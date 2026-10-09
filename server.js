@@ -108,13 +108,10 @@ app.post('/api/enviar-equipe',async(req,res)=>{
   // ID de situação é opcional: nunca inventar um valor.
   const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
   if(situacaoId&&!/^[0-9]+$/.test(situacaoId))return res.status(400).json({ok:false,error:'UMOV_EM_CAMPO_SITUATION_ID deve ser numérico quando configurado.'});
-  const equipe=await pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=$1 LIMIT 1',values:[agente],query_timeout:5000});
-  if(!equipe.rows.length)return res.status(404).json({ok:false,error:'Equipe não encontrada no uMov.'});
+  // Sem consulta SQL bloqueante: a API uMov valida o agente na gravação.
   const resultados=[];
   for(const tarefa of tarefas){
    try{
-    const check=await pool.query({text:'SELECT tsk_id FROM u45468.task WHERE tsk_id=$1 LIMIT 1',values:[tarefa],query_timeout:4000});
-    if(!check.rows.length)throw Error('Tarefa não encontrada');
     // A situação precisa ser configurada conforme o ID REAL da API uMov.
     // Não presumir que atribuir um agente altera automaticamente a situação.
     const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
@@ -123,7 +120,7 @@ app.post('/api/enviar-equipe',async(req,res)=>{
    }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
-  res.json({ok:resultados.every(x=>x.ok),equipe:equipe.rows[0].age_name,resultados,avisos:'Atribuição enviada ao uMov. A situação Em campo só é confirmada quando o banco sincronizado mostrar esse estado.'});
+  res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'Atribuição enviada ao uMov. A situação Em campo só é confirmada quando o banco sincronizado mostrar esse estado.'});
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -254,10 +251,7 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
   const resultados=[];
   for(const tarefa of tarefas){
    try{
-    const antes=await pool.query({text:`SELECT d.tsk_situation,t.age_id FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
-    if(!antes.rows.length)throw Error('Tarefa não localizada no uMov.');
-    const atual=String(antes.rows[0].tsk_situation||'').trim().toLowerCase();
-    if(!['em campo','pendente de envio para campo'].includes(atual))throw Error('A SS não está Em Campo. Situação atual: '+atual);
+    // A API uMov valida a tarefa; evitar espera por PostgreSQL antes da operação.
     // Desvincula o agente e solicita o retorno na mesma operação uMov.
     // Não modifica diretamente as tabelas espelho do PostgreSQL.
     const pendenteId=String(process.env.UMOV_PENDENTE_SITUATION_ID||'').trim();
