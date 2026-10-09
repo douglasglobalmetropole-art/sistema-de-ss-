@@ -247,4 +247,28 @@ load();
   $('rejectBtn').onclick=()=>changeIntegrationStatus('Rejeitada','Rejeição');
   $('duplicateBtn').onclick=()=>changeIntegrationStatus('Duplicada','Duplicação');
 })();
+</script>
+<script>
+// Exibe o retorno informado pela equipe no uMov; não utiliza dados do SISCOM.
+(function(){
+  document.querySelector('label[for="dInfoExecucao"]')?.remove();
+  const labels=document.querySelectorAll('#executionInfo label');
+  if(labels[2])labels[2].textContent='SERVIÇO INFORMADO PELA EQUIPE';
+  if(labels[3])labels[3].textContent='INFORMAÇÃO PREENCHIDA PELO BOMBEIRO';
+  window.fill=function(x){
+    if(!x)return;
+    document.body.classList.add('panel-open');$('lower').classList.add('open');
+    $('titleSS').textContent=$('dss').textContent=val(x,'ss');
+    [['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));
+    const paraBaixar=currentScreen==='baixar';
+    $('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; RETORNO PREENCHIDO PELA EQUIPE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';
+    $('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;
+    if(paraBaixar){
+      $('dInicioAtividade').textContent=val(x,'inicio_atividade')||'Não informado';
+      $('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';
+      $('dInfoExecucao').textContent=val(x,'servico_executado')||'Não informado';
+      $('dMateriais').textContent=val(x,'informacao_bombeiro')||'Não informado';
+    }else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||'';
+  };
+})();
 </script></body></html>
