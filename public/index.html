@@ -197,7 +197,7 @@ async function load(){
     raw=j.rows||[];window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=ssBusca.length>=3;window.ms=j.ms;selected={};apply();
   }catch(e){$('countInfo').textContent='Erro: '+e.message}
 }
-let ssSearchTimer;const ssInput=document.querySelector('.filter input[data-col="ss"]');ssInput.placeholder='Buscar SS em todas as datas...';ssInput.addEventListener('input',()=>{clearTimeout(ssSearchTimer);ssSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},350)});$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
+let ssSearchTimer;const ssInput=document.querySelector('.filter input[data-col="ss"]');ssInput.placeholder='Buscar SS em todas as datas...';ssInput.addEventListener('input',()=>{clearTimeout(ssSearchTimer);ssSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},700)});$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
 $('filterBtn').onclick=()=>{window.__pageOffset=0;load()};
 let dateFilterTimer;
 ['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
