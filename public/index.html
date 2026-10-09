@@ -45,8 +45,8 @@ function screenMatch(x){
   return true;
 }
 function apply(){
-  const q=Object.fromEntries([...document.querySelectorAll('.filter input')].map(i=>[i.dataset.col,i.value.toLowerCase()]));
-  view=raw.filter(x=>screenMatch(x)&&(!cities.length||cities.includes(val(x,'cidade')))&&(!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
+  const q=Object.fromEntries([...document.querySelectorAll('.filter input')].map(i=>[i.dataset.col,i.value.toLowerCase()]));if(window.__globalSSSearch)q.ss='';
+  view=raw.filter(x=>screenMatch(x)&&(window.__globalSSSearch||!cities.length||cities.includes(val(x,'cidade')))&&(window.__globalSSSearch||!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
   if(sort)view.sort((a,b)=>val(a,sort).localeCompare(val(b,sort),'pt-BR',{numeric:true})*dir);
   render()
 }
@@ -173,8 +173,8 @@ window.__hasMore=false;
 function renderPagination(){
   let area=$('pagination');
   if(!area){area=document.createElement('div');area.id='pagination';area.className='pagination';document.querySelector('.listControls').appendChild(area)}
-  const atual=Math.floor(window.__pageOffset/page)+1,nums=[];
-  for(let n=Math.max(1,atual-1);n<=atual+(window.__hasMore?1:0);n++)nums.push(n);
+  const atual=Math.floor(window.__pageOffset/page)+1,nums=[];const totalPaginas=Number.isFinite(window.__totalSS)?Math.max(1,Math.ceil(window.__totalSS/page)):null;
+  for(let n=Math.max(1,atual-2);n<=Math.min(totalPaginas||atual+(window.__hasMore?1:0),atual+2);n++)nums.push(n);
   area.innerHTML='<button class="pageBtn" '+(atual===1?'disabled':'')+' data-page="'+(atual-1)+'">‹</button>'+nums.map(n=>'<button class="pageBtn '+(n===atual?'active':'')+'" data-page="'+n+'">'+n+'</button>').join('')+'<button class="pageBtn" '+(!window.__hasMore?'disabled':'')+' data-page="'+(atual+1)+'">›</button>';
   area.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{const destino=Number(b.dataset.page);if(destino<1||destino===atual)return;window.__pageOffset=(destino-1)*page;load()});
 }
@@ -185,19 +185,19 @@ function render(){
   $('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);
   let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';
   const inicioPagina=a.length?window.__pageOffset+1:0,fimPagina=window.__pageOffset+a.length;
-  $('countInfo').textContent='Exibindo '+inicioPagina+'–'+fimPagina+' SS'+(window.ms?' • consulta '+window.ms+' ms':'');
+  $('countInfo').textContent='Exibindo '+inicioPagina+'–'+fimPagina+' de '+(Number.isFinite(window.__totalSS)?window.__totalSS:'mais SS')+(window.ms?' • consulta '+window.ms+' ms':'');
   renderPagination();
 }
 async function load(){
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
-    let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro}),r=await fetch('/api/recepcao?'+p),j=await r.json();
+    const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});if(ssBusca.length>=3)p.set('ss',ssBusca);let r=await fetch((ssBusca.length>=3?'/api/busca-ss?':'/api/recepcao?')+p),j=await r.json();
     if(!r.ok)throw Error(j.error);
-    raw=j.rows||[];window.__hasMore=!!j.hasMore;window.ms=j.ms;selected={};apply();
+    raw=j.rows||[];window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=ssBusca.length>=3;window.ms=j.ms;selected={};apply();
   }catch(e){$('countInfo').textContent='Erro: '+e.message}
 }
-$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
+let ssSearchTimer;const ssInput=document.querySelector('.filter input[data-col="ss"]');ssInput.placeholder='Buscar SS em todas as datas...';ssInput.addEventListener('input',()=>{clearTimeout(ssSearchTimer);ssSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},350)});$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
 $('filterBtn').onclick=()=>{window.__pageOffset=0;load()};
 let dateFilterTimer;
 ['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
