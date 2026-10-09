@@ -246,6 +246,25 @@ load();
   $('downloadBtn').onclick=()=>changeIntegrationStatus('Baixada','Baixa');
   $('rejectBtn').onclick=()=>changeIntegrationStatus('Rejeitada','Rejeição');
   $('duplicateBtn').onclick=()=>changeIntegrationStatus('Duplicada','Duplicação');
+  $('tagBtn').onclick=async()=>{
+    if(currentScreen!=='recepcao')return notify('A tag pode ser adicionada na aba Recepção.','error');
+    const items=Object.values(selected||{});
+    if(!items.length)return notify('Selecione ao menos uma SS.','error');
+    const tag=prompt(`Digite a tag para ${items.length===1?'esta SS':'as '+items.length+' SS'}:`,'');
+    if(tag===null)return;
+    const valor=tag.trim().replace(/\s+/g,' ');
+    if(!valor)return notify('Informe uma tag.','error');
+    $('tagBtn').disabled=true;
+    try{
+      const response=await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:valor,tarefas:items.map(item=>item.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||'Não foi possível gravar a tag.');
+      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated?.ok)item.tags=valor});
+      selected={};apply();
+      notify(`Tag adicionada em ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
+    }catch(error){notify(error.message||'Não foi possível gravar a tag.','error')}
+    finally{$('tagBtn').disabled=false}
+  };
 })();
 </script>
 <script>
