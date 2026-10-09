@@ -287,13 +287,13 @@ load();
     if(currentScreen!=='campo')return;
     const items=Object.values(selected||{});
     if(!items.length)return notify('Selecione uma SS em campo.','error');
-    if(!confirm(`Retornar ${items.length} SS para Recepção? A equipe será removida e a situação mudará para Pendente de envio para campo no uMov.`))return;
+    if(!confirm(`Solicitar retorno de ${items.length} SS para Recepção pelo uMov? A equipe será removida; a mudança de situação será verificada após a sincronização.`))return;
     const button=$('returnReceptionBtn');button.disabled=true;
     try{
       const response=await fetch('/api/retornar-recepcao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:items.map(item=>item.tarefa)})});
       const result=await response.json();
       if(!response.ok&&!result.sucesso)throw new Error(result.error||'Falha ao retornar SS.');
-      notify(`${result.sucesso||0} SS confirmada(s) na Recepção${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
+      const confirmadas=(result.resultados||[]).filter(item=>item.confirmado).length;notify(`API aceitou ${result.sucesso||0} solicitação(ões). Confirmadas na Recepção: ${confirmadas}.${result.falhas?' Falhas: '+result.falhas+'.':''}${(result.sucesso||0)>confirmadas?' Aguardando confirmação da situação no uMov.':''}`,result.falhas||(result.sucesso||0)>confirmadas?'error':'success');
       selected={};window.__pageOffset=0;await load();
     }catch(error){notify(error.message||'Não foi possível retornar para Recepção.','error')}
     finally{button.disabled=false}

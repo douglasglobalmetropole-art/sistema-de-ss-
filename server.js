@@ -104,8 +104,10 @@ app.post('/api/enviar-equipe',async(req,res)=>{
   const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
   const agente=Number(req.body?.agente);
   if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0)||!Number.isSafeInteger(agente)||agente<=0)return res.status(400).json({ok:false,error:'Selecione uma equipe válida e até 100 SS.'});
+  // A atribuição do agente foi confirmada em uma requisição real do VilaBoa.
+  // ID de situação é opcional: nunca inventar um valor.
   const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
-  if(!/^[0-9]+$/.test(situacaoId))return res.status(503).json({ok:false,error:'Envio bloqueado: configure UMOV_EM_CAMPO_SITUATION_ID com o ID numérico confirmado da situação Em campo na API uMov. Nenhuma SS foi alterada.'});
+  if(situacaoId&&!/^[0-9]+$/.test(situacaoId))return res.status(400).json({ok:false,error:'UMOV_EM_CAMPO_SITUATION_ID deve ser numérico quando configurado.'});
   const equipe=await pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=$1 LIMIT 1',values:[agente],query_timeout:5000});
   if(!equipe.rows.length)return res.status(404).json({ok:false,error:'Equipe não encontrada no uMov.'});
   const resultados=[];
@@ -115,7 +117,7 @@ app.post('/api/enviar-equipe',async(req,res)=>{
     if(!check.rows.length)throw Error('Tarefa não encontrada');
     // A situação precisa ser configurada conforme o ID REAL da API uMov.
     // Não presumir que atribuir um agente altera automaticamente a situação.
-    const situacaoXml=`<situation><id>${xmlEscape(situacaoId)}</id></situation>`;
+    const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
     await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
     const verificacao=await pool.query({text:`SELECT t.age_id,d.tsk_situation FROM u45468.task t LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
     const estado=verificacao.rows[0]||{};
@@ -125,7 +127,7 @@ app.post('/api/enviar-equipe',async(req,res)=>{
    }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
-  res.json({ok:resultados.every(x=>x.ok),equipe:equipe.rows[0].age_name,resultados,avisos:'O envio foi aceito pela API. Confira o campo confirmado em cada tarefa; a sincronização pode levar alguns instantes.'});
+  res.json({ok:resultados.every(x=>x.ok),equipe:equipe.rows[0].age_name,resultados,avisos:'Atribuição enviada ao uMov. A situação Em campo só é confirmada quando o banco sincronizado mostrar esse estado.'});
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -263,10 +265,11 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
     // Desvincula o agente e solicita o retorno na mesma operação uMov.
     // Não modifica diretamente as tabelas espelho do PostgreSQL.
     const pendenteId=String(process.env.UMOV_PENDENTE_SITUATION_ID||'').trim();
-    if(atual==='em campo'&&!/^[0-9]+$/.test(pendenteId))throw Error('Configure UMOV_PENDENTE_SITUATION_ID com o ID confirmado da situação Pendente de envio para campo na API uMov. Nenhuma alteração enviada.');
-    const xml=atual==='em campo'
-      ? `<schedule><agent><id></id></agent><situation><id>${xmlEscape(pendenteId)}</id></situation></schedule>`
-      : '<schedule><agent><id></id></agent></schedule>';
+    if(pendenteId&&!/^[0-9]+$/.test(pendenteId))throw Error('UMOV_PENDENTE_SITUATION_ID deve ser numérico quando configurado.');
+    // A remoção de agente usa o mesmo endpoint comprovado para atribuição.
+    // O ID de situação só é enviado quando foi explicitamente confirmado.
+    const situacaoXml=pendenteId?`<situation><id>${xmlEscape(pendenteId)}</id></situation>`:'';
+    const xml=`<schedule><agent><id></id></agent>${situacaoXml}</schedule>`;
     await postUmovXml('schedule',tarefa,xml);
     let confirmado=false,ultimaSituacao=atual,ultimoAgente=antes.rows[0].age_id;
     for(let tentativa=0;tentativa<4;tentativa++){
@@ -276,8 +279,7 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
       if(ultimaSituacao==='pendente de envio para campo' && (ultimoAgente===null||ultimoAgente===undefined)){confirmado=true;break}
       if(tentativa<3)await new Promise(resolve=>setTimeout(resolve,700));
     }
-    if(!confirmado)throw Error('uMov recebeu a solicitação, mas ainda não confirmou situação pendente e equipe removida. Situação: '+ultimaSituacao+'; agente: '+(ultimoAgente??'nenhum')+'. Confira a sincronização e o formato de alteração de situação da API.');
-    resultados.push({tarefa,ok:true});
+    resultados.push({tarefa,ok:true,confirmado,situacao:ultimaSituacao,agente:ultimoAgente??null,aviso:confirmado?'':'Solicitação aceita pela API; retorno à Recepção ainda não confirmado. Verifique a situação no uMov. Se a situação não mudar, é necessário identificar o ID real de Pendente de envio para campo.'});
    }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,250)})}
   }
   const sucesso=resultados.filter(x=>x.ok).length,primeiraFalha=resultados.find(x=>!x.ok);
