@@ -216,6 +216,20 @@ document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener
 load();
 </script>
 <script>
+/* Lançamento de itens: usa o cadastro e a gravação já existentes na programação. */
+(function(){
+  let materiais=[];
+  const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+  function modal(){let box=$('itensModal');if(box)return box;box=document.createElement('div');box.id='itensModal';box.className='modalBg';box.innerHTML='<div class="modalBox" style="width:820px;max-width:95vw"><h3>Lançar itens da SS <span id="itensSS"></span></h3><div id="itensLista" style="max-height:230px;overflow:auto;margin:10px 0"></div><hr style="border:0;border-top:1px solid #d7e3ed"><h4 style="margin:12px 0 8px">Adicionar item</h4><input id="itemMaterial" list="itensMateriais" placeholder="Digite o material" style="width:100%;box-sizing:border-box"><datalist id="itensMateriais"></datalist><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><input id="itemUnidade" placeholder="Unidade"><input id="itemQuantidade" type="number" min="0.0001" step="0.0001" value="1" placeholder="Quantidade"><input id="itemValor" type="number" min="0" step="0.01" placeholder="Valor total"></div><div class="modalBtns"><button class="btn" id="itensFechar">Fechar</button><button class="btn primary" id="itensAdicionar">Adicionar item</button></div></div>';document.body.appendChild(box);$('itensFechar').onclick=()=>box.classList.remove('open');box.onclick=e=>{if(e.target===box)box.classList.remove('open')};$('itemMaterial').onchange=preencher;$('itemQuantidade').oninput=calcular;return box}
+  function selecionado(){const nome=$('itemMaterial').value.trim().toLocaleLowerCase('pt-BR');return materiais.find(x=>String(x.nome||'').trim().toLocaleLowerCase('pt-BR')===nome)}
+  function preencher(){const m=selecionado();if(!m)return;$('itemUnidade').value=m.unidade||'UN';calcular()}
+  function calcular(){const m=selecionado(),q=Number($('itemQuantidade').value||0);if(m&&Number(m.valor_unitario)>=0)$('itemValor').value=(q*Number(m.valor_unitario||0)).toFixed(2)}
+  async function carregar(ss){const lista=$('itensLista');lista.textContent='Carregando itens...';const r=await fetch('/api/itens?ss='+encodeURIComponent(ss)).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível carregar os itens.');const itens=r.rows||[];lista.innerHTML=itens.length?'<table style="width:100%;border-collapse:collapse"><thead><tr><th>Material</th><th>UN</th><th>Qtd.</th><th>Valor</th><th></th></tr></thead><tbody>'+itens.map(i=>'<tr><td>'+esc(i.material||i.nome||'')+'</td><td>'+esc(i.unidade||'')+'</td><td>'+esc(i.quantidade||'')+'</td><td>'+moeda(i.valor_total||i.valor||0)+'</td><td><button class="btn excluirItem" data-id="'+esc(i.id||i.item_id||'')+'">×</button></td></tr>').join('')+'</tbody></table>':'Nenhum item lançado.';lista.querySelectorAll('.excluirItem').forEach(b=>b.onclick=async()=>{if(!b.dataset.id||!confirm('Excluir este item?'))return;const r=await fetch('/api/itens/'+encodeURIComponent(b.dataset.id),{method:'DELETE'}).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível excluir.');await carregar(ss)});
+  }
+  $('launchItemsBtn').onclick=async()=>{const itens=Object.values(selected||{});if(itens.length!==1)return alert('Selecione somente uma SS para lançar itens.');const ss=itens[0].ss;if(!ss)return alert('A SS selecionada não possui número.');modal().classList.add('open');$('itensSS').textContent=ss;try{if(!materiais.length){const r=await fetch('/api/materiais').then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível carregar os materiais.');materiais=r.rows||[];$('itensMateriais').innerHTML=materiais.map(x=>'<option value="'+esc(x.nome||'')+'">').join('')}await carregar(ss);$('itensAdicionar').onclick=async()=>{const m=selecionado(),unidade=$('itemUnidade').value.trim(),quantidade=$('itemQuantidade').value,valor_total=$('itemValor').value;if(!m)return alert('Selecione um material da lista.');if(!unidade||!Number(quantidade))return alert('Informe unidade e quantidade.');const b=$('itensAdicionar');b.disabled=true;try{const r=await fetch('/api/itens',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ss,material:m.id,unidade,quantidade,valor_total})}).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível lançar o item.');$('itemMaterial').value='';$('itemUnidade').value='';$('itemQuantidade').value='1';$('itemValor').value='';await carregar(ss);alert(r.message||'Item lançado com sucesso.')}catch(e){alert(e.message)}finally{b.disabled=false}}}catch(e){$('itensLista').textContent='Erro: '+e.message}};
+})();
+</script>
+<script>
 // Ações de integração: somente na aba "Notas para Baixar". A chave do uMov
 // permanece no servidor; o navegador envia apenas tarefa(s) e o status.
 (function(){
@@ -284,6 +298,11 @@ load();
       $('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';
       $('dInfoExecucao').textContent=val(x,'servico_executado')||'Não informado';
       $('dMateriais').textContent=val(x,'materiais_bombeiro')||'Não informado';
+      fetch('/api/retorno-equipe/'+encodeURIComponent(x.tarefa)).then(r=>r.json()).then(retorno=>{
+        if(!retorno.ok)return;
+        if(retorno.servico_executado)$('dInfoExecucao').textContent=retorno.servico_executado;
+        if(retorno.materiais_bombeiro)$('dMateriais').textContent=retorno.materiais_bombeiro;
+      }).catch(()=>{});
     }else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||'';
   };
 })();

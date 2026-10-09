@@ -99,6 +99,38 @@ async function postUmovXml(resource,id,xml){
   throw new Error(`uMov respondeu ${response.status}${detalhe}`);
  }
 }
+const normalizaCampo=v=>String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'');
+const textoXml=v=>String(v||'').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/<[^>]*>/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/\s+/g,' ').trim();
+async function getUmovXml(resource,id){
+ const token=String(process.env.UMOV_API_TOKEN||'').trim();
+ const base=String(process.env.UMOV_API_BASE_URL||'https://api.umov.me/CenterWeb/api').replace(/\/$/,'');
+ if(!token)throw new Error('Integração uMov não configurada. Cadastre UMOV_API_TOKEN na Vercel.');
+ const response=await fetch(`${base}/${encodeURIComponent(token)}/${resource}/${encodeURIComponent(id)}.xml`,{signal:AbortSignal.timeout(12000)});
+ const xml=await response.text();
+ if(!response.ok)throw new Error(`uMov respondeu ${response.status}: ${xml.replace(/\s+/g,' ').trim().slice(0,240)}`);
+ return xml;
+}
+app.get('/api/retorno-equipe/:tarefa',async(req,res)=>{try{
+ const tarefa=Number(req.params.tarefa);if(!Number.isInteger(tarefa))return res.status(400).json({ok:false,error:'Tarefa inválida.'});
+ const xml=await getUmovXml('schedule',tarefa);
+ const bloco=(xml.match(/<customFields\b[^>]*>([\s\S]*?)<\/customFields>/i)||[])[1]||xml;
+ const campos={};let match;const re=/<([A-Za-z][\w.-]*)\b[^>]*>([\s\S]*?)<\/\1>/g;
+ while((match=re.exec(bloco))){const valor=textoXml(match[2]);if(valor)campos[normalizaCampo(match[1])]=valor}
+ const obter=(...nomes)=>nomes.map(normalizaCampo).map(nome=>campos[nome]||Object.entries(campos).find(([chave])=>chave.includes(nome))?.[1]).find(Boolean)||'';
+ res.json({ok:true,servico_executado:obter('servicoexecutadosiscom','servicoexecutado','informacaoexecucaosiscom','informacaoexecucao','retornoexecucao'),materiais_bombeiro:obter('materialusado','materialutilizado','materiaisutilizados','materiaislancados','materiais','material'),campos_encontrados:Object.keys(campos)});
+}catch(error){res.status(502).json({ok:false,error:String(error?.message||'Não foi possível consultar o retorno no uMov.')})}});
+const programacaoUrl=String(process.env.PROGRAMACAO_API_URL||'https://vilaboa.net.br/vila_velha_programacao/server.php');
+async function programacaoFetch(query='',form=null){
+ const sep=programacaoUrl.includes('?')?'&':'?';
+ const response=await fetch(programacaoUrl+(query?sep+query:''),{method:form?'POST':'GET',headers:form?{'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest'}:{'Accept':'application/json'},body:form?new URLSearchParams(form).toString():undefined,signal:AbortSignal.timeout(20000)});
+ const texto=await response.text();let dados;try{dados=JSON.parse(texto)}catch{throw new Error(`Servidor de itens respondeu ${response.status}.`)}
+ if(!response.ok)throw new Error(dados?.message||dados?.error||`Servidor de itens respondeu ${response.status}.`);
+ return dados;
+}
+app.get('/api/materiais',async(req,res)=>{try{const hit=getCache('programacao:materiais',300000);if(hit)return res.json({ok:true,rows:hit});const rows=await programacaoFetch('materiais=1');setCache('programacao:materiais',Array.isArray(rows)?rows:[]);res.json({ok:true,rows:Array.isArray(rows)?rows:[]})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+app.get('/api/itens',async(req,res)=>{try{const ss=String(req.query.ss||'').trim();if(!ss)return res.status(400).json({ok:false,error:'Informe a SS.'});const rows=await programacaoFetch('itens=1&ss='+encodeURIComponent(ss));res.json({ok:true,rows:Array.isArray(rows)?rows:[]})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+app.post('/api/itens',async(req,res)=>{try{const ss=String(req.body?.ss||'').trim(),material=String(req.body?.material||'').trim(),unidade=String(req.body?.unidade||'').trim(),quantidade=String(req.body?.quantidade||'').trim(),valor_total=String(req.body?.valor_total||'').trim();if(!ss||!material||!unidade||!quantidade)return res.status(400).json({ok:false,error:'Preencha material, unidade e quantidade.'});const result=await programacaoFetch('',{inserir_item:'1',ss,material,unidade,quantidade,valor_total});res.json({ok:result?.success!==false,message:result?.message||'Item lançado com sucesso.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+app.delete('/api/itens/:id',async(req,res)=>{try{const item_id=String(req.params.id||'').trim();if(!item_id)return res.status(400).json({ok:false,error:'Item inválido.'});const result=await programacaoFetch('',{excluir_item:'1',item_id});res.json({ok:result?.success!==false,message:result?.message||'Item excluído.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
 app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
