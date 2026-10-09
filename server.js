@@ -119,11 +119,7 @@ app.post('/api/enviar-equipe',async(req,res)=>{
     // Não presumir que atribuir um agente altera automaticamente a situação.
     const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
     await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
-    const verificacao=await pool.query({text:`SELECT t.age_id,d.tsk_situation FROM u45468.task t LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
-    const estado=verificacao.rows[0]||{};
-    const emCampo=String(estado.tsk_situation||'').trim().toLowerCase()==='em campo';
-    const equipeConfirmada=String(estado.age_id||'')===String(agente);
-    resultados.push({tarefa,ok:true,confirmado:emCampo&&equipeConfirmada, situacao:estado.tsk_situation||'', aviso:emCampo&&equipeConfirmada?'':'Envio aceito; mudança para Em campo ainda não confirmada no banco.'});
+    resultados.push({tarefa,ok:true,confirmado:false,situacaoSolicitada:!!situacaoId,aviso:situacaoId?'Requisição aceita pela API; situação solicitada, aguardando atualização do espelho.':'Equipe atribuída pela API; mudança para Em campo não garantida sem ID da situação.'});
    }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
@@ -271,15 +267,7 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
     const situacaoXml=pendenteId?`<situation><id>${xmlEscape(pendenteId)}</id></situation>`:'';
     const xml=`<schedule><agent><id></id></agent>${situacaoXml}</schedule>`;
     await postUmovXml('schedule',tarefa,xml);
-    let confirmado=false,ultimaSituacao=atual,ultimoAgente=antes.rows[0].age_id;
-    for(let tentativa=0;tentativa<4;tentativa++){
-      const check=await pool.query({text:`SELECT d.tsk_situation,t.age_id FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
-      ultimaSituacao=String(check.rows[0]?.tsk_situation||'').trim().toLowerCase();
-      ultimoAgente=check.rows[0]?.age_id;
-      if(ultimaSituacao==='pendente de envio para campo' && (ultimoAgente===null||ultimoAgente===undefined)){confirmado=true;break}
-      if(tentativa<3)await new Promise(resolve=>setTimeout(resolve,700));
-    }
-    resultados.push({tarefa,ok:true,confirmado,situacao:ultimaSituacao,agente:ultimoAgente??null,aviso:confirmado?'':'Solicitação aceita pela API; retorno à Recepção ainda não confirmado. Verifique a situação no uMov. Se a situação não mudar, é necessário identificar o ID real de Pendente de envio para campo.'});
+    resultados.push({tarefa,ok:true,confirmado:false,situacaoSolicitada:!!pendenteId,aviso:pendenteId?'Requisição aceita pela API; situação solicitada, aguardando atualização do espelho.':'Remoção da equipe solicitada; retorno à Recepção não garantido sem ID da situação.'});
    }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,250)})}
   }
   const sucesso=resultados.filter(x=>x.ok).length,primeiraFalha=resultados.find(x=>!x.ok);
