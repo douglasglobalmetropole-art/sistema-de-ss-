@@ -100,16 +100,11 @@ app.post('/api/status-integracao',async(req,res)=>{try{
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
  if(!integrationStatuses.has(status))return res.status(400).json({ok:false,error:'Status de integração inválido.'});
  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
- const elegiveis=await pool.query({text:`SELECT t.tsk_id,t.loc_id FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_id=ANY($1::bigint[]) AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL`,values:[tarefas],query_timeout:7000});
- const porTarefa=new Map(elegiveis.rows.map(row=>[String(row.tsk_id),row]));
  const resultados=[];
  for(const tarefa of tarefas){
-  const item=porTarefa.get(String(tarefa));
-  if(!item){resultados.push({tarefa,ok:false,error:'A SS não está disponível para baixa.'});continue}
   try{
    const valor=xmlEscape(status);
-   await postUmovXml('schedule',item.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);
-   if(item.loc_id)await postUmovXml('serviceLocal',item.loc_id,`<serviceLocal><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></serviceLocal>`);
+   await postUmovXml('schedule',tarefa,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);
    resultados.push({tarefa,ok:true,status});
   }catch(error){resultados.push({tarefa,ok:false,error:error.message})}
  }
