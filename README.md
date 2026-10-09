@@ -12,8 +12,10 @@ Painel de recepção, acompanhamento e encerramento de SS integrado ao banco Pos
    - `DB_USER`
    - `DB_PASSWORD`
    - `DB_SSL`
+   - `UMOV_API_TOKEN` (Secret) — chave de integração do uMov
+   - `UMOV_API_BASE_URL` (Config) — normalmente `https://api.umov.me/CenterWeb/api`
 3. Faça o deploy. A página inicial e as rotas `/api/*` serão atendidas pelo `server.js`.
 
 ## Segurança
 
-Não envie o arquivo `.env` ao GitHub nem ao ZIP de publicação. Ele contém a senha do banco e deve existir somente no ambiente local ou nas variáveis da Vercel.
+Não envie o arquivo `.env` ao GitHub nem ao ZIP de publicação. Senhas e `UMOV_API_TOKEN` devem ser cadastrados como **Secret** na Vercel.

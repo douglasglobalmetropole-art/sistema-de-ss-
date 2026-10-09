@@ -214,4 +214,37 @@ let equipeFilterTimer;
 $('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
 document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener('click',()=>{window.__pageOffset=0},{capture:true}));
 load();
+</script>
+<script>
+// Ações de integração: somente na aba "Notas para Baixar". A chave do uMov
+// permanece no servidor; o navegador envia apenas tarefa(s) e o status.
+(function(){
+  function notify(message,kind){
+    let el=document.getElementById('integrationToast');
+    if(!el){el=document.createElement('div');el.id='integrationToast';el.style.cssText='position:fixed;right:18px;bottom:18px;z-index:1000;max-width:360px;padding:12px 15px;border-radius:7px;color:#fff;font-weight:700;box-shadow:0 8px 24px #001a3a44';document.body.appendChild(el)}
+    el.style.background=kind==='error'?'#c63b3b':'#0879f7';el.textContent=message;el.hidden=false;clearTimeout(el._timer);el._timer=setTimeout(()=>el.hidden=true,5000);
+  }
+  async function changeIntegrationStatus(status,label){
+    const items=Object.values(selected||{});
+    if(currentScreen!=='baixar')return notify('Esta ação é permitida somente em Notas para Baixar.','error');
+    if(!items.length)return notify('Selecione ao menos uma SS.','error');
+    const count=items.length;
+    if(!confirm(`Confirmar ${label.toLowerCase()} ${count===1?'esta SS':count+' SS'}?`))return;
+    const buttons=['downloadBtn','rejectBtn','duplicateBtn'].map(id=>$(id)).filter(Boolean);
+    buttons.forEach(button=>button.disabled=true);
+    try{
+      const response=await fetch('/api/status-integracao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,tarefas:items.map(item=>item.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||'A ação não foi concluída.');
+      const sucesso=Number(result.sucesso||0),falhas=Number(result.falhas||0);
+      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated&&updated.ok)item.status_integracao=status});
+      selected={};apply();
+      notify(`${label}: ${sucesso} concluída(s)${falhas?' • '+falhas+' falha(s)':''}.`,falhas?'error':'success');
+    }catch(error){notify(error.message||'Não foi possível concluir a ação.','error')}
+    finally{buttons.forEach(button=>button.disabled=false)}
+  }
+  $('downloadBtn').onclick=()=>changeIntegrationStatus('Baixada','Baixa');
+  $('rejectBtn').onclick=()=>changeIntegrationStatus('Rejeitada','Rejeição');
+  $('duplicateBtn').onclick=()=>changeIntegrationStatus('Duplicada','Duplicação');
+})();
 </script></body></html>

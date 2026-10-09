@@ -15,7 +15,7 @@ const pool=new Pool({
  idleTimeoutMillis:20000,
  allowExitOnIdle:true
 });
-app.use(express.json());app.use(express.static(path.join(__dirname,'public')));
+app.use(express.json({limit:'100kb'}));app.use(express.static(path.join(__dirname,'public')));
 const cache=new Map(),getCache=(k,ttl)=>{const x=cache.get(k);return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(k,{ts:Date.now(),data:v}),v);
 async function extrasLocal(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT loc_id,loc_integrationid AS ss,e_localidade AS cidade,e_bairro AS bairro,e_setor AS setor,e_reflocalizacao AS referencia_localizacao,loc_description AS localizacao,loc_street AS logradouro,loc_streetnumber AS numero,e_hidrometro AS hidrometro,e_situacao AS status_integracao,e_servicoexecutadosiscom AS servico_executado_siscom,e_informacaoexecucaosiscom AS materiais_lancados,e_informacaosolicitante AS informacao_solicitante,e_esclarecimentosolicitante AS esclarecimento_solicitante FROM u45468.dbout_local WHERE loc_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.loc_id),x));return m}
 async function extrasTask(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT d.tsk_id,d.tss_id,d.tsk_accesstoken,d.tsk_situation AS situacao_campo,d.e_tag AS tags,d.e_situacao AS status_integracao,d.tsk_realinitialdatehour AS inicio_atividade_raw,d.tsk_lastexecutiondatehour AS ultima_atividade_raw,d.tsk_realfinaldatehour AS fim_real_raw FROM u45468.dbout_task d WHERE d.tsk_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.tsk_id),x));return m}
@@ -77,6 +77,41 @@ app.get('/api/recepcao',async(req,res)=>{try{
 app.get('/api/macros',async(req,res)=>{try{const hit=getCache('macros',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(tty_description) AS macro FROM u45468.tasktype WHERE tty_description IS NOT NULL AND TRIM(tty_description)<>'' ORDER BY 1`,query_timeout:6000});setCache('macros',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/cidades',async(req,res)=>{try{const hit=getCache('cidades',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(e_localidade) AS cidade FROM u45468.dbout_local WHERE e_localidade IS NOT NULL AND TRIM(e_localidade)<>'' ORDER BY 1`,query_timeout:6000});setCache('cidades',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/equipes',async(req,res)=>{try{const q=String(req.query.q||'').trim(),key='eq:'+q.toLowerCase(),hit=getCache(key,60000);if(hit)return res.json({ok:true,rows:hit});const values=[],where=['age_name IS NOT NULL',"TRIM(age_name)<>''"];if(q){values.push('%'+q+'%');where.push('(age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1)')}const r=await pool.query({text:`SELECT DISTINCT age_id AS id,age_name AS nome FROM u45468.agent WHERE ${where.join(' AND ')} ORDER BY age_name LIMIT 80`,values,query_timeout:6000});setCache(key,r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
+
+// Marca notas retornadas de campo no uMov. A chave fica exclusivamente nas
+// variáveis da Vercel; ela nunca é entregue ao navegador.
+const integrationStatuses=new Set(['Baixada','Rejeitada','Duplicada']);
+const xmlEscape=value=>String(value).replace(/[<>&'\"]/g,char=>({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[char]));
+async function postUmovXml(resource,id,xml){
+ const token=String(process.env.UMOV_API_TOKEN||'').trim();
+ const base=String(process.env.UMOV_API_BASE_URL||'https://api.umov.me/CenterWeb/api').replace(/\/$/,'');
+ if(!token)throw new Error('Integração uMov não configurada. Cadastre UMOV_API_TOKEN na Vercel.');
+ const response=await fetch(`${base}/${encodeURIComponent(token)}/${resource}/${encodeURIComponent(id)}.xml`,{
+  method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(xml),signal:AbortSignal.timeout(12000)
+ });
+ if(!response.ok)throw new Error(`uMov respondeu ${response.status}`);
+}
+app.post('/api/status-integracao',async(req,res)=>{try{
+ const status=String(req.body?.status||'').trim();
+ const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
+ if(!integrationStatuses.has(status))return res.status(400).json({ok:false,error:'Status de integração inválido.'});
+ if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
+ const elegiveis=await pool.query({text:`SELECT t.tsk_id,t.loc_id FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_id=ANY($1::bigint[]) AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL`,values:[tarefas],query_timeout:7000});
+ const porTarefa=new Map(elegiveis.rows.map(row=>[String(row.tsk_id),row]));
+ const resultados=[];
+ for(const tarefa of tarefas){
+  const item=porTarefa.get(String(tarefa));
+  if(!item){resultados.push({tarefa,ok:false,error:'A SS não está disponível para baixa.'});continue}
+  try{
+   const valor=xmlEscape(status);
+   await postUmovXml('schedule',item.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);
+   if(item.loc_id)await postUmovXml('serviceLocal',item.loc_id,`<serviceLocal><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></serviceLocal>`);
+   resultados.push({tarefa,ok:true,status});
+  }catch(error){resultados.push({tarefa,ok:false,error:error.message})}
+ }
+ const sucesso=resultados.filter(item=>item.ok).length;
+ res.status(sucesso?200:502).json({ok:sucesso>0,status,resultados,sucesso,falhas:resultados.length-sucesso});
+}catch(error){console.error('Status integração:',error);res.status(500).json({ok:false,error:'Não foi possível atualizar o status de integração.'})}});
 // No computador local, mantenha o comportamento original: `npm start`.
 // Na Vercel, o adaptador Node importa este Express app e não abre uma porta.
 if (require.main === module) {
