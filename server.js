@@ -216,6 +216,38 @@ app.post('/api/status-integracao',async(req,res)=>{try{
  const detalhe=String(error?.message||'Erro interno').replace(/\s+/g,' ').trim().slice(0,300);
  res.status(500).json({ok:false,error:`Não foi possível atualizar o status de integração: ${detalhe}`})
 }});
+// Retorno para Recepção: solicita a mudança no uMov e só confirma após
+// verificar o status real no PostgreSQL. Nunca altera apenas a interface.
+app.post('/api/retornar-recepcao',async(req,res)=>{
+ try{
+  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,25);
+  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
+  const resultados=[];
+  for(const tarefa of tarefas){
+   try{
+    const antes=await pool.query({text:'SELECT tsk_situation FROM u45468.dbout_task WHERE tsk_id=$1 LIMIT 1',values:[tarefa],query_timeout:4000});
+    if(!antes.rows.length)throw Error('Tarefa não localizada no uMov.');
+    const atual=String(antes.rows[0].tsk_situation||'').trim().toLowerCase();
+    if(atual==='pendente de envio para campo'){resultados.push({tarefa,ok:true});continue}
+    if(atual!=='em campo')throw Error('A SS não está Em Campo. Situação atual: '+atual);
+    // O endpoint schedule é o mesmo utilizado para atualizar campos personalizados.
+    // A confirmação abaixo impede sucesso falso caso não altere tsk_situation.
+    await postUmovXml('schedule',tarefa,'<schedule><situation>Pendente de envio para campo</situation></schedule>');
+    let confirmado=false;
+    for(let tentativa=0;tentativa<3;tentativa++){
+      const check=await pool.query({text:'SELECT tsk_situation FROM u45468.dbout_task WHERE tsk_id=$1 LIMIT 1',values:[tarefa],query_timeout:4000});
+      if(String(check.rows[0]?.tsk_situation||'').trim().toLowerCase()==='pendente de envio para campo'){confirmado=true;break}
+      await new Promise(resolve=>setTimeout(resolve,600));
+    }
+    if(!confirmado)throw Error('uMov não confirmou a alteração de tsk_situation. Verifique o endpoint de mudança de situação da API.');
+    resultados.push({tarefa,ok:true});
+   }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,250)})}
+  }
+  const sucesso=resultados.filter(x=>x.ok).length,primeiraFalha=resultados.find(x=>!x.ok);
+  if(sucesso)cache.clear();
+  res.status(sucesso?200:502).json({ok:sucesso>0,sucesso,falhas:resultados.length-sucesso,resultados,error:primeiraFalha?.error});
+ }catch(error){res.status(500).json({ok:false,error:error.message})}
+});
 app.post('/api/tags',async(req,res)=>{try{
  const tag=String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
