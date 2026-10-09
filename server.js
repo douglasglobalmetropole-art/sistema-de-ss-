@@ -83,6 +83,9 @@ app.get('/api/equipes',async(req,res)=>{try{const q=String(req.query.q||'').trim
 // variáveis da Vercel; ela nunca é entregue ao navegador.
 const integrationStatuses=new Set(['Baixada','Rejeitada','Duplicada']);
 const xmlEscape=value=>String(value).replace(/[<>&'\"]/g,char=>({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[char]));
+// A API XML do uMov recebe o alternativeIdentifier da opção cadastrada no
+// campo de lista "situacao". O rótulo mostrado no painel pode ser diferente.
+const identificadorSituacao=status=>String(process.env[`UMOV_STATUS_${status.toUpperCase()}`]||(status==='Baixada'?'Baixada no Siscom':status)).trim();
 async function postUmovXml(resource,id,xml){
  const token=String(process.env.UMOV_API_TOKEN||'').trim();
  const base=String(process.env.UMOV_API_BASE_URL||'https://api.umov.me/CenterWeb/api').replace(/\/$/,'');
@@ -104,7 +107,7 @@ app.post('/api/status-integracao',async(req,res)=>{try{
  const resultados=[];
  for(const tarefa of tarefas){
   try{
-   const valor=xmlEscape(status);
+   const valor=xmlEscape(identificadorSituacao(status));
    await postUmovXml('schedule',tarefa,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);
    resultados.push({tarefa,ok:true,status});
   }catch(error){resultados.push({tarefa,ok:false,error:error.message})}

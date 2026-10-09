@@ -14,7 +14,7 @@ const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,
 const isoDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`};
 function setDefaultDateRange(){const fim=new Date(),inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);$('dateIni').value=isoDate(inicio);$('dateFim').value=isoDate(fim)}
 setDefaultDateRange();
-const val=(x,k)=>String(x[k]??'').trim();
+const val=(x,k)=>{const valor=String(x[k]??'').trim();return k==='status_integracao'&&valor.toLocaleLowerCase('pt-BR')==='baixada no siscom'?'Baixada':valor};
 const actionSets={recepcao:['sendTeamBtn','duplicateBtn','tagBtn','rejectBtn'],baixar:['viewSSBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn'],encerradas:['viewReportBtn','groupedBtn']};
 function configureActions(screen){const allowed=actionSets[screen]||[];document.querySelectorAll('.actions .action').forEach(button=>button.hidden=!allowed.includes(button.id))}
 function norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
