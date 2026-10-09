@@ -116,7 +116,11 @@ app.post('/api/status-integracao',async(req,res)=>{try{
  const sucesso=resultados.filter(item=>item.ok).length;
  const primeiraFalha=resultados.find(item=>!item.ok);
  res.status(sucesso?200:502).json({ok:sucesso>0,status,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
-}catch(error){console.error('Status integração:',error);res.status(500).json({ok:false,error:'Não foi possível atualizar o status de integração.'})}});
+}catch(error){
+ console.error('Status integração:',error);
+ const detalhe=String(error?.message||'Erro interno').replace(/\s+/g,' ').trim().slice(0,300);
+ res.status(500).json({ok:false,error:`Não foi possível atualizar o status de integração: ${detalhe}`})
+}});
 // No computador local, mantenha o comportamento original: `npm start`.
 // Na Vercel, o adaptador Node importa este Express app e não abre uma porta.
 if (require.main === module) {
