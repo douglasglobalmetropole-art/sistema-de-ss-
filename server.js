@@ -262,8 +262,10 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
     if(!['em campo','pendente de envio para campo'].includes(atual))throw Error('A SS não está Em Campo. Situação atual: '+atual);
     // Desvincula o agente e solicita o retorno na mesma operação uMov.
     // Não modifica diretamente as tabelas espelho do PostgreSQL.
+    const pendenteId=String(process.env.UMOV_PENDENTE_SITUATION_ID||'').trim();
+    if(atual==='em campo'&&!/^[0-9]+$/.test(pendenteId))throw Error('Configure UMOV_PENDENTE_SITUATION_ID com o ID confirmado da situação Pendente de envio para campo na API uMov. Nenhuma alteração enviada.');
     const xml=atual==='em campo'
-      ? '<schedule><agent><id></id></agent><situation>Pendente de envio para campo</situation></schedule>'
+      ? `<schedule><agent><id></id></agent><situation><id>${xmlEscape(pendenteId)}</id></situation></schedule>`
       : '<schedule><agent><id></id></agent></schedule>';
     await postUmovXml('schedule',tarefa,xml);
     let confirmado=false,ultimaSituacao=atual,ultimoAgente=antes.rows[0].age_id;
