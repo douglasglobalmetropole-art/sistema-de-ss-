@@ -98,6 +98,28 @@ app.get('/api/macros',async(req,res)=>{try{const hit=getCache('macros',300000);i
 app.get('/api/cidades',async(req,res)=>{try{const hit=getCache('cidades',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(e_localidade) AS cidade FROM u45468.dbout_local WHERE e_localidade IS NOT NULL AND TRIM(e_localidade)<>'' ORDER BY 1`,query_timeout:6000});setCache('cidades',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/equipes',async(req,res)=>{try{const q=String(req.query.q||'').trim(),key='eq:'+q.toLowerCase(),hit=getCache(key,60000);if(hit)return res.json({ok:true,rows:hit});const values=[],where=['age_name IS NOT NULL',"TRIM(age_name)<>''"];if(q){values.push('%'+q+'%');where.push('(age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1)')}const r=await pool.query({text:`SELECT DISTINCT age_id AS id,age_name AS nome FROM u45468.agent WHERE ${where.join(' AND ')} ORDER BY age_name LIMIT 80`,values,query_timeout:6000});setCache(key,r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 
+// Envio de SS para equipe: grava no uMov, nunca apenas na interface.
+app.post('/api/enviar-equipe',async(req,res)=>{
+ try{
+  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
+  const agente=Number(req.body?.agente);
+  if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0)||!Number.isSafeInteger(agente)||agente<=0)return res.status(400).json({ok:false,error:'Selecione uma equipe válida e até 100 SS.'});
+  const equipe=await pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=$1 LIMIT 1',values:[agente],query_timeout:5000});
+  if(!equipe.rows.length)return res.status(404).json({ok:false,error:'Equipe não encontrada no uMov.'});
+  const resultados=[];
+  for(const tarefa of tarefas){
+   try{
+    const check=await pool.query({text:'SELECT tsk_id FROM u45468.task WHERE tsk_id=$1 LIMIT 1',values:[tarefa],query_timeout:4000});
+    if(!check.rows.length)throw Error('Tarefa não encontrada');
+    await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent></schedule>`);
+    resultados.push({tarefa,ok:true});
+   }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
+  }
+  for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
+  res.json({ok:resultados.every(x=>x.ok),equipe:equipe.rows[0].age_name,resultados,avisos:'Envio aceito pela API; a atualização do banco de consulta pode levar alguns instantes.'});
+ }catch(e){res.status(500).json({ok:false,error:e.message})}
+});
+
 // Marca notas retornadas de campo no uMov. A chave fica exclusivamente nas
 // variáveis da Vercel; ela nunca é entregue ao navegador.
 const integrationStatuses=new Set(['Baixada','Rejeitada','Duplicada']);
@@ -225,21 +247,25 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
   const resultados=[];
   for(const tarefa of tarefas){
    try{
-    const antes=await pool.query({text:'SELECT tsk_situation FROM u45468.dbout_task WHERE tsk_id=$1 LIMIT 1',values:[tarefa],query_timeout:4000});
+    const antes=await pool.query({text:`SELECT d.tsk_situation,t.age_id FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
     if(!antes.rows.length)throw Error('Tarefa não localizada no uMov.');
     const atual=String(antes.rows[0].tsk_situation||'').trim().toLowerCase();
-    if(atual==='pendente de envio para campo'){resultados.push({tarefa,ok:true});continue}
-    if(atual!=='em campo')throw Error('A SS não está Em Campo. Situação atual: '+atual);
-    // O endpoint schedule é o mesmo utilizado para atualizar campos personalizados.
-    // A confirmação abaixo impede sucesso falso caso não altere tsk_situation.
-    await postUmovXml('schedule',tarefa,'<schedule><situation>Pendente de envio para campo</situation></schedule>');
-    let confirmado=false;
-    for(let tentativa=0;tentativa<3;tentativa++){
-      const check=await pool.query({text:'SELECT tsk_situation FROM u45468.dbout_task WHERE tsk_id=$1 LIMIT 1',values:[tarefa],query_timeout:4000});
-      if(String(check.rows[0]?.tsk_situation||'').trim().toLowerCase()==='pendente de envio para campo'){confirmado=true;break}
-      await new Promise(resolve=>setTimeout(resolve,600));
+    if(!['em campo','pendente de envio para campo'].includes(atual))throw Error('A SS não está Em Campo. Situação atual: '+atual);
+    // Desvincula o agente e solicita o retorno na mesma operação uMov.
+    // Não modifica diretamente as tabelas espelho do PostgreSQL.
+    const xml=atual==='em campo'
+      ? '<schedule><agent><id></id></agent><situation>Pendente de envio para campo</situation></schedule>'
+      : '<schedule><agent><id></id></agent></schedule>';
+    await postUmovXml('schedule',tarefa,xml);
+    let confirmado=false,ultimaSituacao=atual,ultimoAgente=antes.rows[0].age_id;
+    for(let tentativa=0;tentativa<4;tentativa++){
+      const check=await pool.query({text:`SELECT d.tsk_situation,t.age_id FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
+      ultimaSituacao=String(check.rows[0]?.tsk_situation||'').trim().toLowerCase();
+      ultimoAgente=check.rows[0]?.age_id;
+      if(ultimaSituacao==='pendente de envio para campo' && (ultimoAgente===null||ultimoAgente===undefined)){confirmado=true;break}
+      if(tentativa<3)await new Promise(resolve=>setTimeout(resolve,700));
     }
-    if(!confirmado)throw Error('uMov não confirmou a alteração de tsk_situation. Verifique o endpoint de mudança de situação da API.');
+    if(!confirmado)throw Error('uMov recebeu a solicitação, mas ainda não confirmou situação pendente e equipe removida. Situação: '+ultimaSituacao+'; agente: '+(ultimoAgente??'nenhum')+'. Confira a sincronização e o formato de alteração de situação da API.');
     resultados.push({tarefa,ok:true});
    }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,250)})}
   }
