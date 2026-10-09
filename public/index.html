@@ -235,7 +235,7 @@ load();
     try{
       const response=await fetch('/api/status-integracao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,tarefas:items.map(item=>item.tarefa)})});
       const result=await response.json();
-      if(!response.ok&&!result.sucesso)throw new Error(result.error||'A ação não foi concluída.');
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||result.resultados?.find(item=>!item.ok)?.error||'A ação não foi concluída.');
       const sucesso=Number(result.sucesso||0),falhas=Number(result.falhas||0);
       items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated&&updated.ok)item.status_integracao=status});
       selected={};apply();

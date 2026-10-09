@@ -89,7 +89,11 @@ async function postUmovXml(resource,id,xml){
  const response=await fetch(`${base}/${encodeURIComponent(token)}/${resource}/${encodeURIComponent(id)}.xml`,{
   method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(xml),signal:AbortSignal.timeout(12000)
  });
- if(!response.ok)throw new Error(`uMov respondeu ${response.status}`);
+ if(!response.ok){
+  const texto=(await response.text()).replace(/\s+/g,' ').trim();
+  const detalhe=texto?`: ${texto.slice(0,240)}`:'';
+  throw new Error(`uMov respondeu ${response.status}${detalhe}`);
+ }
 }
 app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
@@ -110,7 +114,8 @@ app.post('/api/status-integracao',async(req,res)=>{try{
   }catch(error){resultados.push({tarefa,ok:false,error:error.message})}
  }
  const sucesso=resultados.filter(item=>item.ok).length;
- res.status(sucesso?200:502).json({ok:sucesso>0,status,resultados,sucesso,falhas:resultados.length-sucesso});
+ const primeiraFalha=resultados.find(item=>!item.ok);
+ res.status(sucesso?200:502).json({ok:sucesso>0,status,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
 }catch(error){console.error('Status integração:',error);res.status(500).json({ok:false,error:'Não foi possível atualizar o status de integração.'})}});
 // No computador local, mantenha o comportamento original: `npm start`.
 // Na Vercel, o adaptador Node importa este Express app e não abre uma porta.
