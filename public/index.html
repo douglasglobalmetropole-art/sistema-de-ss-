@@ -242,6 +242,8 @@ load();
     if(!el){el=document.createElement('div');el.id='integrationToast';el.style.cssText='position:fixed;right:18px;bottom:18px;z-index:1000;max-width:360px;padding:12px 15px;border-radius:7px;color:#fff;font-weight:700;box-shadow:0 8px 24px #001a3a44';document.body.appendChild(el)}
     el.style.background=kind==='error'?'#c63b3b':'#0879f7';el.textContent=message;el.hidden=false;clearTimeout(el._timer);el._timer=setTimeout(()=>el.hidden=true,5000);
   }
+  // Disponibiliza o aviso discreto também para o envio de equipes.
+  window.notify = notify;
   async function changeIntegrationStatus(status,label){
     const items=Object.values(selected||{});
     if(currentScreen!=='baixar')return notify('Esta ação é permitida somente em Notas para Baixar.','error');
