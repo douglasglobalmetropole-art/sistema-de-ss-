@@ -111,12 +111,20 @@ app.post('/api/enviar-equipe',async(req,res)=>{
    try{
     const check=await pool.query({text:'SELECT tsk_id FROM u45468.task WHERE tsk_id=$1 LIMIT 1',values:[tarefa],query_timeout:4000});
     if(!check.rows.length)throw Error('Tarefa não encontrada');
-    await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent></schedule>`);
-    resultados.push({tarefa,ok:true});
+    // A situação precisa ser configurada conforme o ID REAL da API uMov.
+    // Não presumir que atribuir um agente altera automaticamente a situação.
+    const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
+    const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
+    await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
+    const verificacao=await pool.query({text:`SELECT t.age_id,d.tsk_situation FROM u45468.task t LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
+    const estado=verificacao.rows[0]||{};
+    const emCampo=String(estado.tsk_situation||'').trim().toLowerCase()==='em campo';
+    const equipeConfirmada=String(estado.age_id||'')===String(agente);
+    resultados.push({tarefa,ok:true,confirmado:emCampo&&equipeConfirmada, situacao:estado.tsk_situation||'', aviso:emCampo&&equipeConfirmada?'':'Envio aceito; mudança para Em campo ainda não confirmada no banco.'});
    }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
-  res.json({ok:resultados.every(x=>x.ok),equipe:equipe.rows[0].age_name,resultados,avisos:'Envio aceito pela API; a atualização do banco de consulta pode levar alguns instantes.'});
+  res.json({ok:resultados.every(x=>x.ok),equipe:equipe.rows[0].age_name,resultados,avisos:'O envio foi aceito pela API. Confira o campo confirmado em cada tarefa; a sincronização pode levar alguns instantes.'});
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
