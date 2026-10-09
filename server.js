@@ -104,6 +104,8 @@ app.post('/api/enviar-equipe',async(req,res)=>{
   const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
   const agente=Number(req.body?.agente);
   if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0)||!Number.isSafeInteger(agente)||agente<=0)return res.status(400).json({ok:false,error:'Selecione uma equipe válida e até 100 SS.'});
+  const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
+  if(!/^[0-9]+$/.test(situacaoId))return res.status(503).json({ok:false,error:'Envio bloqueado: configure UMOV_EM_CAMPO_SITUATION_ID com o ID numérico confirmado da situação Em campo na API uMov. Nenhuma SS foi alterada.'});
   const equipe=await pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=$1 LIMIT 1',values:[agente],query_timeout:5000});
   if(!equipe.rows.length)return res.status(404).json({ok:false,error:'Equipe não encontrada no uMov.'});
   const resultados=[];
@@ -113,8 +115,7 @@ app.post('/api/enviar-equipe',async(req,res)=>{
     if(!check.rows.length)throw Error('Tarefa não encontrada');
     // A situação precisa ser configurada conforme o ID REAL da API uMov.
     // Não presumir que atribuir um agente altera automaticamente a situação.
-    const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
-    const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
+    const situacaoXml=`<situation><id>${xmlEscape(situacaoId)}</id></situation>`;
     await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
     const verificacao=await pool.query({text:`SELECT t.age_id,d.tsk_situation FROM u45468.task t LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:4000});
     const estado=verificacao.rows[0]||{};
