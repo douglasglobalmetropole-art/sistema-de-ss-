@@ -79,9 +79,27 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  if(cidades.length){values.push(cidades);where.push(`UPPER(TRIM(COALESCE(NULLIF(dl.e_localidade,''),l.loc_city)))=ANY(SELECT UPPER(unnest($${values.length}::text[])))`)}
  const inicio=String(req.query.inicio||''),fim=String(req.query.fim||'');
  if(!semData&&inicio&&fim){values.push(inicio);const i=values.length;values.push(fim);const f=values.length;const dt=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dt} >= $${i}::date AND ${dt} < ($${f}::date + INTERVAL '1 day')`)}
- const base=`FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.dbout_local dl ON dl.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id WHERE ${where.join(' AND ')}`;
+ // Restringe primeiro pelo periodo (ou pela SS exata), evitando varredura global
+ // das views dbout antes de filtrar e paginar.
+ const ssTerm=String(req.query.ss||'').trim();
+ const dataAplicavel=!semData&&inicio&&fim;
+ const seedValues=[];let seedSql;
+ if(ssTerm){
+   seedValues.push('%'+ssTerm+'%');
+   seedSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour FROM u45468.local l0 JOIN u45468.task t ON t.loc_id=l0.loc_id WHERE l0.loc_integrationid ILIKE $1`;
+ }else if(dataAplicavel){
+   seedValues.push(inicio,fim);
+   const dateColumn=tela==='recepcao'?'t.tsk_insertdatehour':'t.tsk_insertdatehour';
+   // A data de ultima atividade das demais abas permanece filtrada abaixo.
+   if(tela==='recepcao') seedSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour FROM u45468.task t WHERE ${dateColumn} >= $1::date AND ${dateColumn} < ($2::date + INTERVAL '1 day')`;
+ }
+ // Para abas sem periodo na task, usa consulta original; evita alterar a regra de datas.
+ const prefix=seedSql?`WITH candidatas AS MATERIALIZED (${seedSql}) `:'';
+ const taskSource=seedSql?'candidatas':'u45468.task';
+ const base=`FROM ${taskSource} t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.dbout_local dl ON dl.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id WHERE ${where.map((w)=>w.replace(/\$(\d+)/g,(_,n)=>'$'+(Number(n)+seedValues.length))).join(' AND ')}`;
  const sort=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';
- const args=[...values,limit+1,offset];const r=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,a.age_name AS tecnico,tt.tty_description AS servico ${base} ORDER BY ${sort} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`,values:args,query_timeout:15000});
+ const args=[...seedValues,...values,limit+1,offset];
+ const r=await pool.query({text:`${prefix}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,a.age_name AS tecnico,tt.tty_description AS servico ${base} ORDER BY ${sort} DESC NULLS LAST,t.tsk_id DESC LIMIT $${seedValues.length+values.length+1} OFFSET $${seedValues.length+values.length+2}`,values:args,query_timeout:12000});
  const hasMore=r.rows.length>limit,items=r.rows.slice(0,limit);
  const [locals,tasks]=await Promise.all([extrasLocal(items.map(x=>x.loc_id)),extrasTask(items.map(x=>x.tsk_id))]);
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
