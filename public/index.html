@@ -67,7 +67,7 @@ function apply(){
   if(sort)view.sort((a,b)=>val(a,sort).localeCompare(val(b,sort),'pt-BR',{numeric:true})*dir);
   render()
 }
-function render(){let a=view.slice(0,page);$('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(val(x,k))+'</td>').join('')+'</tr>').join('');[...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];fill(a[i]);render()});$('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';$('countInfo').textContent='Exibindo '+a.length+' de '+view.length+' SS'+(window.ms?' • consulta '+window.ms+' ms':'')}
+function render(){let a=view.slice(0,page);$('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(k==='data_finalizacao'?(val(x,'periodo_execucao')||val(x,k)):val(x,k))+'</td>').join('')+'</tr>').join('');[...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];fill(a[i]);render()});$('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';$('countInfo').textContent='Exibindo '+a.length+' de '+view.length+' SS'+(window.ms?' • consulta '+window.ms+' ms':'')}
 function fill(x){if(!x)return;document.body.classList.add('panel-open');$('lower').classList.add('open');$('titleSS').textContent=$('dss').textContent=val(x,'ss');[['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));const paraBaixar=currentScreen==='baixar';$('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; EXECUÇÃO DA ATIVIDADE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';$('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;if(paraBaixar){$('dInicioAtividade').textContent=val(x,'inicio_atividade')||'Não informado';$('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';$('dInfoExecucao').textContent=val(x,'info_execucao_siscom')||val(x,'informacao_solicitante')||'Não informado';$('dMateriais').textContent=val(x,'materiais_lancados')||'Não informado'}else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||x.info_execucao_siscom||''}
 function menu(box,button,items,selected,empty,suffix,set,label=v=>esc(v)){box.innerHTML='<input class="menuFind" autocomplete="off" placeholder="Digite para pesquisar..."><label style="font-weight:400;border-bottom:1px solid #d8e4ee"><input class="checkAll" type="checkbox" '+(items.length&&selected.length===items.length?'checked':'')+'> Selecione...</label>'+items.map(v=>'<label class="menuOption" data-text="'+esc(String(v).toLowerCase())+'"><input class="menuCheck" type="checkbox" value="'+esc(v)+'" '+(selected.includes(v)?'checked':'')+'> '+label(v)+'</label>').join('')||'<label>Nenhum registro encontrado.</label>';const sync=()=>{const chosen=[...box.querySelectorAll('.menuCheck:checked')].map(x=>x.value);set(chosen);button.textContent=!chosen.length?empty:chosen.length===1?chosen[0]:chosen.length+' '+suffix;box.querySelector('.checkAll').checked=chosen.length===items.length&&!!items.length;apply()};box.querySelector('.checkAll').onchange=e=>{box.querySelectorAll('.menuCheck').forEach(x=>x.checked=e.target.checked);sync()};box.querySelectorAll('.menuCheck').forEach(i=>i.onchange=sync);box.querySelector('.menuFind').oninput=e=>{const q=e.target.value.toLocaleLowerCase('pt-BR');box.querySelectorAll('.menuOption').forEach(x=>x.style.display=!q||x.dataset.text.includes(q)?'flex':'none')}}
 function macroLabel(v){const m=String(v).trim().match(/^(\\d+)\\s*[-–:]?\\s*(.*)$/);return m&&m[2]?'<b>'+esc(m[1])+'</b><span style="color:#58718a"> — '+esc(m[2])+'</span>':esc(v)}
@@ -99,10 +99,10 @@ function setScreen(screen,btn){
     f.dataset.col='equipe_executou';
     f.placeholder='Filtrar equipe...';
   }else if(mostraEquipeComData){
-    h.innerHTML='DATA DE FINALIZAÇÃO<span class="sort">↕</span>';
+    h.innerHTML='QUANDO (EXECUTADO)<span class="sort">↕</span>';
     h.dataset.key='data_finalizacao';
     f.dataset.col='data_finalizacao';
-    f.placeholder='Filtrar data...';
+    f.placeholder='Filtrar início ou fim...';
     teamHeader.innerHTML='EQUIPE QUE EXECUTOU<span class="sort">↕</span>';
     teamHeader.dataset.key='equipe_executou';
     teamFilter.dataset.col='equipe_executou';
@@ -197,7 +197,7 @@ function renderPagination(){
 }
 function render(){
   let a=view.slice(0,page);
-  $('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(val(x,k))+'</td>').join('')+'</tr>').join('');
+  $('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(k==='data_finalizacao'?(val(x,'periodo_execucao')||val(x,k)):val(x,k))+'</td>').join('')+'</tr>').join('');
   [...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];fill(a[i]);render()});
   $('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);
   let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';
@@ -329,7 +329,7 @@ load();
     document.body.classList.add('panel-open');$('lower').classList.add('open');
     $('titleSS').textContent=$('dss').textContent=val(x,'ss');
     [['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));
-    const paraBaixar=currentScreen==='baixar';
+    const paraBaixar=currentScreen==='baixar'||currentScreen==='encerradas';
     $('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; RETORNO PREENCHIDO PELA EQUIPE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';
     $('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;
     if(paraBaixar){
