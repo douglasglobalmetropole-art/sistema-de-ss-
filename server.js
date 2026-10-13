@@ -348,6 +348,24 @@ app.post('/api/status-integracao',async(req,res)=>{try{
 }});
 // Retorno para Recepção: solicita a mudança no uMov e só confirma após
 // verificar o status real no PostgreSQL. Nunca altera apenas a interface.
+// Desvincular equipe na Recepção sem mudar a situação da SS.
+app.post('/api/remover-equipe',async(req,res)=>{
+ try{
+  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
+  if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0))
+   return res.status(400).json({ok:false,error:'Selecione de 1 a 100 SS válidas.'});
+  const resultados=[];
+  for(const tarefa of tarefas){
+   try{
+    await postUmovXml('schedule',tarefa,'<schedule><agent><id></id></agent></schedule>');
+    resultados.push({tarefa,ok:true,aviso:'Desvinculação solicitada à API uMov; aguarde a sincronização.'});
+   }catch(e){resultados.push({tarefa,ok:false,error:String(e.message||e).slice(0,250)})}
+  }
+  const sucesso=resultados.filter(x=>x.ok).length;
+  if(sucesso)cache.clear();
+  res.status(sucesso?200:502).json({ok:sucesso>0,sucesso,falhas:resultados.length-sucesso,resultados,error:resultados.find(x=>!x.ok)?.error});
+ }catch(e){res.status(500).json({ok:false,error:e.message})}
+});
 app.post('/api/retornar-recepcao',async(req,res)=>{
  try{
   const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,25);
