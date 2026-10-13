@@ -395,9 +395,11 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
  }catch(error){res.status(500).json({ok:false,error:error.message})}
 });
 app.post('/api/tags',async(req,res)=>{try{
- const tag=String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
+ const acao=String(req.body?.acao||'adicionar');
+ if(!['adicionar','limpar'].includes(acao))return res.status(400).json({ok:false,error:'Ação de tag inválida.'});
+ const tag=acao==='limpar'?'':String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
- if(!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
+ if(acao==='adicionar'&&!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
  const resultados=[];
  for(const tarefa of tarefas){

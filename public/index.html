@@ -11,6 +11,7 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
 <section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div id="buscaDiretaStatus" aria-live="polite" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
 <section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"></th><th data-key="ss">SS<span class="sort">↕</span></th><th id="receptionTeamHeader" data-key="equipe_executou">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th id="lastHeader" data-key="criado_em">DATA DE ABERTURA<span class="sort">↕</span></th><th id="teamHeader" data-key="equipe_executou" hidden>EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th id="integrationHeader" data-key="status_integracao" hidden>STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."></td><td><input data-col="logradouro"></td><td><input data-col="bairro"></td><td><input data-col="cidade"></td><td><input data-col="setor"></td><td><input data-col="servico"></td><td><input data-col="tags"></td><td><input id="lastFilter" data-col="criado_em"></td><td id="teamFilterCell" hidden><input id="teamFilter" data-col="equipe_executou"></td><td id="integrationFilterCell" hidden><input id="integrationFilter" data-col="status_integracao"></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected>25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
 <section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣ &nbsp; DETALHES DA SS &nbsp; <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰ &nbsp; INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly></textarea><div class="executionGrid" id="executionInfo" hidden><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙ &nbsp; AÇÕES DA SS</h3><div class="actions"><button class="action" id="viewSSBtn" hidden><b>▤</b>Visualizar SS</button><button class="action" id="viewReportBtn" hidden><b>▤</b>Visualizar Relatório</button><button class="action" id="groupedBtn" hidden><b>♟</b>Visualizar Agrupado</button><button class="action" id="downloadBtn" hidden><b>↓</b>Baixar</button><button class="action" id="duplicateBtn" hidden><b>▣+</b>Duplicar</button><button class="action" id="rejectBtn" hidden><b>×</b>Rejeitar</button><button class="action" id="launchItemsBtn" hidden><b>☷+</b>Lançar Itens</button><button class="action" id="returnReceptionBtn" hidden><b>↩</b>Retornar para Recepção</button><button class="action" id="tagBtn" hidden><b>◆</b>Adicionar Tag</button><button class="action" id="sendTeamBtn" hidden><b>➜</b>Enviar para Equipe</button><button class="action" id="removeTeamBtn" hidden><b>↩</b>Remover da Equipe</button></div></div></section></main>
+<div id="tagModal" class="modalBg" role="dialog" aria-modal="true" aria-labelledby="tagModalTitle"><div class="modalBox" style="width:460px;max-width:95vw"><h3 id="tagModalTitle">Gerenciar tag das SS</h3><p id="tagModalCount" style="margin:10px 0;color:#476481"></p><label for="tagModalInput" style="display:block;margin-bottom:6px;font-weight:700">Tag</label><input id="tagModalInput" maxlength="120" placeholder="Digite a tag que deseja adicionar" style="width:100%;padding:11px;border:1px solid #bed1e2;border-radius:6px"><p style="color:#526b80;font-size:12px">Adicionar substitui a tag atual. Limpar remove a tag das SS selecionadas.</p><div id="tagModalError" style="color:#b42318;min-height:18px" aria-live="polite"></div><div class="modalBtns" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn" id="tagModalCancel">Cancelar</button><button type="button" class="btn" id="tagModalClear" style="border-color:#c94c4c;color:#a92b2b">Limpar tag</button><button type="button" class="btn primary" id="tagModalSave">Adicionar tag</button></div></div></div>
 <div id="teamModal" class="modalBg"><div class="modalBox"><h3>Enviar SS para Equipe</h3><div>Digite o <b>número</b> ou o <b>nome</b> da equipe/técnico:</div><input id="sendTeamSearch" autocomplete="off" placeholder="Ex.: 270 ou THIAGO"><div id="sendTeamList" class="modalList"></div><div id="sendTeamSelected" style="margin-top:8px;font-weight:bold"></div><div class="modalBtns"><button class="btn" id="cancelTeam">Cancelar</button><button class="btn primary" id="confirmTeam">Enviar para equipe</button></div></div></div>
 <script>
 // Notificação global, disponível desde o início da aplicação.
@@ -355,26 +356,43 @@ load();
     }catch(error){notify(error.message||'Não foi possível retornar para Recepção.','error')}
     finally{button.disabled=false}
   };
-  $('tagBtn').onclick=async()=>{
+  let tagModalItems=[];
+  const closeTagModal=()=>{$('tagModal').classList.remove('open');$('tagModalError').textContent='';};
+  $('tagModalCancel').onclick=closeTagModal;
+  $('tagModal').addEventListener('click',e=>{if(e.target===$('tagModal'))closeTagModal()});
+  $('tagModal').addEventListener('keydown',e=>{if(e.key==='Escape')closeTagModal()});
+  $('tagBtn').onclick=()=>{
     if(!['recepcao','campo'].includes(currentScreen))return notify('A tag está disponível nas abas Recepção e Em Campo.','error');
-    const items=Object.values(selected||{});
-    if(!items.length&&window.__detailSS?.tarefa)items.push(window.__detailSS);
-    if(!items.length)return notify('Selecione ao menos uma SS.','error');
-    const tag=prompt(`Digite a tag para ${items.length===1?'esta SS':'as '+items.length+' SS'}:`,'');
-    if(tag===null)return;
-    const valor=tag.trim().replace(/\s+/g,' ');
-    if(!valor)return notify('Informe uma tag.','error');
-    $('tagBtn').disabled=true;
-    try{
-      const response=await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:valor,tarefas:items.map(item=>item.tarefa)})});
-      const result=await response.json();
-      if(!response.ok&&!result.sucesso)throw new Error(result.error||'Não foi possível gravar a tag.');
-      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated?.ok)item.tags=valor});
-      selected={};apply();
-      notify(`Tag adicionada em ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
-    }catch(error){notify(error.message||'Não foi possível gravar a tag.','error')}
-    finally{$('tagBtn').disabled=false}
+    tagModalItems=Object.values(selected||{});
+    if(!tagModalItems.length&&window.__detailSS?.tarefa)tagModalItems=[window.__detailSS];
+    if(!tagModalItems.length)return notify('Selecione ao menos uma SS.','error');
+    if(tagModalItems.length>25)return notify('Selecione no máximo 25 SS por operação de tag.','error');
+    $('tagModalCount').textContent=`${tagModalItems.length} SS selecionada(s)`;
+    $('tagModalInput').value=tagModalItems.length===1?String(tagModalItems[0].tags||''):'';
+    $('tagModalError').textContent='';
+    $('tagModal').classList.add('open');$('tagModalInput').focus();
   };
+  async function executarTag(limpar){
+    const valor=limpar?'':$('tagModalInput').value.trim().replace(/\s+/g,' ');
+    if(!limpar&&!valor){$('tagModalError').textContent='Digite uma tag para adicionar.';return;}
+    if(limpar&&!confirm(`Limpar a tag de ${tagModalItems.length} SS?`))return;
+    const buttons=[$('tagModalSave'),$('tagModalClear'),$('tagModalCancel')];buttons.forEach(b=>b.disabled=true);
+    $('tagModalError').textContent='';
+    try{
+      const response=await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:limpar?'limpar':'adicionar',tag:valor,tarefas:tagModalItems.map(x=>x.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível atualizar a tag.');
+      const ids=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+      for(const item of tagModalItems)if(ids.has(String(item.tarefa)))item.tags=valor;
+      for(const item of raw)if(ids.has(String(item.tarefa)))item.tags=valor;
+      if(window.__detailSS&&ids.has(String(window.__detailSS.tarefa))){window.__detailSS.tags=valor;$('dtag').textContent=valor;}
+      selected={};apply();closeTagModal();
+      notify(`${limpar?'Limpeza':'Atualização'} de tag enviada ao uMov para ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
+    }catch(error){$('tagModalError').textContent=error.message||'Erro ao atualizar tag.'}
+    finally{buttons.forEach(b=>b.disabled=false)}
+  }
+  $('tagModalSave').onclick=()=>executarTag(false);
+  $('tagModalClear').onclick=()=>executarTag(true);
 })();
 </script>
 <script>
