@@ -82,7 +82,14 @@ async function loadMenus(){try{const a=await fetch('/api/macros').then(r=>r.json
 async function load(){try{$('countInfo').textContent='Carregando SS...';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,tela:currentScreen}),r=await fetch('/api/recepcao?'+p),j=await r.json();if(!r.ok)throw Error(j.error);raw=j.rows||[];window.ms=j.ms;selected={};apply()}catch(e){$('countInfo').textContent='Erro: '+e.message}}
 ['macro','city'].forEach(n=>$(n+'Btn').onclick=e=>{e.stopPropagation();$(n+'Multi').classList.toggle('open')});document.addEventListener('click',()=>document.querySelectorAll('.multi.open').forEach(x=>x.classList.remove('open')));document.querySelectorAll('.multiMenu').forEach(x=>x.onclick=e=>e.stopPropagation());document.querySelectorAll('.filter input').forEach(i=>i.oninput=apply);document.querySelectorAll('th[data-key]').forEach(t=>t.onclick=()=>{sort===t.dataset.key?dir*=-1:(sort=t.dataset.key,dir=1);document.querySelectorAll('.sort').forEach(x=>x.textContent='↕');t.querySelector('.sort').textContent=dir===1?'↑':'↓';apply()});$('pageSize').onchange=e=>{page=+e.target.value;load()};$('filterBtn').onclick=load;$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();loadMenus();load()};$('all').onchange=e=>{view.slice(0,page).forEach(x=>e.target.checked?selected[x.tarefa]=x:delete selected[x.tarefa]);render()};$('closeDetail').onclick=()=>{$('lower').classList.remove('open');selected={};render()};
 async function teams(){try{let r=await fetch('/api/equipes?q='+encodeURIComponent($('sendTeamSearch').value)),j=await r.json(),a=j.rows||[];$('sendTeamList').innerHTML=a.length?a.map(x=>'<div class="modalItem" data-id="'+esc(x.id)+'" data-name="'+esc(x.nome)+'"><b>'+esc(x.id)+'</b> - '+esc(x.nome)+'</div>').join(''):'<div class="modalItem">Nenhum técnico/equipe encontrado.</div>';document.querySelectorAll('.modalItem[data-id]').forEach(x=>x.onclick=()=>{target={id:x.dataset.id,nome:x.dataset.name};$('sendTeamSearch').value=target.id+' - '+target.nome;$('sendTeamSelected').textContent='Selecionado: '+$('sendTeamSearch').value})}catch(e){$('sendTeamList').textContent='Erro ao buscar equipes.'}}
-$('sendTeamBtn').onclick=async()=>{if(!Object.keys(selected).length&&window.__detailSS?.tarefa)selected[window.__detailSS.tarefa]=window.__detailSS;if(!Object.keys(selected).length)return alert('Selecione uma SS antes de enviar para uma equipe.');target=null;$('sendTeamSearch').value='';$('sendTeamSelected').textContent='';$('teamModal').classList.add('open');await teams();$('sendTeamSearch').focus()};let time;$('sendTeamSearch').oninput=()=>{clearTimeout(time);time=setTimeout(teams,180)};$('cancelTeam').onclick=()=>$('teamModal').classList.remove('open');$('teamModal').onclick=e=>{if(e.target===$('teamModal'))$('teamModal').classList.remove('open')};$('confirmTeam').onclick=async()=>{if(!target)return alert('Selecione uma equipe da lista.');const tarefas=Object.keys(selected).map(Number);if(!tarefas.length)return alert('Selecione pelo menos uma SS.');if(!confirm('Enviar '+tarefas.length+' SS para '+target.nome+'?'))return;const btn=$('confirmTeam');btn.disabled=true;btn.textContent='Enviando...';try{const r=await fetch('/api/enviar-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas,agente:Number(target.id)})});const j=await r.json();if(!r.ok&&!j.resultados)throw Error(j.error||'Erro no envio');const sucesso=(j.resultados||[]).filter(x=>x.ok).length;const falhas=(j.resultados||[]).filter(x=>!x.ok);const confirmadas=(j.resultados||[]).filter(x=>x.confirmado).length;window.notify('Equipe atribuída: '+sucesso+' SS. Em Campo confirmadas: '+confirmadas+'.'+(falhas.length?' Falhas: '+falhas.length+'.':'')+(sucesso>confirmadas?' Aguarde sincronização e atualize para verificar a situação.':''),falhas.length?'error':'success');$('teamModal').classList.remove('open');if(sucesso){selected={};await load()}else await load()}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();load();
+$('sendTeamBtn').onclick=async()=>{if(!Object.keys(selected).length&&window.__detailSS?.tarefa)selected[window.__detailSS.tarefa]=window.__detailSS;if(!Object.keys(selected).length)return alert('Selecione uma SS antes de enviar para uma equipe.');target=null;$('sendTeamSearch').value='';$('sendTeamSelected').textContent='';$('teamModal').classList.add('open');await teams();$('sendTeamSearch').focus()};let time;$('sendTeamSearch').oninput=()=>{clearTimeout(time);time=setTimeout(teams,180)};$('cancelTeam').onclick=()=>$('teamModal').classList.remove('open');$('teamModal').onclick=e=>{if(e.target===$('teamModal'))$('teamModal').classList.remove('open')};$('confirmTeam').onclick=async()=>{if(!target)return alert('Selecione uma equipe da lista.');const tarefas=Object.keys(selected).map(Number);if(!tarefas.length)return alert('Selecione pelo menos uma SS.');if(!confirm('Enviar '+tarefas.length+' SS para '+target.nome+'?'))return;const btn=$('confirmTeam');btn.disabled=true;btn.textContent='Enviando...';try{const r=await fetch('/api/enviar-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas,agente:Number(target.id)})});const j=await r.json();if(!r.ok&&!j.resultados)throw Error(j.error||'Erro no envio');const sucesso=(j.resultados||[]).filter(x=>x.ok).length;for(const x of (j.resultados||[])){if(x.ok)equipesPendentes.set(String(x.tarefa),{nome:target.nome,em:Date.now()})}const falhas=(j.resultados||[]).filter(x=>!x.ok);const confirmadas=(j.resultados||[]).filter(x=>x.confirmado).length;window.notify('Equipe atribuída: '+sucesso+' SS. Em Campo confirmadas: '+confirmadas+'.'+(falhas.length?' Falhas: '+falhas.length+'.':'')+(sucesso>confirmadas?' Aguarde sincronização e atualize para verificar a situação.':''),falhas.length?'error':'success');$('teamModal').classList.remove('open');if(sucesso){
+  const ids=new Set((j.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+  for(const item of raw){if(ids.has(String(item.tarefa))){item.equipe_executou=target.nome;item.tecnico=target.nome;}}
+  if(window.__detailSS&&ids.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou=target.nome;window.__detailSS.tecnico=target.nome;}
+  selected={};apply();
+  // A atualização visual é imediata. Uma nova consulta não deve bloquear o botão
+  // nem apagar o nome antes de o uMov sincronizar a atribuição.
+}else{selected={};apply()}}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();load();
 $('closeDetail').addEventListener('click',()=>{document.body.classList.remove('panel-open');window.__detailSS=null});
 document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!document.querySelector('.pick:checked')){document.body.classList.remove('panel-open');$('lower').classList.remove('open')}});
 ['macroBtn','cityBtn'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>{const box=id==='macroBtn'?'macroMenu':'cityMenu';$(box).querySelector('.menuFind')?.focus()},0)));
@@ -220,6 +227,21 @@ function render(){
   $('countInfo').textContent='Exibindo '+inicioPagina+'–'+fimPagina+' de '+(Number.isFinite(window.__totalSS)?window.__totalSS:'mais SS')+(window.ms?' • consulta '+window.ms+' ms':'');
   renderPagination();
 }
+// Atribuições aceitas pela API podem levar alguns segundos para aparecer no banco.
+// Mostra o vínculo pendente imediatamente, sem atribuí-lo falsamente como confirmado.
+const equipesPendentes=new Map();
+function reconciliarEquipes(rows){
+  for(const x of rows){
+    const key=String(x.tarefa),pendente=equipesPendentes.get(key);
+    if(!pendente)continue;
+    const banco=String(x.equipe_executou||x.tecnico||'').trim();
+    if(banco&&banco===pendente.nome){equipesPendentes.delete(key);continue}
+    if(Date.now()-pendente.em>600000){equipesPendentes.delete(key);continue}
+    x.equipe_executou=pendente.nome;
+    x.tecnico=x.equipe_executou;
+  }
+  return rows;
+}
 let consultaListaAtual=null,numeroConsultaLista=0;
 async function load(forcarAtualizacao=false){
   if(window.__buscaSSAtiva)return;
@@ -230,7 +252,7 @@ async function load(forcarAtualizacao=false){
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
     const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!somenteEquipe;if(forcarAtualizacao)p.set('_refresh',String(Date.now()));let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
-    raw=j.rows||[];window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
+    raw=reconciliarEquipes(j.rows||[]);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
 }
 let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},500)}));
@@ -343,7 +365,7 @@ load();
       const response=await fetch('/api/remover-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:comEquipe.map(x=>x.tarefa)})});
       const result=await response.json();
       if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível remover a equipe.');
-      const okIds=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+      const okIds=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));for(const id of okIds)equipesPendentes.delete(id);
       for(const x of raw){if(okIds.has(String(x.tarefa))){x.equipe_executou='';x.tecnico='';}}
       if(window.__detailSS&&okIds.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou='';window.__detailSS.tecnico='';}
       selected={};apply();
