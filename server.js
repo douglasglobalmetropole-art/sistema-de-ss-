@@ -117,14 +117,26 @@ app.get('/api/localizar-ss', async (req,res)=>{
     SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street
     FROM u45468.local WHERE loc_integrationid = $1 LIMIT 30
   ) SELECT l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
-     l.loc_street AS rua,t.tsk_id AS tarefa,d.tsk_situation AS situacao,
+     l.loc_street AS rua,l.loc_id,t.tsk_id AS tarefa,t.tsk_insertdatehour AS criado_em,a.age_name AS tecnico,tt.tty_description AS servico,d.tsk_situation AS situacao,
      d.e_situacao AS status_integracao
     FROM locais l JOIN u45468.task t ON t.loc_id=l.loc_id
     LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
+    LEFT JOIN u45468.agent a ON a.age_id=t.age_id
+    LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
     ORDER BY t.tsk_id DESC LIMIT 30`;
   const query=exata?sql:sql.replace('loc_integrationid = $1','loc_integrationid ILIKE $1');
   const r=await pool.query({text:query,values:[exata?termo:termo+'%'],query_timeout:7000});
-  res.json({ok:true,rows:r.rows});
+  const encontrados=r.rows;
+  const [locaisExtras,tarefasExtras]=await Promise.all([
+    extrasLocal(encontrados.map(x=>x.loc_id).filter(Boolean)),
+    extrasTask(encontrados.map(x=>x.tarefa))
+  ]);
+  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
+  const rows=encontrados.map(x=>{
+    const l=locaisExtras.get(String(x.loc_id))||{},t=tarefasExtras.get(String(x.tarefa))||{};
+    return {ss:x.ss||'',tarefa:x.tarefa,local:x.loc_id,cidade:l.cidade||x.cidade||'',bairro:l.bairro||x.bairro||'',logradouro:l.logradouro||x.rua||'',numero:l.numero||'',setor:l.setor||'',servico:x.servico||'',tags:t.tags||'',situacao_campo:x.situacao||'',status_integracao:x.status_integracao||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tss_id:t.tss_id||'',link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tarefa}/${t.tsk_accesstoken}`:'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.criado_em)};
+  });
+  res.json({ok:true,rows});
  }catch(e){console.error('Localizar SS:',e);res.status(500).json({ok:false,error:'Falha ao consultar SS no banco: '+e.message})}
 });
 app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.query('SELECT current_database() banco,NOW() agora')).rows[0]})}catch(e){res.status(500).json({ok:false,error:e.message})}});

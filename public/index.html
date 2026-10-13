@@ -65,8 +65,8 @@ function screenMatch(x){
   return true;
 }
 function apply(){
-  const q=Object.fromEntries([...document.querySelectorAll('.filter input')].map(i=>[i.dataset.col,i.value.toLowerCase()]));if(window.__globalSSSearch)Object.keys(q).forEach(k=>q[k]='');
-  view=raw.filter(x=>screenMatch(x)&&(window.__globalSSSearch||!cities.length||cities.includes(val(x,'cidade')))&&(window.__globalSSSearch||!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
+  const q=Object.fromEntries([...document.querySelectorAll('.filter input')].map(i=>[i.dataset.col,i.value.toLowerCase()]));if(window.__globalSSSearch||window.__buscaSSAtiva)Object.keys(q).forEach(k=>q[k]='');
+  view=raw.filter(x=>(window.__buscaSSAtiva||screenMatch(x))&&(window.__globalSSSearch||window.__buscaSSAtiva||!cities.length||cities.includes(val(x,'cidade')))&&(window.__globalSSSearch||window.__buscaSSAtiva||!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
   if(sort)view.sort((a,b)=>val(a,sort).localeCompare(val(b,sort),'pt-BR',{numeric:true})*dir);
   render()
 }
@@ -196,7 +196,7 @@ function renderPagination(){
   const atual=Math.floor(window.__pageOffset/page)+1,nums=[];const totalPaginas=Number.isFinite(window.__totalSS)?Math.max(1,Math.ceil(window.__totalSS/page)):null;
   for(let n=Math.max(1,atual-2);n<=Math.min(totalPaginas||atual+(window.__hasMore?1:0),atual+2);n++)nums.push(n);
   area.innerHTML='<button class="pageBtn" '+(atual===1?'disabled':'')+' data-page="'+(atual-1)+'">‹</button>'+nums.map(n=>'<button class="pageBtn '+(n===atual?'active':'')+'" data-page="'+n+'">'+n+'</button>').join('')+'<button class="pageBtn" '+(!window.__hasMore?'disabled':'')+' data-page="'+(atual+1)+'">›</button>';
-  area.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{const destino=Number(b.dataset.page);if(destino<1||destino===atual)return;window.__pageOffset=(destino-1)*page;load()});
+  area.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{if(window.__buscaSSAtiva)return;const destino=Number(b.dataset.page);if(destino<1||destino===atual)return;window.__pageOffset=(destino-1)*page;load()});
 }
 function render(){
   let a=view.slice(0,page);
@@ -209,6 +209,7 @@ function render(){
   renderPagination();
 }
 async function load(){
+  if(window.__buscaSSAtiva)return;
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
@@ -234,25 +235,31 @@ let equipeFilterTimer;
 });
 $('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
 document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener('click',()=>{window.__pageOffset=0},{capture:true}));
-// Busca direta independente das abas e dos filtros da tabela.
+// Pesquisa direta no PostgreSQL, exibida na própria lista principal.
 (()=>{
- const input=$('buscaDiretaSS'),botao=$('buscaDiretaBtn'),limpar=$('buscaDiretaLimpar'),status=$('buscaDiretaStatus'),resultado=$('buscaDiretaResultados'),painel=$('buscaDiretaPainel');
- let seq=0,timer;
+ const input=$('buscaDiretaSS'),botao=$('buscaDiretaBtn'),limpar=$('buscaDiretaLimpar');
+ const painel=$('buscaDiretaPainel');if(painel)painel.remove();
+ let seq=0,timer,anterior=null;
  async function buscar(){
   const ss=input.value.trim(),id=++seq;
-  if(ss.length<4){resultado.style.display='none';status.textContent='Digite pelo menos 4 caracteres do número da SS.';return}
-  status.textContent='Consultando PostgreSQL...';resultado.style.display='none';botao.disabled=true;
+  if(ss.length<4){if(!ss)restaurar();else $('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return}
+  if(!window.__buscaSSAtiva)anterior={raw,offset:window.__pageOffset,total:window.__totalSS,hasMore:window.__hasMore,ms:window.ms};
+  window.__buscaSSAtiva=true;botao.disabled=true;$('countInfo').textContent='Pesquisando SS diretamente no PostgreSQL...';
   try{
    const r=await fetch('/api/localizar-ss?ss='+encodeURIComponent(ss));const j=await r.json();if(id!==seq)return;
    if(!r.ok||!j.ok)throw Error(j.error||'Erro na consulta');
-   const rows=j.rows||[];status.textContent=rows.length?rows.length+' tarefa(s) encontrada(s) no banco.':'Nenhuma SS encontrada.';
-   resultado.innerHTML=rows.length?'<table style="min-width:750px"><thead><tr><th>SS</th><th>Tarefa</th><th>Cidade</th><th>Bairro</th><th>Situação uMov</th><th>Integração</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+esc(x.ss||'')+'</td><td>'+esc(String(x.tarefa||''))+'</td><td>'+esc(x.cidade||'')+'</td><td>'+esc(x.bairro||'')+'</td><td>'+esc(x.situacao||'')+'</td><td>'+esc(x.status_integracao||'')+'</td></tr>').join('')+'</tbody></table>':'';
-   resultado.style.display=rows.length?'block':'none';
-  }catch(e){if(id===seq)status.textContent='Erro: '+e.message}finally{if(id===seq)botao.disabled=false}
+   raw=j.rows||[];selected={};window.__pageOffset=0;window.__totalSS=raw.length;window.__hasMore=false;window.ms=null;apply();
+   if(!raw.length)$('countInfo').textContent='Nenhuma SS encontrada para '+ss+'.';
+  }catch(e){if(id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
+  finally{if(id===seq)botao.disabled=false}
  }
- botao.addEventListener('click',buscar);input.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);buscar()}});
- input.addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(buscar,650)});
- limpar.addEventListener('click',()=>{painel.style.display='none';seq++;clearTimeout(timer);input.value='';resultado.innerHTML='';resultado.style.display='none';status.textContent='Busca independente de cidade, macro, período e paginação.';botao.disabled=false});
+ function restaurar(){seq++;clearTimeout(timer);window.__buscaSSAtiva=false;botao.disabled=false;selected={};
+  if(anterior){raw=anterior.raw;window.__pageOffset=anterior.offset;window.__totalSS=anterior.total;window.__hasMore=anterior.hasMore;window.ms=anterior.ms;anterior=null;apply()}else load();
+ }
+ botao.onclick=buscar;
+ input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);buscar()}};
+ input.oninput=()=>{clearTimeout(timer);if(!input.value.trim()){restaurar();return}timer=setTimeout(buscar,550)};
+ limpar.onclick=()=>{input.value='';restaurar()};
 })();
 load();
 </script>
