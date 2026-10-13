@@ -88,6 +88,13 @@ document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!
 // V10.1: apenas apresentação da aba. NÃO executa nova consulta.
 function setScreen(screen,btn){
   if(screen==='preparacao') return;
+  // Em Campo: sem restrição de datas por padrão. Preservar as datas que
+  // o programador preencher até sair da aba.
+  if(screen==='campo' && currentScreen!=='campo'){
+    $('dateIni').value='';$('dateFim').value='';
+  }else if(currentScreen==='campo' && screen!=='campo'){
+    setDefaultDateRange();
+  }
   currentScreen=screen;window.__detailSS=null;
   configureActions(screen);
   document.querySelectorAll('.tab[data-screen]').forEach(x=>x.classList.toggle('active',x===btn));
@@ -230,7 +237,7 @@ $('filterBtn').onclick=()=>{window.__pageOffset=0;load()};
 let dateFilterTimer;
 ['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
   clearTimeout(dateFilterTimer);
-  dateFilterTimer=setTimeout(()=>{if($('dateIni').value&&$('dateFim').value){window.__pageOffset=0;load()}},250);
+  dateFilterTimer=setTimeout(()=>{if(currentScreen==='campo'||($('dateIni').value&&$('dateFim').value)){window.__pageOffset=0;load()}},250);
 }));
 let equipeFilterTimer;
 ['teamFilter','lastFilter'].forEach(id=>$(id).oninput=()=>{
@@ -239,7 +246,7 @@ let equipeFilterTimer;
   clearTimeout(equipeFilterTimer);
   equipeFilterTimer=setTimeout(()=>{window.__pageOffset=0;load()},300);
 });
-$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
+$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');if(currentScreen==='campo'){$('dateIni').value='';$('dateFim').value=''}else setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
 document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener('click',()=>{window.__pageOffset=0},{capture:true}));
 // Pesquisa direta no PostgreSQL, exibida na própria lista principal.
 (()=>{
