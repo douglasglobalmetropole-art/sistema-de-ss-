@@ -106,6 +106,27 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.tsk_insertdatehour),link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
  res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore});
  }catch(e){console.error('Pesquisa global:',e);res.status(500).json({ok:false,error:e.message})}});
+// Pesquisa independente por numero de SS, sem filtros de tela ou data.
+// Restringe a busca na tabela local antes de acessar as tarefas.
+app.get('/api/localizar-ss', async (req,res)=>{
+ try {
+  const termo=String(req.query.ss||'').trim().slice(0,40);
+  if(termo.length<4)return res.json({ok:true,rows:[],message:'Digite pelo menos 4 caracteres.'});
+  const exata=/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(termo);
+  const sql=`WITH locais AS MATERIALIZED (
+    SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street
+    FROM u45468.local WHERE loc_integrationid = $1 LIMIT 30
+  ) SELECT l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
+     l.loc_street AS rua,t.tsk_id AS tarefa,d.tsk_situation AS situacao,
+     d.e_situacao AS status_integracao
+    FROM locais l JOIN u45468.task t ON t.loc_id=l.loc_id
+    LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
+    ORDER BY t.tsk_id DESC LIMIT 30`;
+  const query=exata?sql:sql.replace('loc_integrationid = $1','loc_integrationid ILIKE $1');
+  const r=await pool.query({text:query,values:[exata?termo:termo+'%'],query_timeout:7000});
+  res.json({ok:true,rows:r.rows});
+ }catch(e){console.error('Localizar SS:',e);res.status(500).json({ok:false,error:'Falha ao consultar SS no banco: '+e.message})}
+});
 app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.query('SELECT current_database() banco,NOW() agora')).rows[0]})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 // Consulta rápida: limita task primeiro e só consulta dbout_local para até 100 SS.
 app.get('/api/recepcao',async(req,res)=>{try{
