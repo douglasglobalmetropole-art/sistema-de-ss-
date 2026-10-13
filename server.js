@@ -91,10 +91,19 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
    seedValues.push(inicio,fim);
    const dateColumn=tela==='recepcao'?'t.tsk_insertdatehour':'t.tsk_insertdatehour';
    // A data de ultima atividade das demais abas permanece filtrada abaixo.
-   if(tela==='recepcao') seedSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour FROM u45468.task t WHERE ${dateColumn} >= $1::date AND ${dateColumn} < ($2::date + INTERVAL '1 day')`;
+   if(tela==='recepcao') {
+     // Filtrar logradouro/SS na tabela local ANTES de acessar as views de integração.
+     // Evita multiplicar a pesquisa por milhares de tarefas sem correspondência.
+     const rua=String(req.query.logradouro||'').trim().slice(0,120);
+     const ss=String(req.query.ss||'').trim().slice(0,120);
+     const localConditions=[];
+     if(rua){seedValues.push('%'+rua+'%');localConditions.push(`l0.loc_street ILIKE $${seedValues.length}`)}
+     if(ss){seedValues.push('%'+ss+'%');localConditions.push(`l0.loc_integrationid ILIKE $${seedValues.length}`)}
+     seedSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour FROM u45468.task t ${localConditions.length?'JOIN u45468.local l0 ON l0.loc_id=t.loc_id':''} WHERE ${dateColumn} >= $1::date AND ${dateColumn} < ($2::date + INTERVAL '1 day') ${localConditions.map(c=>'AND '+c).join(' ')}`;
+   }
  }
  // Para abas sem periodo na task, usa consulta original; evita alterar a regra de datas.
- const prefix=seedSql?`WITH candidatas AS MATERIALIZED (${seedSql}) `:'';
+ const prefix=seedSql?`WITH candidatas AS (${seedSql}) `:'';
  const taskSource=seedSql?'candidatas':'u45468.task';
  const base=`FROM ${taskSource} t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.dbout_local dl ON dl.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id WHERE ${where.map((w)=>w.replace(/\$(\d+)/g,(_,n)=>'$'+(Number(n)+seedValues.length))).join(' AND ')}`;
  const sort=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';

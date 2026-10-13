@@ -208,15 +208,18 @@ function render(){
   $('countInfo').textContent='Exibindo '+inicioPagina+'–'+fimPagina+' de '+(Number.isFinite(window.__totalSS)?window.__totalSS:'mais SS')+(window.ms?' • consulta '+window.ms+' ms':'');
   renderPagination();
 }
+let consultaListaAtual=null,numeroConsultaLista=0;
 async function load(){
   if(window.__buscaSSAtiva)return;
+  if(consultaListaAtual)consultaListaAtual.abort();
+  consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
-    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim());const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const global=currentScreen==='recepcao'&&filtros.length>0;let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p),j=await r.json();
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim());const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const global=currentScreen==='recepcao'&&filtros.length>0;let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
     raw=j.rows||[];window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
-  }catch(e){$('countInfo').textContent='Erro: '+e.message}
+  }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
 }
 let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{if(currentScreen==='recepcao'){window.__pageOffset=0;load()}else apply()},500)}));
 let ssSearchTimer;const ssInput=document.querySelector('.filter input[data-col="ss"]');ssInput.placeholder='Buscar SS em todas as datas...';ssInput.addEventListener('input',()=>{clearTimeout(ssSearchTimer);ssSearchTimer=setTimeout(()=>{if(currentScreen==='recepcao'){window.__pageOffset=0;load()}else apply()},700)});$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
