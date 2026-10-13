@@ -106,14 +106,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  for(const [key,q] of Object.entries(filters)){
    if(key==='bairro'){values.push('%'+q+'%');where.push(`l.loc_neighborhood ILIKE $${values.length}`)}
    else if(key==='servico'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tt WHERE tt.tty_id=t.tty_id AND tt.tty_description ILIKE $${values.length})`)}
-   else if(key==='equipe_executou'){
-     // Resolve a equipe antes de consultar tarefas: evita varrer a tabela grande
-     // com um EXISTS correlacionado para cada SS.
-     const equipeResult=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1',values:['%'+q+'%'],query_timeout:5000});
-     const ids=equipeResult.rows.map(x=>String(x.age_id));
-     if(!ids.length)return res.json({ok:true,rows:[],total:0,count:0,limit,offset,hasMore:false,ms:0});
-     values.push(ids);where.push(`t.age_id = ANY($${values.length}::bigint[])`);
-   }
+   else if(key==='equipe_executou'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.agent ag WHERE ag.age_id=t.age_id AND ag.age_name ILIKE $${values.length})`)}
    else if(key==='setor'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.dbout_local sx WHERE sx.loc_id=t.loc_id AND sx.e_setor ILIKE $${values.length})`)}
    else if(key==='criado_em'&&tela!=='recepcao'){values.push('%'+q+'%');where.push(`TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length}`)}
    else add(allowed[key],'%'+q+'%');
@@ -185,14 +178,17 @@ app.get('/api/recepcao',async(req,res)=>{try{
   const total=null; // Paginação leve: sem COUNT(*) a cada página.
   const data={ok:true,count:rows.length,total,hasMore:total===null?pagina.hasMore:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');return res.json(data);
  }
+ // Resolve IDs da equipe antes da consulta principal, evitando subconsulta por SS.
+ const equipesIds=equipeBusca?(await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000})).rows.map(x=>String(x.age_id)):[];
+ if(equipeBusca&&!equipesIds.length){const vazio={ok:true,count:0,total:0,hasMore:false,offset,limit,ms:Date.now()-started,rows:[]};setCache(key,vazio);return res.json(vazio)}
  const filtraPorUltimaAtividade=tela==='baixar'||tela==='encerradas';
- const proximoParametro=(tela==='recepcao'?5:(filtraPorUltimaAtividade?5:3)),parametroEquipe=proximoParametro,parametroMacro=parametroEquipe+(equipeBusca?1:0),parametroCidade=parametroMacro+(macroBusca.length?1:0),equipeSql=equipeBusca?`AND EXISTS (SELECT 1 FROM u45468.agent ae WHERE ae.age_id=t.age_id AND ae.age_name ILIKE $${parametroEquipe})`:'',macroSql=macroBusca.length?`AND EXISTS (SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY($${parametroMacro}::text[]))`:'',cidadeSql=cidadeBusca.length?`AND EXISTS (SELECT 1 FROM u45468.local cl WHERE cl.loc_id=t.loc_id AND UPPER(TRIM(cl.loc_city))=ANY($${parametroCidade}::text[]))`:'';
+ const proximoParametro=(tela==='recepcao'?5:(filtraPorUltimaAtividade?5:3)),parametroEquipe=proximoParametro,parametroMacro=parametroEquipe+(equipeBusca?1:0),parametroCidade=parametroMacro+(macroBusca.length?1:0),equipeSql=equipeBusca?`AND t.age_id=ANY($${parametroEquipe}::bigint[])`:'',macroSql=macroBusca.length?`AND EXISTS (SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY($${parametroMacro}::text[]))`:'',cidadeSql=cidadeBusca.length?`AND EXISTS (SELECT 1 FROM u45468.local cl WHERE cl.loc_id=t.loc_id AND UPPER(TRIM(cl.loc_city))=ANY($${parametroCidade}::text[]))`:'';
  const sqlRecepcao=`WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_insertdatehour >= $1::date AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day') AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo' ${equipeSql} ${macroSql} ${cidadeSql} ORDER BY t.tsk_insertdatehour DESC, t.tsk_id DESC LIMIT $3 OFFSET $4) SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id ORDER BY data_referencia DESC,t.tsk_id DESC`;
  const sqlPorStatus='';
  // A tabela dbout_local é enriquecida somente após limitar a página; juntá-la antes do LIMIT causava timeout.
  const limiteStatus=filtraPorUltimaAtividade?'$3':'$1',deslocamentoStatus=filtraPorUltimaAtividade?'$4':'$2',filtroDataStatus=filtraPorUltimaAtividade?"AND d.tsk_lastexecutiondatehour >= $1::date AND d.tsk_lastexecutiondatehour < ($2::date + INTERVAL '1 day')":'';
  const sqlPorStatusRapido=['WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao','FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id','WHERE '+condicoes[tela],filtroDataStatus,equipeSql,macroSql,cidadeSql,'ORDER BY d.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC','LIMIT '+limiteStatus+' OFFSET '+deslocamentoStatus+')','SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico','FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id','ORDER BY t.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC'].join(' ');
- const valoresExtras=[...(equipeBusca?['%'+equipeBusca+'%']:[]),...(macroBusca.length?[macroBusca]:[]),...(cidadeBusca.length?[cidadeBusca]:[])];
+ const valoresExtras=[...(equipeBusca?[equipesIds]:[]),...(macroBusca.length?[macroBusca]:[]),...(cidadeBusca.length?[cidadeBusca]:[])];
  const valoresStatus=(filtraPorUltimaAtividade?[inicio,fim,consultaLimit,offset]:[consultaLimit,offset]).concat(valoresExtras);
  const valoresRecepcao=[inicio,fim,consultaLimit,offset].concat(valoresExtras);
  const base=await pool.query({text:tela==='recepcao'?sqlRecepcao:sqlPorStatusRapido,values:tela==='recepcao'?valoresRecepcao:valoresStatus,query_timeout:9000});
