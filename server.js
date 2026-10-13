@@ -213,18 +213,18 @@ app.post('/api/enviar-equipe',async(req,res)=>{
   const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
   if(situacaoId&&!/^[0-9]+$/.test(situacaoId))return res.status(400).json({ok:false,error:'UMOV_EM_CAMPO_SITUATION_ID deve ser numérico quando configurado.'});
   // Sem consulta SQL bloqueante: a API uMov valida o agente na gravação.
+  // Envia ate 5 SS simultaneamente. Nao faz consulta SQL por SS apos o POST:
+  // a confirmacao de situacao ocorre na sincronizacao normal do uMov.
   const resultados=[];
-  for(const tarefa of tarefas){
-   try{
-    // A situação precisa ser configurada conforme o ID REAL da API uMov.
-    // Não presumir que atribuir um agente altera automaticamente a situação.
-    const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
-    await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
-    // Conferir a situação observável no espelho, sem afirmar que a API alterou o status.
-    let situacaoAtual=null,confirmado=false;
-    try{const verificacao=await pool.query({text:'SELECT tsk_situation FROM u45468.dbout_task WHERE tsk_id=$1',values:[tarefa],query_timeout:3000});situacaoAtual=verificacao.rows[0]?.tsk_situation||null;confirmado=String(situacaoAtual||'').trim().toLowerCase()==='em campo'}catch(err){console.warn('Confirmação pendente',tarefa,err.message)}
-    resultados.push({tarefa,ok:true,confirmado,situacaoAtual,situacaoSolicitada:!!situacaoId,aviso:confirmado?'Situação Em Campo confirmada.':'Equipe atribuída; situação Em Campo ainda não confirmada no banco. Atualize após a sincronização.'});
-   }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
+  const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
+  for(let i=0;i<tarefas.length;i+=5){
+   const lote=await Promise.all(tarefas.slice(i,i+5).map(async tarefa=>{
+    try{
+     await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
+     return {tarefa,ok:true,confirmado:false,situacaoAtual:null,situacaoSolicitada:!!situacaoId,aviso:'Equipe atribuida pela API uMov. A situacao Em Campo depende de sincronizacao.'};
+    }catch(e){return {tarefa,ok:false,error:e.message}}
+   }));
+   resultados.push(...lote);
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
   res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'A atribuição e a mudança de situação são operações distintas. Somente confirmado=true comprova Em Campo no banco.'});
