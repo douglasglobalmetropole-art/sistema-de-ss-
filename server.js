@@ -106,7 +106,14 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  for(const [key,q] of Object.entries(filters)){
    if(key==='bairro'){values.push('%'+q+'%');where.push(`l.loc_neighborhood ILIKE $${values.length}`)}
    else if(key==='servico'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tt WHERE tt.tty_id=t.tty_id AND tt.tty_description ILIKE $${values.length})`)}
-   else if(key==='equipe_executou'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.agent ag WHERE ag.age_id=t.age_id AND ag.age_name ILIKE $${values.length})`)}
+   else if(key==='equipe_executou'){
+     // Resolve a equipe antes de consultar tarefas: evita varrer a tabela grande
+     // com um EXISTS correlacionado para cada SS.
+     const equipeResult=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1',values:['%'+q+'%'],query_timeout:5000});
+     const ids=equipeResult.rows.map(x=>String(x.age_id));
+     if(!ids.length)return res.json({ok:true,rows:[],total:0,count:0,limit,offset,hasMore:false,ms:0});
+     values.push(ids);where.push(`t.age_id = ANY($${values.length}::bigint[])`);
+   }
    else if(key==='setor'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.dbout_local sx WHERE sx.loc_id=t.loc_id AND sx.e_setor ILIKE $${values.length})`)}
    else if(key==='criado_em'&&tela!=='recepcao'){values.push('%'+q+'%');where.push(`TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length}`)}
    else add(allowed[key],'%'+q+'%');

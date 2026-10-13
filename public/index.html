@@ -87,7 +87,8 @@ document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!
 // V10.1: apenas apresentação da aba. NÃO executa nova consulta.
 function setScreen(screen,btn){
   if(screen==='preparacao') return;
-  currentScreen=screen;window.__detailSS=null;
+  currentScreen=screen;window.__detailSS=null;selected={};
+  $('lower').classList.remove('open');document.body.classList.remove('panel-open');
   configureActions(screen);
   document.querySelectorAll('.tab[data-screen]').forEach(x=>x.classList.toggle('active',x===btn));
   const h=$('lastHeader'), f=$('lastFilter'), teamHeader=$('teamHeader'), teamFilterCell=$('teamFilterCell'), teamFilter=$('teamFilter'), integrationHeader=$('integrationHeader'), integrationFilterCell=$('integrationFilterCell'), integrationFilter=$('integrationFilter');
@@ -217,7 +218,7 @@ async function load(){
   consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
   try{
     $('countInfo').textContent='Carregando SS...';
-    const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
+    const equipeFiltro=''; // Filtro por equipe é enviado pelo data-col ativo em todas as abas.
     const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const global=filtros.length>0;let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
     raw=j.rows||[];window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
