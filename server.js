@@ -288,6 +288,55 @@ async function retornoHistorico(tarefa){
  }
  return setCache(key,saida);
 }
+// Relatório gerado a partir dos dados da SS exibidos na aba Para Baixar.
+// PDF autônomo, sem serviços externos ou dependências adicionais.
+function relatorioPdf(dados){
+ const clean=v=>String(v??'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,2500);
+ const rows=[
+  ['RELATORIO AUTOMATICO DE SERVICO',''],
+  ['SS',dados.ss],['Tarefa',dados.tarefa],['Abertura',dados.criado_em],
+  ['Cidade',dados.cidade],['Bairro',dados.bairro],['Endereco',[dados.logradouro,dados.numero].filter(Boolean).join(', ')],
+  ['Setor',dados.setor],['Macro / Servico',dados.servico],['Equipe',dados.equipe],
+  ['Tag',dados.tags],['Situacao',dados.situacao],['Referencia',dados.referencia],
+  ['Hidrometro',dados.hidrometro],['Inicio da atividade',dados.inicio],['Fim da atividade',dados.fim],
+  ['SERVICO EXECUTADO',dados.servico_executado],['MATERIAIS UTILIZADOS',dados.materiais],
+  ['PAVIMENTACAO',dados.pavimentacao],['INFORMACOES DO SOLICITANTE',dados.informacao_solicitante],
+  ['ESCLARECIMENTOS',dados.esclarecimento]
+ ];
+ // Helvetica WinAnsi; replace glyphs unsupported by this base font.
+ const win=v=>clean(v).replace(/[\u2013\u2014]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/[^\u0020-\u007e\u00a0-\u00ff]/g,'?');
+ const escape=v=>win(v).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+ const wrap=(v,max=92)=>{const words=win(v||'Nao informado').split(/\s+/);const out=[];let line='';for(const word of words){if(word.length>max){if(line){out.push(line);line=''}for(let k=0;k<word.length;k+=max)out.push(word.slice(k,k+max));continue}if((line+' '+word).trim().length>max){out.push(line);line=word}else line=(line+' '+word).trim()}if(line)out.push(line);return out.length?out:['Nao informado']};
+ const pages=[];let commands=[],y=790;
+ const add=(str,bold=false,size=10)=>{if(y<65){pages.push(commands.join('\n'));commands=[];y=790}commands.push(`BT /${bold?'F2':'F1'} ${size} Tf 44 ${y} Td (${escape(str)}) Tj ET`);y-=size+6};
+ add('RELATORIO DE EXECUCAO - SS DE CAMPO',true,16);add('Gerado em '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}),false,9);y-=12;
+ for(const [label,value] of rows.slice(1)){add(label+':',true,10);for(const line of wrap(value))add('   '+line,false,10);y-=5}
+ add('Documento gerado a partir dos dados consultados no sistema SS de Campo.',false,8);
+ pages.push(commands.join('\n'));
+ const objects=[null];const put=body=>(objects.push(body),objects.length-1);
+ const font=put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+ const bold=put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+ const pagesId=put('');const pageIds=[];
+ for(const content of pages){const b=Buffer.from(content,'latin1');const streamId=put({stream:b});pageIds.push(put(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${streamId} 0 R >>`))}
+ objects[pagesId]=`<< /Type /Pages /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
+ const root=put(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+ const buffers=[Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n','latin1')];const offsets=[0];let length=buffers[0].length;
+ for(let i=1;i<objects.length;i++){offsets[i]=length;const o=objects[i];const header=Buffer.from(`${i} 0 obj\n`);let body;
+ if(typeof o==='string')body=Buffer.from(o+'\nendobj\n','latin1');else body=Buffer.concat([Buffer.from(`<< /Length ${o.stream.length} >>\nstream\n`),o.stream,Buffer.from('\nendstream\nendobj\n')]);
+ buffers.push(header,body);length+=header.length+body.length}
+ const xref=length;let trailer=`xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+ for(let i=1;i<objects.length;i++)trailer+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+ trailer+=`trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+ buffers.push(Buffer.from(trailer));return Buffer.concat(buffers);
+}
+app.post('/api/relatorio-pdf',(req,res)=>{
+ try{
+  const d=req.body||{};if(!d.ss||!Number.isSafeInteger(Number(d.tarefa))||Number(d.tarefa)<=0)return res.status(400).json({ok:false,error:'SS invalida para o relatorio.'});
+  const pdf=relatorioPdf(d);
+  res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="relatorio_ss_${String(d.ss).replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf"`);
+  res.setHeader('Cache-Control','no-store');res.send(pdf);
+ }catch(e){res.status(500).json({ok:false,error:'Falha ao gerar relatorio PDF.'})}
+});
 app.get('/api/retorno-equipe/:tarefa',async(req,res)=>{try{
  const tarefa=Number(req.params.tarefa);if(!Number.isSafeInteger(tarefa)||tarefa<=0)return res.status(400).json({ok:false,error:'Tarefa invalida.'});
  const dados=await retornoHistorico(tarefa);
