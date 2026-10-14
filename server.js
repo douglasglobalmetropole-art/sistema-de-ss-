@@ -213,10 +213,10 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
  const localFilterKeys=['ss','logradouro','bairro','cidade'];
- const localFirst=Boolean(filters.ss); // SS exata/partial: restringir locais; demais filtros: permitir ao otimizador escolher a ordem
+ const localFirst=Boolean(filters.ss); // SS: restringir locais antes de consultar tarefas
  const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('UPPER(TRIM(l.'));
  const taskPredicates=where.filter(x=>!localPredicates.includes(x));
- const localCte=localFirst?`WITH locais_filtrados AS NOT MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
+ const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')} ${/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(filters.ss||'')?'LIMIT 1':''}) `:'';
  const sql=`${localCte}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.age_id,t.tty_id FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN ${localFirst?'locais_filtrados':'u45468.local'} l ON l.loc_id=t.loc_id WHERE ${localFirst?taskPredicates.join(' AND '):where.join(' AND ')} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`;
  const started=Date.now();const r=await pool.query({text:sql,values:[...values,limit+1,offset],query_timeout:12000});
  const hasMore=r.rows.length>limit,items=r.rows.slice(0,limit);
