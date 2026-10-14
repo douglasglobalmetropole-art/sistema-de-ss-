@@ -125,15 +125,15 @@ async function paginaStatusIndexada({tela,inicio,fim,limit,offset,equipeBusca,ma
   const v=[...args],cond=[...filtros];
   if(cursorId!==null){v.push(cursorData);const pd='$'+v.length;v.push(cursorId);const pi='$'+v.length;cond.push(cursorData===null?`(${coluna} IS NULL AND t.tsk_id < ${pi})`:`(${coluna} < ${pd} OR (${coluna} = ${pd} AND t.tsk_id < ${pi}) OR ${coluna} IS NULL)`)}
   v.push(bloco);
-  const q=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,t.tsk_lastexecutiondatehour FROM u45468.task t WHERE ${cond.join(' AND ')} ORDER BY ${coluna} DESC NULLS LAST,t.tsk_id DESC LIMIT $${v.length}`,values:v,query_timeout:6000});
+  const q=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_situation,t.tsk_insertdatehour,t.tsk_lastexecutiondatehour FROM u45468.task t WHERE ${cond.join(' AND ')} ORDER BY ${coluna} DESC NULLS LAST,t.tsk_id DESC LIMIT $${v.length}`,values:v,query_timeout:6000});
   if(!q.rows.length){acabou=true;break}
   const ultimo=q.rows[q.rows.length-1];cursorData=ultimo.tsk_lastexecutiondatehour;cursorId=ultimo.tsk_id;
   const ds=await pool.query({text:'SELECT tsk_id,tsk_situation,e_situacao,tsk_lastexecutiondatehour FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])',values:[q.rows.map(x=>x.tsk_id)],query_timeout:6000});
   const mapa=new Map(ds.rows.map(d=>[String(d.tsk_id),d]));
-  for(const t of q.rows){const d=mapa.get(String(t.tsk_id));if(!d)continue;const situacao=String(d.tsk_situation||'').trim().toLowerCase(),integracao=String(d.e_situacao||'').trim();if(tela==='campo'?situacao!=='em campo':situacao!=='retornada de campo'||integracao!==''||!d.tsk_lastexecutiondatehour)continue;
+  for(const t of q.rows){const d=mapa.get(String(t.tsk_id));if(!d)continue;const situacao=String(t.tsk_situation||'').trim().toLowerCase(),integracao=String(d.e_situacao??'').trim();if(tela==='campo'?situacao!=='em campo':situacao!=='retornada de campo'||integracao!=='')continue;
    // A data efetiva da integração também deve estar no período solicitado.
-   if(tela==='baixar'&&inicio&&fim){const dia=String(d.tsk_lastexecutiondatehour).slice(0,10);if(dia<inicio||dia>fim)continue}
-   encontrados.push({...t,situacao_campo:d.tsk_situation,status_integracao:d.e_situacao});if(encontrados.length>offset+limit)break;
+   if(tela==='baixar'&&inicio&&fim){const dataEfetiva=d.tsk_lastexecutiondatehour||t.tsk_lastexecutiondatehour;if(!dataEfetiva)continue;const dia=new Date(dataEfetiva).toISOString().slice(0,10);if(dia<inicio||dia>fim)continue}
+   encontrados.push({...t,situacao_campo:t.tsk_situation,status_integracao:d.e_situacao});if(encontrados.length>offset+limit)break;
   }
   if(q.rows.length<bloco){acabou=true;break}
  }
