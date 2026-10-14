@@ -200,44 +200,6 @@ $('viewReportBtn').onclick=()=>{
   const w=window.open(x.link,'_blank');
   if(!w) window.location.href=x.link;
 };
-// Visualização e geração do PDF das sequências relacionadas à SS, consultadas no banco.
-$('groupedBtn').onclick=async()=>{
- const x=Object.values(selected||{})[0]||window.__detailSS;
- if(!x?.ss)return window.notify('Selecione ou abra uma SS para agrupar.','error');
- const btn=$('groupedBtn');btn.disabled=true;
- try{
-  const r=await fetch('/api/relatorios-agrupados?ss='+encodeURIComponent(x.ss),{cache:'no-store'});
-  const j=await r.json();if(!r.ok)throw Error(j.error||'Falha ao localizar sequências.');
-  let modal=document.getElementById('groupedReportsModal');
-  if(!modal){modal=document.createElement('div');modal.id='groupedReportsModal';modal.style.cssText='position:fixed;inset:0;background:#0008;z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px';document.body.appendChild(modal)}
-  const escGroup=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  modal.innerHTML=`<div style="width:min(650px,96vw);max-height:85vh;overflow:auto;background:white;border-radius:12px;padding:22px;box-shadow:0 14px 50px #0004;color:#123">`+
-    `<h2 style="margin:0 0 8px;font-size:19px">Relatórios agrupados — ${escGroup(j.prefixo)}</h2>`+
-    `<p>${j.total} sequência(s) encontrada(s); ${j.comRelatorio} com relatório disponível.</p>`+
-    `<div id="groupedReportsList" style="display:grid;gap:8px;margin:16px 0">`+
-    (j.rows.length?j.rows.map(item=>`<div style="display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px;border:1px solid #d9e4f0;border-radius:7px"><span><strong>${escGroup(item.ss)}</strong>${item.link?'':' — relatório indisponível'}</span>${item.link?`<button type="button" class="groupOpen" data-ss="${escGroup(item.ss)}" style="padding:7px 12px">Visualizar</button>`:''}</div>`).join(''):'Nenhuma sequência localizada')+
-    `</div><div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap"><button type="button" id="groupClose" style="padding:10px">Fechar</button><button type="button" id="groupPdf" ${j.comRelatorio?'':'disabled'} style="padding:10px;background:#0879f7;color:white;border:0;border-radius:6px">Gerar PDF agrupado</button></div><p id="groupStatus" style="font-size:12px"></p></div>`;
-  const available=j.rows.filter(item=>item.link);
-  modal.querySelector('#groupClose').onclick=()=>modal.remove();
-  modal.onclick=e=>{if(e.target===modal)modal.remove()};
-  modal.querySelectorAll('.groupOpen').forEach(button=>button.onclick=()=>{
-   const item=available.find(a=>a.ss===button.dataset.ss);if(item)window.open(item.link,'_blank','noopener,noreferrer');
-  });
-  modal.querySelector('#groupPdf').onclick=async()=>{
-   const pdfBtn=modal.querySelector('#groupPdf'),status=modal.querySelector('#groupStatus');
-   pdfBtn.disabled=true;pdfBtn.textContent='Gerando PDF...';status.textContent='Aguarde a conversão dos relatórios originais e das fotografias.';
-   try{
-    const r=await fetch('/api/relatorios-agrupados/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefixo:j.prefixo,links:available.map(item=>({ss:item.ss,link:item.link}))})});
-    if(!r.ok){const err=await r.json().catch(()=>({}));throw Error(err.error||'Falha ao gerar PDF agrupado.')}
-    const blob=await r.blob();if(blob.type!=='application/pdf')throw Error('Resposta não é PDF.');
-    const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Relatorios_Agrupados_'+j.prefixo.replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-    status.textContent='PDF agrupado gerado com sucesso.';
-   }catch(err){status.textContent=err.message;window.notify(err.message,'error')}
-   finally{pdfBtn.disabled=false;pdfBtn.textContent='Gerar PDF agrupado'}
-  };
- }catch(err){window.notify(err.message||'Falha ao buscar sequências.','error')}
- finally{btn.disabled=false}
-};
 $('viewSSBtn').onclick=()=>$('viewReportBtn').click();
 $('generatePdfBtn').onclick=async()=>{
   if(currentScreen!=='baixar')return;
@@ -309,7 +271,7 @@ async function load(forcarAtualizacao=false){
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
-    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const filtrosRapidosRecepcao=new Set(['bairro','equipe_executou']);const somenteRapidosRecepcao=currentScreen==='recepcao'&&filtros.every(x=>filtrosRapidosRecepcao.has(x.dataset.col));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!somenteEquipe&&!somenteRapidosRecepcao;if(forcarAtualizacao)p.set('_refresh',String(Date.now()));let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!somenteEquipe;if(forcarAtualizacao)p.set('_refresh',String(Date.now()));let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
     raw=reconciliarEquipes(j.rows||[]);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
