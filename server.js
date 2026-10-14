@@ -329,6 +329,70 @@ function relatorioPdf(dados){
  trailer+=`trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;
  buffers.push(Buffer.from(trailer));return Buffer.concat(buffers);
 }
+// Localiza TODAS as sequências no banco, sem depender da página/filtros da tela.
+app.get('/api/relatorios-agrupados',async(req,res)=>{
+ try{
+  const ss=String(req.query.ss||'').trim();
+  const m=ss.match(/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/);
+  if(!m)return res.status(400).json({ok:false,error:'Número de SS inválido. Exemplo: 10/26-045913-03'});
+  const prefixo=m[1];
+  // Limita a pesquisa pela tabela local antes de consultar as tarefas e tokens.
+  const r=await pool.query({text:`WITH locais AS MATERIALIZED (
+   SELECT loc_id,loc_integrationid FROM u45468.local
+   WHERE loc_integrationid LIKE $1 AND loc_integrationid ~ $2
+   LIMIT 150
+  ) SELECT l.loc_integrationid AS ss,t.tsk_id AS tarefa,d.tss_id,d.tsk_accesstoken,
+   t.tsk_insertdatehour AS criado_em
+   FROM locais l JOIN u45468.task t ON t.loc_id=l.loc_id
+   LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
+   ORDER BY l.loc_integrationid,t.tsk_id DESC LIMIT 150`,
+   values:[prefixo+'-%','^'+prefixo.replace('/','\\/')+'-[0-9]{2}$'],query_timeout:8000});
+  const sequencias=new Map();
+  for(const x of r.rows){
+   const numero=String(x.ss||'');if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!numero.startsWith(prefixo+'-'))continue;
+   const link=Number(x.tss_id)===50&&x.tsk_accesstoken?
+    `https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tarefa}/${x.tsk_accesstoken}`:null;
+   const atual=sequencias.get(numero);
+   if(!atual||(!atual.link&&link))sequencias.set(numero,{ss:numero,tarefa:x.tarefa,link,disponivel:!!link});
+  }
+  const rows=[...sequencias.values()].sort((a,b)=>Number(a.ss.slice(-2))-Number(b.ss.slice(-2)));
+  res.json({ok:true,prefixo,rows,total:rows.length,comRelatorio:rows.filter(x=>x.link).length});
+ }catch(e){console.error('Relatórios agrupados:',e.message);res.status(500).json({ok:false,error:'Erro ao localizar sequências: '+e.message})}
+});
+// PDF único com páginas ORIGINAIS de cada sequência, preservando imagens.
+app.post('/api/relatorios-agrupados/pdf',async(req,res)=>{
+ let browser;
+ try{
+  const links=req.body?.links;
+  if(!Array.isArray(links)||!links.length||links.length>20)return res.status(400).json({ok:false,error:'Selecione de 1 a 20 relatórios.'});
+  for(const item of links){
+   const url=new URL(String(item.link||''));
+   if(url.protocol!=='https:'||url.hostname!=='consglobalmetropole.umov.me'||
+     !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash)
+    return res.status(400).json({ok:false,error:'Link de relatório inválido.'});
+  }
+  const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
+  const {PDFDocument}=require('pdf-lib');
+  const merged=await PDFDocument.create();
+  browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
+  const page=await browser.newPage();
+  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
+  for(const item of links){
+   await page.goto(item.link,{waitUntil:'domcontentloaded',timeout:25000});
+   await page.evaluate(async()=>{
+    await Promise.race([Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,10000))]);
+   });
+   await page.emulateMediaType('print');
+   const bytes=await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}});
+   const doc=await PDFDocument.load(bytes);const pages=await merged.copyPages(doc,doc.getPageIndices());pages.forEach(p=>merged.addPage(p));
+  }
+  const bytes=await merged.save();
+  const prefixo=String(req.body?.prefixo||'SS').replace(/[^a-zA-Z0-9_-]/g,'_');
+  res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="Relatorios_Agrupados_${prefixo}.pdf"`);
+  res.setHeader('Cache-Control','no-store');res.send(Buffer.from(bytes));
+ }catch(e){console.error('PDF agrupado:',e.message);if(!res.headersSent)res.status(502).json({ok:false,error:'Falha ao gerar PDF agrupado: '+e.message})}
+ finally{if(browser)await browser.close().catch(()=>{})}
+});
 // Converte a própria página original do relatório uMov, inclusive imagens, em PDF.
 // Não usa os campos resumidos da SS: renderiza o HTML original no Chromium.
 app.post('/api/relatorio-original-pdf',async(req,res)=>{
