@@ -46,59 +46,47 @@ async function extrasTask(ids){const u=[...new Set(ids.filter(Boolean).map(Numbe
 const campo=(row,...nomes)=>{const dados=row?.campos||{};for(const nome of nomes){const valor=dados[nome];if(valor!==null&&valor!==undefined&&String(valor).trim()!=='')return String(valor)}return ''};
 // Recepção é buscada em blocos pequenos pela tabela task. Assim a tabela de
 // integração nunca é varrida inteira para descobrir as SS pendentes.
+// Consulta única, paginada no banco. Nunca varrer 200 tarefas por bloco.
+// Situação lida de task (coluna operacional); dbout_task só enriquece a página.
 async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca,bairroBusca}){
- const idsEquipe=equipeBusca?(await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000})).rows.map(x=>String(x.age_id)):null;
- const idsMacro=macroBusca.length?(await pool.query({text:'SELECT tty_id FROM u45468.tasktype WHERE TRIM(tty_description)=ANY($1::text[])',values:[macroBusca],query_timeout:4000})).rows.map(x=>String(x.tty_id)):null;
- if((idsEquipe&& !idsEquipe.length)||(idsMacro&&!idsMacro.length))return{rows:[],hasMore:false};
- // Pesquisa por bairro: limitar locais primeiro e filtrar situação antes da paginação.
- // Evita percorrer centenas de blocos de tarefas quando há poucas SS no bairro.
- if(bairroBusca){
-  const args=['%'+bairroBusca+'%',inicio,fim];
-  const addArg=v=>{args.push(v);return '$'+args.length};
-  const citySQL=cidadeBusca.length?`AND UPPER(TRIM(l.loc_city))=ANY(${addArg(cidadeBusca)}::text[])`:'';
-  const equipeSQL=idsEquipe?`AND t.age_id=ANY(${addArg(idsEquipe)}::bigint[])`:'';
-  const macroSQL=idsMacro?`AND t.tty_id=ANY(${addArg(idsMacro)}::bigint[])`:'';
-  const pLimit=addArg(limit+1),pOffset=addArg(offset);
-  const sql=`WITH locais AS MATERIALIZED (
-    SELECT l.loc_id FROM u45468.local l WHERE l.loc_neighborhood ILIKE $1 ${citySQL}
-  ) SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
-    d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao
-    FROM locais l JOIN u45468.task t ON t.loc_id=l.loc_id
-    JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
-    WHERE t.tsk_insertdatehour >= $2::date AND t.tsk_insertdatehour < ($3::date + INTERVAL '1 day')
-    AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'
-    ${equipeSQL} ${macroSQL}
-    ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC LIMIT ${pLimit} OFFSET ${pOffset}`;
-  const dados=await pool.query({text:sql,values:args,query_timeout:7000});
-  const page=dados.rows.slice(0,limit);
-  const [servicos,tecnicos]=await Promise.all([
-    pool.query({text:'SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])',values:[page.map(x=>x.tty_id).filter(Boolean)],query_timeout:3000}),
-    pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])',values:[page.map(x=>x.age_id).filter(Boolean)],query_timeout:3000})
-  ]);
-  const sm=new Map(servicos.rows.map(x=>[String(x.tty_id),x.tty_description]));
-  const am=new Map(tecnicos.rows.map(x=>[String(x.age_id),x.age_name]));
-  return {rows:page.map(x=>({...x,servico:sm.get(String(x.tty_id))||'',tecnico:am.get(String(x.age_id))||''})),hasMore:dados.rows.length>limit};
+ const args=[inicio,fim];
+ const param=x=>{args.push(x);return '$'+args.length};
+ let equipeSQL='',macroSQL='',localSQL='';
+ if(equipeBusca){
+  const q=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR age_id::text ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000});
+  const ids=q.rows.map(x=>x.age_id);if(!ids.length)return{rows:[],hasMore:false};
+  equipeSQL=`AND t.age_id=ANY(${param(ids)}::bigint[])`;
  }
- const equipeSet=idsEquipe&&new Set(idsEquipe),macroSet=idsMacro&&new Set(idsMacro),selecionadas=[],chunk=200,maxBlocos=200;let cursorData=null,cursorId=null,encontradas=0,acabou=false;
- for(let bloco=0;bloco<maxBlocos&&selecionadas.length<=limit;bloco++){
-  const cursor=cursorData?'AND (t.tsk_insertdatehour,t.tsk_id)<($3::timestamp,$4::bigint)':'';
-  const valores=cursorData?[inicio,fim,cursorData,cursorId,chunk]:[inicio,fim,chunk];
-  const limite=cursorData?'$5':'$3';
-  const candidatas=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour FROM u45468.task t WHERE t.tsk_insertdatehour >= $1::date AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day') ${cursor} ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC LIMIT ${limite}`,values:valores,query_timeout:4000});
-  if(!candidatas.rows.length){acabou=true;break}
-  const ultima=candidatas.rows[candidatas.rows.length-1];cursorData=ultima.tsk_insertdatehour;cursorId=ultima.tsk_id;
-  const ids=candidatas.rows.map(x=>x.tsk_id);
-  const situacoes=await pool.query({text:`SELECT tsk_id,tsk_situation,e_situacao FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])`,values:[ids],query_timeout:4000});
-  const porId=new Map(situacoes.rows.map(x=>[String(x.tsk_id),x]));
-  let cidadesOk=null;
-  if(cidadeBusca.length||bairroBusca){const conds=['loc_id=ANY($1::bigint[])'];const args=[candidatas.rows.map(x=>x.loc_id)];if(cidadeBusca.length){args.push(cidadeBusca);conds.push(`UPPER(TRIM(loc_city))=ANY($${args.length}::text[])`)}if(bairroBusca){args.push('%'+bairroBusca+'%');conds.push(`loc_neighborhood ILIKE $${args.length}`)}const locais=await pool.query({text:`SELECT loc_id FROM u45468.local WHERE ${conds.join(' AND ')}`,values:args,query_timeout:4000});cidadesOk=new Set(locais.rows.map(x=>String(x.loc_id)))}
-  for(const t of candidatas.rows){const d=porId.get(String(t.tsk_id));if(!d||String(d.tsk_situation||'').trim().toLowerCase()!=='pendente de envio para campo')continue;if(equipeSet&&!equipeSet.has(String(t.age_id)))continue;if(macroSet&&!macroSet.has(String(t.tty_id)))continue;if(cidadesOk&&!cidadesOk.has(String(t.loc_id)))continue;if(encontradas++>=offset)selecionadas.push({...t,situacao_campo:d.tsk_situation,status_integracao:d.e_situacao});if(selecionadas.length>limit)break}
-  if(candidatas.rows.length<chunk){acabou=true;break}
+ if(macroBusca.length){
+  const q=await pool.query({text:'SELECT tty_id FROM u45468.tasktype WHERE TRIM(tty_description)=ANY($1::text[])',values:[macroBusca],query_timeout:4000});
+  const ids=q.rows.map(x=>x.tty_id);if(!ids.length)return{rows:[],hasMore:false};
+  macroSQL=`AND t.tty_id=ANY(${param(ids)}::bigint[])`;
  }
- const servicos=selecionadas.length?await pool.query({text:`SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])`,values:[selecionadas.map(x=>x.tty_id)],query_timeout:4000}):{rows:[]};
- const tecnicos=selecionadas.length?await pool.query({text:`SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])`,values:[selecionadas.map(x=>x.age_id)],query_timeout:4000}):{rows:[]};
- const servicoPorId=new Map(servicos.rows.map(x=>[String(x.tty_id),x.tty_description])),tecnicoPorId=new Map(tecnicos.rows.map(x=>[String(x.age_id),x.age_name]));
- return{rows:selecionadas.slice(0,limit).map(x=>({...x,servico:servicoPorId.get(String(x.tty_id))||'',tecnico:tecnicoPorId.get(String(x.age_id))||''})),hasMore:selecionadas.length>limit||!acabou};
+ if(cidadeBusca.length||bairroBusca){
+  const conditions=['l.loc_id=t.loc_id'];
+  if(cidadeBusca.length)conditions.push(`UPPER(TRIM(l.loc_city))=ANY(${param(cidadeBusca)}::text[])`);
+  if(bairroBusca)conditions.push(`l.loc_neighborhood ILIKE ${param('%'+bairroBusca+'%')}`);
+  localSQL=`AND EXISTS (SELECT 1 FROM u45468.local l WHERE ${conditions.join(' AND ')})`;
+ }
+ const lim=param(limit+1),off=param(offset);
+ const sql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
+ t.tsk_situation AS situacao_campo
+ FROM u45468.task t
+ WHERE t.tsk_insertdatehour >= $1::date
+ AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day')
+ AND LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'
+ ${equipeSQL} ${macroSQL} ${localSQL}
+ ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC LIMIT ${lim} OFFSET ${off}`;
+ const q=await pool.query({text:sql,values:args,query_timeout:8000});
+ const page=q.rows.slice(0,limit);
+ if(!page.length)return{rows:[],hasMore:false};
+ const [types,agents]=await Promise.all([
+  pool.query({text:'SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])',values:[page.map(x=>x.tty_id).filter(Boolean)],query_timeout:4000}),
+  pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])',values:[page.map(x=>x.age_id).filter(Boolean)],query_timeout:4000})
+ ]);
+ const tm=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
+ const am=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));
+ return{rows:page.map(x=>({...x,servico:tm.get(String(x.tty_id))||'',tecnico:am.get(String(x.age_id))||''})),hasMore:q.rows.length>limit};
 }
 // Busca por SS sem limite de datas; paginação feita no banco antes do enriquecimento.
 app.get('/api/busca-ss',async(req,res)=>{try{
