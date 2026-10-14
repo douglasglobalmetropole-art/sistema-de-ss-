@@ -50,7 +50,7 @@ async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBu
  const idsEquipe=equipeBusca?(await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000})).rows.map(x=>String(x.age_id)):null;
  const idsMacro=macroBusca.length?(await pool.query({text:'SELECT tty_id FROM u45468.tasktype WHERE TRIM(tty_description)=ANY($1::text[])',values:[macroBusca],query_timeout:4000})).rows.map(x=>String(x.tty_id)):null;
  if((idsEquipe&& !idsEquipe.length)||(idsMacro&&!idsMacro.length))return{rows:[],hasMore:false};
- const equipeSet=idsEquipe&&new Set(idsEquipe),macroSet=idsMacro&&new Set(idsMacro),selecionadas=[],chunk=500,maxBlocos=80;let cursorData=null,cursorId=null,encontradas=0,acabou=false;
+ const equipeSet=idsEquipe&&new Set(idsEquipe),macroSet=idsMacro&&new Set(idsMacro),selecionadas=[],chunk=200,maxBlocos=200;let cursorData=null,cursorId=null,encontradas=0,acabou=false;
  for(let bloco=0;bloco<maxBlocos&&selecionadas.length<=limit;bloco++){
   const cursor=cursorData?'AND (t.tsk_insertdatehour,t.tsk_id)<($3::timestamp,$4::bigint)':'';
   const valores=cursorData?[inicio,fim,cursorData,cursorId,chunk]:[inicio,fim,chunk];
@@ -115,6 +115,19 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  if(macros.length){values.push(macros);where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tm WHERE tm.tty_id=t.tty_id AND TRIM(tm.tty_description)=ANY($${values.length}::text[]))`)}
  if(cidades.length){values.push(cidades);where.push(`UPPER(TRIM(l.loc_city))=ANY($${values.length}::text[])`)}
  const inicio=String(req.query.inicio||''),fim=String(req.query.fim||'');
+ // Recepção / bairro: usar a consulta paginada por task, sem JOIN global com dbout_task.
+ // Só entra neste caminho quando todos os filtros presentes são suportados nele.
+ if(tela==='recepcao' && Object.keys(filters).every(k=>['bairro','equipe_executou'].includes(k)) && inicio && fim){
+   const started=Date.now();
+   const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,
+     equipeBusca:filters.equipe_executou||'',macroBusca:macros,cidadeBusca:cidades,bairroBusca:filters.bairro||''});
+   const items=pagina.rows;
+   const [locals,tasks]=await Promise.all([extrasLocal(items.map(x=>x.loc_id)),extrasTask(items.map(x=>x.tsk_id))]);
+   const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
+   const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};
+     return {ss:l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.tsk_insertdatehour),link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''};});
+   return res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore:pagina.hasMore,ms:Date.now()-started});
+ }
  if(!filters.ss&&inicio&&fim){values.push(inicio,fim);const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dateCol} >= $${values.length-1}::date AND ${dateCol} < ($${values.length}::date + INTERVAL '1 day')`)}
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
