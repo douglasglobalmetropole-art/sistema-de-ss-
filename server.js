@@ -329,6 +329,44 @@ function relatorioPdf(dados){
  trailer+=`trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;
  buffers.push(Buffer.from(trailer));return Buffer.concat(buffers);
 }
+// Converte a própria página original do relatório uMov, inclusive imagens, em PDF.
+// Não usa os campos resumidos da SS: renderiza o HTML original no Chromium.
+app.post('/api/relatorio-original-pdf',async(req,res)=>{
+ let browser;
+ try{
+  const link=String(req.body?.link||'');
+  const url=new URL(link);
+  if(url.protocol!=='https:'||url.hostname!=='consglobalmetropole.umov.me'||
+    !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash){
+    return res.status(400).json({ok:false,error:'Endereço do relatório uMov inválido.'});
+  }
+  const chromium=require('@sparticuz/chromium');
+  const puppeteer=require('puppeteer-core');
+  browser=await puppeteer.launch({
+    args:chromium.args,executablePath:await chromium.executablePath(),
+    headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}
+  });
+  const page=await browser.newPage();
+  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
+  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
+  // Aguarda imagens do relatório original antes da impressão.
+  await page.evaluate(async()=>{
+    const imgs=Array.from(document.images);
+    await Promise.race([Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{
+      img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});
+    }))),new Promise(resolve=>setTimeout(resolve,14000))]);
+  });
+  await page.emulateMediaType('print');
+  const pdf=await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,
+    margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}});
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition',`attachment; filename="relatorio_original_${String(req.body?.ss||'ss').replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf"`);
+  res.setHeader('Cache-Control','no-store');res.send(Buffer.from(pdf));
+ }catch(e){
+  console.error('PDF original uMov:',e.message);
+  if(!res.headersSent)res.status(502).json({ok:false,error:'Não foi possível converter o relatório original. Verifique se o link abre normalmente e se a função possui Chromium disponível.'});
+ }finally{if(browser)await browser.close().catch(()=>{});}
+});
 app.post('/api/relatorio-pdf',(req,res)=>{
  try{
   const d=req.body||{};if(!d.ss||!Number.isSafeInteger(Number(d.tarefa))||Number(d.tarefa)<=0)return res.status(400).json({ok:false,error:'SS invalida para o relatorio.'});

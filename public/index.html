@@ -205,33 +205,24 @@ $('generatePdfBtn').onclick=async()=>{
   if(currentScreen!=='baixar')return;
   const itens=Object.values(selected||{});
   const x=itens[0]||window.__detailSS;
-  if(!x?.tarefa)return window.notify('Selecione ou abra uma SS para gerar o PDF.','error');
+  if(!x?.link)return window.notify('Esta SS não possui link do relatório original uMov.','error');
   const btn=$('generatePdfBtn');btn.disabled=true;
+  const old=btn.innerHTML;btn.innerHTML='<b>◌</b>Gerando PDF...';
   try{
-    let retorno={};
-    try{const r=await fetch('/api/retorno-equipe/'+encodeURIComponent(x.tarefa));if(r.ok){const j=await r.json();if(j.ok)retorno=j;}}catch(_){/* dados locais continuam disponíveis */}
-    const dados={
-      ss:x.ss,tarefa:x.tarefa,criado_em:x.criado_em,cidade:x.cidade,bairro:x.bairro,
-      logradouro:x.logradouro,numero:x.numero,setor:x.setor,servico:x.servico,
-      equipe:x.equipe_executou||x.tecnico,tags:x.tags,situacao:x.situacao_campo,
-      referencia:x.referencia_localizacao,hidrometro:x.hidrometro,
-      inicio:x.inicio_atividade,fim:x.fim_atividade||x.fim_real,
-      servico_executado:retorno.servico_executado||x.servico_executado||x.info_execucao_siscom,
-      materiais:retorno.materiais_bombeiro||x.materiais_bombeiro||x.materiais_lancados,
-      pavimentacao:retorno.pavimentacao||x.pavimentacao,
-      informacao_solicitante:x.informacao_solicitante,
-      esclarecimento:x.esclarecimento_solicitante
-    };
-    const r=await fetch('/api/relatorio-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(dados)});
-    if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Falha ao gerar PDF');}
-    const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');
-    a.href=url;a.download='Relatorio_SS_'+String(x.ss||x.tarefa).replace(/[^\w-]/g,'_')+'.pdf';
-    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-    window.notify('Relatório PDF gerado.','success');
-  }catch(e){window.notify(e.message||'Erro ao gerar PDF.','error')}
-  finally{btn.disabled=false}
+    const r=await fetch('/api/relatorio-original-pdf',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({link:x.link,ss:x.ss})
+    });
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Falha ao converter relatório original em PDF.');}
+    const blob=await r.blob();
+    if(blob.type!=='application/pdf')throw Error('O servidor não retornou um PDF válido.');
+    const url=URL.createObjectURL(blob);const el=document.createElement('a');
+    el.href=url;el.download='Relatorio_Original_SS_'+String(x.ss||x.tarefa).replace(/[^\w-]/g,'_')+'.pdf';
+    document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+    window.notify('Relatório original convertido em PDF com as fotos.','success');
+  }catch(e){window.notify(e.message||'Erro ao converter relatório original.','error')}
+  finally{btn.disabled=false;btn.innerHTML=old}
 };
-
 
 
 </script>
