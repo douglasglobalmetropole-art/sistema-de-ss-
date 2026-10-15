@@ -35,7 +35,7 @@ const isoDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0
 function setDefaultDateRange(){const fim=new Date(),inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);$('dateIni').value=isoDate(inicio);$('dateFim').value=isoDate(fim)}
 setDefaultDateRange();
 const val=(x,k)=>{const valor=String(x[k]??'').trim();return k==='status_integracao'&&valor.toLocaleLowerCase('pt-BR')==='baixada no siscom'?'Baixada':valor};
-const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','tagBtn'],baixar:['viewSSBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn'],encerradas:['viewReportBtn','groupedBtn']};
+const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','tagBtn'],baixar:['viewSSBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn','tagBtn'],encerradas:['viewReportBtn','groupedBtn']};
 function configureActions(screen){const allowed=actionSets[screen]||[];document.querySelectorAll('.actions .action').forEach(button=>button.hidden=!allowed.includes(button.id))}
 function norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function screenMatch(x){
@@ -60,7 +60,7 @@ function screenMatch(x){
   }
 
   // NOTAS ENCERRADAS: qualquer nota já integrada (Baixada, Rejeitada, Duplicada etc.).
-  if(currentScreen==='encerradas') return !!statusIntegracao;
+  if(currentScreen==='encerradas') return situacao.includes('retornada de campo') && !!statusIntegracao;
 
   return true;
 }
@@ -310,8 +310,11 @@ load();
       const result=await response.json();
       if(!response.ok&&!result.sucesso)throw new Error(result.error||result.resultados?.find(item=>!item.ok)?.error||'A ação não foi concluída.');
       const sucesso=Number(result.sucesso||0),falhas=Number(result.falhas||0);
-      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated&&updated.ok)item.status_integracao=status});
+      const okIds=new Set((result.resultados||[]).filter(row=>row.ok).map(row=>String(row.tarefa)));
+      items.forEach(item=>{if(okIds.has(String(item.tarefa)))item.status_integracao=status});
+      if(okIds.size){raw=raw.filter(row=>!okIds.has(String(row.tarefa)));window.__detailSS=null;$('lower').classList.remove('open');document.body.classList.remove('panel-open')}
       selected={};apply();
+      if(okIds.size)await load();
       notify(`${label}: ${sucesso} concluída(s)${falhas?' • '+falhas+' falha(s)':''}.`,falhas?'error':'success');
     }catch(error){notify(error.message||'Não foi possível concluir a ação.','error')}
     finally{buttons.forEach(button=>button.disabled=false)}
@@ -356,7 +359,7 @@ load();
     finally{button.disabled=false}
   };
   $('tagBtn').onclick=async()=>{
-    if(!['recepcao','campo'].includes(currentScreen))return notify('A tag está disponível nas abas Recepção e Em Campo.','error');
+    if(!['recepco','recepcao','campo','baixar'].includes(currentScreen))return notify('A tag está disponível nas abas Recepção, Em Campo e Para Baixar.','error');
     const items=Object.values(selected||{});
     if(!items.length&&window.__detailSS?.tarefa)items.push(window.__detailSS);
     if(!items.length)return notify('Selecione ao menos uma SS.','error');
