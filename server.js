@@ -15,36 +15,6 @@ const pool=new Pool({
  idleTimeoutMillis:20000,
  allowExitOnIdle:true
 });
-// Versão 2: contexto isolado por requisição, inclusive durante awaits.
-const {AsyncLocalStorage}=require('node:async_hooks');
-const dbContext=new AsyncLocalStorage();
-const pool2=new Pool({
- host:process.env.DB2_HOST||process.env.DB_HOST,
- port:Number(process.env.DB2_PORT||process.env.DB_PORT||5432),
- database:process.env.DB2_NAME||'umovme_dbview_consglobalmetropole1',
- user:process.env.DB2_USER||process.env.DB_USER,
- password:String(process.env.DB2_PASSWORD||process.env.DB_PASSWORD||''),
- ssl:String(process.env.DB2_SSL||process.env.DB_SSL||'false').toLowerCase()==='true'?{rejectUnauthorized:false}:false,
- max:3,connectionTimeoutMillis:10000,idleTimeoutMillis:20000,allowExitOnIdle:true
-});
-const originalQuery=pool.query.bind(pool);
-const secondaryQuery=pool2.query.bind(pool2);
-pool.query=(query,...args)=>{
- if(dbContext.getStore()!=='v2')return originalQuery(query,...args);
- const schema=process.env.DB2_SCHEMA||'u45468';
- if(!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schema))throw Error('DB2_SCHEMA inválido');
- const replaceSql=sql=>sql.replace(/\bu45468\./g,schema+'.');
- if(typeof query==='string')return secondaryQuery(replaceSql(query),...args);
- return secondaryQuery({...query,text:replaceSql(query.text)},...args);
-};
-// /api2/... usa as mesmas rotas e lógica, porém com conexão secundária.
-app.use((req,res,next)=>{
- if(req.url.startsWith('/api2/')){
-  req.url='/api/'+req.url.slice('/api2/'.length);
-  return dbContext.run('v2',next);
- }
- next();
-});
 app.use(express.json({limit:'100kb'}));
 // Teste de SSO OIDC (desativado por padrão). Nunca recebe senhas do uMov.
 const crypto=require('node:crypto');
@@ -69,10 +39,8 @@ app.post('/api/auth/logout',(req,res)=>{cookie(res,OIDC_COOKIE,'',0);res.json({o
 // Modo SSO de teste: bloquear todas as rotas de negócio até as permissões do uMov serem verificadas.
 // Mesmo um login válido NÃO libera dados ou ações administrativas.
 app.use('/api',(req,res,next)=>{if(!OIDC_ENABLED)return next();const x=verified(cookies(req)[OIDC_COOKIE]);if(!x)return res.status(401).json({ok:false,error:'Faça login com uMov.'});return res.status(403).json({ok:false,error:'Login validado. Aguardando integração de permissões do uMov; acesso às SS bloqueado por segurança.'})});
-app.get('/vitoria', (req,res)=>res.sendFile(path.join(__dirname,'public','index2.html')));
-app.get('/vitoria/', (req,res)=>res.sendFile(path.join(__dirname,'public','index2.html')));
 app.use(express.static(path.join(__dirname,'public')));
-const cache=new Map(),cacheKey=k=>(dbContext.getStore()==='v2'?'v2:':'v1:')+k,getCache=(k,ttl)=>{const x=cache.get(cacheKey(k));return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(cacheKey(k),{ts:Date.now(),data:v}),v);
+const cache=new Map(),getCache=(k,ttl)=>{const x=cache.get(k);return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(k,{ts:Date.now(),data:v}),v);
 async function extrasLocal(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT loc_id,loc_integrationid AS ss,e_localidade AS cidade,e_bairro AS bairro,e_setor AS setor,e_reflocalizacao AS referencia_localizacao,loc_description AS localizacao,loc_street AS logradouro,loc_streetnumber AS numero,e_hidrometro AS hidrometro,e_situacao AS status_integracao,e_servicoexecutadosiscom AS servico_executado,e_informacaoexecucaosiscom AS informacao_bombeiro,e_informacaosolicitante AS informacao_solicitante,e_esclarecimentosolicitante AS esclarecimento_solicitante,to_jsonb(dbout_local) AS campos FROM u45468.dbout_local WHERE loc_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.loc_id),x));return m}
 async function extrasTask(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT d.tsk_id,d.tss_id,d.tsk_accesstoken,d.tsk_situation AS situacao_campo,d.e_tag AS tags,d.e_situacao AS status_integracao,d.tsk_realinitialdatehour AS inicio_atividade_raw,d.tsk_lastexecutiondatehour AS ultima_atividade_raw,d.tsk_realfinaldatehour AS fim_real_raw,to_jsonb(d) AS campos FROM u45468.dbout_task d WHERE d.tsk_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.tsk_id),x));return m}
 const campo=(row,...nomes)=>{const dados=row?.campos||{};for(const nome of nomes){const valor=dados[nome];if(valor!==null&&valor!==undefined&&String(valor).trim()!=='')return String(valor)}return ''};
@@ -137,7 +105,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const add=(expr,val)=>{values.push(val);where.push(`${expr} ILIKE $${values.length}`)};
  for(const [key,q] of Object.entries(filters)){
    if(key==='bairro'){values.push('%'+q+'%');where.push(`(l.loc_neighborhood ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local bx WHERE bx.loc_id=l.loc_id AND bx.e_bairro ILIKE $${values.length}))`)}
-   else if(key==='logradouro'){values.push('%'+q+'%');where.push(`(l.loc_street ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local rx WHERE rx.loc_id=l.loc_id AND rx.loc_street ILIKE $${values.length}))`)}
+   else if(key==='logradouro'){values.push('%'+q+'%');where.push(`l.loc_street ILIKE $${values.length}`)}
    else if(key==='cidade'){values.push('%'+q+'%');where.push(`(l.loc_city ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local cx WHERE cx.loc_id=l.loc_id AND cx.e_localidade ILIKE $${values.length}))`)}
    else if(key==='servico'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tt WHERE tt.tty_id=t.tty_id AND tt.tty_description ILIKE $${values.length})`)}
    else if(key==='equipe_executou'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.agent ag WHERE ag.age_id=t.age_id AND ag.age_name ILIKE $${values.length})`)}
@@ -147,14 +115,14 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  }
  const macros=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidades=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean);
  if(macros.length){values.push(macros);where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tm WHERE tm.tty_id=t.tty_id AND TRIM(tm.tty_description)=ANY($${values.length}::text[]))`)}
- if(cidades.length){values.push(cidades);where.push(`(UPPER(TRIM(COALESCE(l.loc_city,'')))=ANY($${values.length}::text[]) OR EXISTS (SELECT 1 FROM u45468.dbout_local cx WHERE cx.loc_id=l.loc_id AND UPPER(TRIM(COALESCE(cx.e_localidade,'')))=ANY($${values.length}::text[])))`)}
+ if(cidades.length){values.push(cidades);where.push(`UPPER(TRIM(l.loc_city))=ANY($${values.length}::text[])`)}
  const inicio=String(req.query.inicio||''),fim=String(req.query.fim||'');
  if(!filters.ss&&inicio&&fim){values.push(inicio,fim);const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dateCol} >= $${values.length-1}::date AND ${dateCol} < ($${values.length}::date + INTERVAL '1 day')`)}
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
  const localFilterKeys=['ss','logradouro','bairro','cidade'];
  const localFirst=localFilterKeys.some(k=>filters[k])||cidades.length>0;
- const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('(l.')||x.startsWith('(UPPER(TRIM(')||x.startsWith('UPPER(TRIM(l.'));
+ const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('(l.')||x.startsWith('UPPER(TRIM(l.'));
  const taskPredicates=where.filter(x=>!localPredicates.includes(x));
  const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
  const sql=`${localCte}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.age_id,t.tty_id FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN ${localFirst?'locais_filtrados':'u45468.local'} l ON l.loc_id=t.loc_id WHERE ${localFirst?taskPredicates.join(' AND '):where.join(' AND ')} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`;
@@ -164,7 +132,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const agentMap=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));const typeMap=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
  const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:typeMap.get(String(x.tty_id))||'',tecnico:agentMap.get(String(x.age_id))||'',equipe_executou:agentMap.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.tsk_insertdatehour),link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
- res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-started,filtersApplied:{...filters,macro:macros,cidade:cidades,inicio:filters.ss?null:inicio,fim:filters.ss?null:fim,tela}});
+ res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-started});
  }catch(e){console.error('Pesquisa por coluna:',e);res.status(500).json({ok:false,error:e.message})}});
 // Pesquisa independente por numero de SS, sem filtros de tela ou data.
 // Restringe a busca na tabela local antes de acessar as tarefas.
@@ -260,7 +228,7 @@ app.post('/api/enviar-equipe',async(req,res)=>{
     resultados.push({tarefa,ok:true,confirmado,situacaoAtual,situacaoSolicitada:!!situacaoId,aviso:confirmado?'Situação Em Campo confirmada.':'Equipe atribuída; situação Em Campo ainda não confirmada no banco. Atualize após a sincronização.'});
    }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
   }
-  for(const k of [...cache.keys()])if(k.startsWith((dbContext.getStore()==='v2'?'v2:':'v1:')+'ss:'))cache.delete(k);
+  for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
   res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'A atribuição e a mudança de situação são operações distintas. Somente confirmado=true comprova Em Campo no banco.'});
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
