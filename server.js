@@ -10,7 +10,7 @@ const pool=new Pool({
  user:process.env.DB_USER,
  password:String(process.env.DB_PASSWORD||''),
  ssl:String(process.env.DB_SSL||'false').toLowerCase()==='true'?{rejectUnauthorized:false}:false,
- max:5,
+ max:3,
  connectionTimeoutMillis:10000,
  idleTimeoutMillis:20000,
  allowExitOnIdle:true
@@ -46,43 +46,7 @@ async function extrasTask(ids){const u=[...new Set(ids.filter(Boolean).map(Numbe
 const campo=(row,...nomes)=>{const dados=row?.campos||{};for(const nome of nomes){const valor=dados[nome];if(valor!==null&&valor!==undefined&&String(valor).trim()!=='')return String(valor)}return ''};
 // Recepção é buscada em blocos pequenos pela tabela task. Assim a tabela de
 // integração nunca é varrida inteira para descobrir as SS pendentes.
-// Consulta única, paginada no banco. Nunca varrer 200 tarefas por bloco.
-// Situação lida de task (coluna operacional); dbout_task só enriquece a página.
-async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca,bairroBusca}){
- const args=[inicio,fim];
- const param=x=>{args.push(x);return '$'+args.length};
- let equipeSQL='',macroSQL='',localSQL='';
- if(equipeBusca){
-  const q=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR age_id::text ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000});
-  const ids=q.rows.map(x=>x.age_id);if(!ids.length)return{rows:[],hasMore:false};
-  equipeSQL=`AND t.age_id=ANY(${param(ids)}::bigint[])`;
- }
- if(macroBusca.length){
-  const q=await pool.query({text:'SELECT tty_id FROM u45468.tasktype WHERE TRIM(tty_description)=ANY($1::text[])',values:[macroBusca],query_timeout:4000});
-  const ids=q.rows.map(x=>x.tty_id);if(!ids.length)return{rows:[],hasMore:false};
-  macroSQL=`AND t.tty_id=ANY(${param(ids)}::bigint[])`;
- }
- if(cidadeBusca.length||bairroBusca){
-  const conditions=['l.loc_id=t.loc_id'];
-  if(cidadeBusca.length)conditions.push(`UPPER(TRIM(l.loc_city))=ANY(${param(cidadeBusca)}::text[])`);
-  if(bairroBusca)conditions.push(`l.loc_neighborhood ILIKE ${param('%'+bairroBusca+'%')}`);
-  localSQL=`AND EXISTS (SELECT 1 FROM u45468.local l WHERE ${conditions.join(' AND ')})`;
- }
- const lim=param(limit+1),off=param(offset);
- const sql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
- t.tsk_situation AS situacao_campo
- FROM u45468.task t
- WHERE t.tsk_insertdatehour >= $1::date
- AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day')
- AND LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'
- ${equipeSQL} ${macroSQL} ${localSQL}
- ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC LIMIT ${lim} OFFSET ${off}`;
- const q=await pool.query({text:sql,values:args,query_timeout:8000});
- const page=q.rows.slice(0,limit);
- if(!page.length)return{rows:[],hasMore:false};
- return{rows:page,hasMore:q.rows.length>limit};
-}
-async function paginaRecepcaoInicial({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca}){
+async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca}){
  const idsEquipe=equipeBusca?(await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000})).rows.map(x=>String(x.age_id)):null;
  const idsMacro=macroBusca.length?(await pool.query({text:'SELECT tty_id FROM u45468.tasktype WHERE TRIM(tty_description)=ANY($1::text[])',values:[macroBusca],query_timeout:4000})).rows.map(x=>String(x.tty_id)):null;
  if((idsEquipe&& !idsEquipe.length)||(idsMacro&&!idsMacro.length))return{rows:[],hasMore:false};
@@ -107,41 +71,6 @@ async function paginaRecepcaoInicial({inicio,fim,limit,offset,equipeBusca,macroB
  const servicoPorId=new Map(servicos.rows.map(x=>[String(x.tty_id),x.tty_description])),tecnicoPorId=new Map(tecnicos.rows.map(x=>[String(x.age_id),x.age_name]));
  return{rows:selecionadas.slice(0,limit).map(x=>({...x,servico:servicoPorId.get(String(x.tty_id))||'',tecnico:tecnicoPorId.get(String(x.age_id))||''})),hasMore:selecionadas.length>limit||!acabou};
 }
-
-// Paginação por lotes: o índice operacional de task seleciona candidatos;
-// dbout_task valida a situação APENAS dos IDs candidatos, antes da página final.
-// Evita o JOIN global caro, sem confundir "retornada" com "encerrada".
-async function paginaStatusIndexada({tela,inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca}){
- const args=[],filtros=[];
- const add=v=>{args.push(v);return '$'+args.length};
- filtros.push(tela==='campo'?"t.tsk_situation='Em Campo'":"t.tsk_situation='Retornada de Campo'");
- if(tela==='baixar'&&inicio&&fim){filtros.push(`t.tsk_lastexecutiondatehour >= ${add(inicio)}::date AND t.tsk_lastexecutiondatehour < (${add(fim)}::date + INTERVAL '1 day')`)}
- if(equipeBusca){const q=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR age_id::text ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000});const ids=q.rows.map(x=>x.age_id);if(!ids.length)return{rows:[],hasMore:false};filtros.push(`t.age_id=ANY(${add(ids)}::bigint[])`)}
- if(macroBusca.length){const q=await pool.query({text:'SELECT tty_id FROM u45468.tasktype WHERE TRIM(tty_description)=ANY($1::text[])',values:[macroBusca],query_timeout:4000});const ids=q.rows.map(x=>x.tty_id);if(!ids.length)return{rows:[],hasMore:false};filtros.push(`t.tty_id=ANY(${add(ids)}::bigint[])`)}
- if(cidadeBusca.length)filtros.push(`EXISTS(SELECT 1 FROM u45468.local l WHERE l.loc_id=t.loc_id AND UPPER(TRIM(l.loc_city))=ANY(${add(cidadeBusca)}::text[]))`);
- const encontrados=[];const bloco=200;let cursorData=null,cursorId=null,acabou=false;
- const coluna='t.tsk_lastexecutiondatehour';
- for(let rodada=0;rodada<100&&encontrados.length<=offset+limit;rodada++){
-  const v=[...args],cond=[...filtros];
-  if(cursorId!==null){v.push(cursorData);const pd='$'+v.length;v.push(cursorId);const pi='$'+v.length;cond.push(cursorData===null?`(${coluna} IS NULL AND t.tsk_id < ${pi})`:`(${coluna} < ${pd} OR (${coluna} = ${pd} AND t.tsk_id < ${pi}) OR ${coluna} IS NULL)`)}
-  v.push(bloco);
-  const q=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_situation,t.tsk_insertdatehour,t.tsk_lastexecutiondatehour FROM u45468.task t WHERE ${cond.join(' AND ')} ORDER BY ${coluna} DESC NULLS LAST,t.tsk_id DESC LIMIT $${v.length}`,values:v,query_timeout:6000});
-  if(!q.rows.length){acabou=true;break}
-  const ultimo=q.rows[q.rows.length-1];cursorData=ultimo.tsk_lastexecutiondatehour;cursorId=ultimo.tsk_id;
-  const ds=await pool.query({text:'SELECT tsk_id,tsk_situation,e_situacao,tsk_lastexecutiondatehour FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])',values:[q.rows.map(x=>x.tsk_id)],query_timeout:6000});
-  const mapa=new Map(ds.rows.map(d=>[String(d.tsk_id),d]));
-  for(const t of q.rows){const d=mapa.get(String(t.tsk_id));if(!d)continue;const situacao=String(t.tsk_situation||'').trim().toLowerCase(),integracao=String(d.e_situacao??'').trim();if(tela==='campo'?situacao!=='em campo':situacao!=='retornada de campo'||integracao!=='')continue;
-   // A data efetiva da integração também deve estar no período solicitado.
-   if(tela==='baixar'&&inicio&&fim){const dataEfetiva=d.tsk_lastexecutiondatehour||t.tsk_lastexecutiondatehour;if(!dataEfetiva)continue;const dia=new Date(dataEfetiva).toISOString().slice(0,10);if(dia<inicio||dia>fim)continue}
-   encontrados.push({...t,situacao_campo:t.tsk_situation,status_integracao:d.e_situacao});if(encontrados.length>offset+limit)break;
-  }
-  if(q.rows.length<bloco){acabou=true;break}
- }
- if(!acabou&&encontrados.length<=offset+limit)throw Error('Pesquisa excedeu o limite de varredura; refine os filtros.');
- const page=encontrados.slice(offset,offset+limit);
- return{rows:page,hasMore:encontrados.length>offset+limit};
-}
-
 // Busca por SS sem limite de datas; paginação feita no banco antes do enriquecimento.
 app.get('/api/busca-ss',async(req,res)=>{try{
  const ss=String(req.query.ss||'').trim();if(ss.length<3)return res.json({ok:true,rows:[],total:0,hasMore:false});
@@ -156,7 +85,7 @@ app.get('/api/busca-ss',async(req,res)=>{try{
  const hasMore=q.rows.length>limit; q.rows=q.rows.slice(0,limit);
  const [locals,tasks]=await Promise.all([extrasLocal(q.rows.map(x=>x.loc_id)),extrasTask(q.rows.map(x=>x.tsk_id))]);
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
- const rows=q.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return {ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:nomesServicos.get(String(x.tty_id))||'',tecnico:nomesAgentes.get(String(x.age_id))||'',equipe_executou:nomesAgentes.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.tsk_insertdatehour),link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
+ const rows=q.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return {ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.tsk_insertdatehour),link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
  res.json({ok:true,rows,total,count:rows.length,limit,offset,hasMore});
  }catch(e){console.error('Busca SS:',e);res.status(500).json({ok:false,error:e.message})}});
 // Pesquisa global: filtros no PostgreSQL ANTES de LIMIT/OFFSET.
@@ -170,53 +99,32 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const limit=Math.min(Math.max(Number(req.query.limit)||25,1),100),offset=Math.max(Number(req.query.offset)||0,0);
  const allowed={ss:'l.loc_integrationid',logradouro:'l.loc_street',bairro:'l.loc_neighborhood',cidade:'l.loc_city',setor:'dl.e_setor',servico:'tt.tty_description',tags:'d.e_tag',equipe_executou:'a.age_name',status_integracao:'d.e_situacao',criado_em:"TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')"};
  const values=[],where=[status[tela]];
- // Use task's indexed operational situation as an additional prefilter, never as a replacement for dbout_task.
- if(tela==='campo')where.push("t.tsk_situation='Em Campo'");
- if(tela==='baixar')where.push("t.tsk_situation='Retornada de Campo'");
  // Cada campo consulta SOMENTE a sua coluna. Bairro também contempla o bairro enriquecido.
- const keys=tela==='recepcao'?['ss','equipe_executou','logradouro','bairro','cidade','setor','servico','tags','criado_em']:tela==='campo'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou']:tela==='baixar'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou','criado_em']:Object.keys(allowed);
+ const keys=['ss','equipe_executou','logradouro','bairro','cidade','setor','servico','tags','criado_em','status_integracao'];
  const filters={};for(const k of keys){const q=String(req.query[k]||'').trim().slice(0,100);if(q)filters[k]=q}
  const add=(expr,val)=>{values.push(val);where.push(`${expr} ILIKE $${values.length}`)};
  for(const [key,q] of Object.entries(filters)){
-   if(key==='bairro'){values.push('%'+q+'%');where.push(`l.loc_neighborhood ILIKE $${values.length}`)}
+   if(key==='bairro'){values.push('%'+q+'%');where.push(`(l.loc_neighborhood ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local bx WHERE bx.loc_id=l.loc_id AND bx.e_bairro ILIKE $${values.length}))`)}
+   else if(key==='logradouro'){values.push('%'+q+'%');where.push(`l.loc_street ILIKE $${values.length}`)}
+   else if(key==='cidade'){values.push('%'+q+'%');where.push(`(l.loc_city ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local cx WHERE cx.loc_id=l.loc_id AND cx.e_localidade ILIKE $${values.length}))`)}
    else if(key==='servico'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tt WHERE tt.tty_id=t.tty_id AND tt.tty_description ILIKE $${values.length})`)}
    else if(key==='equipe_executou'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.agent ag WHERE ag.age_id=t.age_id AND ag.age_name ILIKE $${values.length})`)}
    else if(key==='setor'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.dbout_local sx WHERE sx.loc_id=t.loc_id AND sx.e_setor ILIKE $${values.length})`)}
    else if(key==='criado_em'&&tela!=='recepcao'){values.push('%'+q+'%');where.push(`TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length}`)}
-   else if(key==='ss' && /^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(q)){values.push(q);where.push(`l.loc_integrationid = $${values.length}`)}
    else add(allowed[key],'%'+q+'%');
  }
  const macros=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidades=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean);
  if(macros.length){values.push(macros);where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tm WHERE tm.tty_id=t.tty_id AND TRIM(tm.tty_description)=ANY($${values.length}::text[]))`)}
  if(cidades.length){values.push(cidades);where.push(`UPPER(TRIM(l.loc_city))=ANY($${values.length}::text[])`)}
  const inicio=String(req.query.inicio||''),fim=String(req.query.fim||'');
- // Recepção / bairro: usar a consulta paginada por task, sem JOIN global com dbout_task.
- // Só entra neste caminho quando todos os filtros presentes são suportados nele.
- if(tela==='recepcao' && Object.keys(filters).every(k=>['bairro','equipe_executou'].includes(k)) && inicio && fim){
-   const started=Date.now();
-   const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,
-     equipeBusca:filters.equipe_executou||'',macroBusca:macros,cidadeBusca:cidades,bairroBusca:filters.bairro||''});
-   const items=pagina.rows;
-   const [locals,tasks,agents,types]=await Promise.all([
-    extrasLocal(items.map(x=>x.loc_id)),extrasTask(items.map(x=>x.tsk_id)),
-    pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])',values:[items.map(x=>x.age_id).filter(Boolean)],query_timeout:4000}),
-    pool.query({text:'SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])',values:[items.map(x=>x.tty_id).filter(Boolean)],query_timeout:4000})
-   ]);
-   const nomesAgentes=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));
-   const nomesServicos=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
-   const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
-   const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};
-     return {ss:l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',servico:nomesServicos.get(String(x.tty_id))||'',tecnico:nomesAgentes.get(String(x.age_id))||'',equipe_executou:nomesAgentes.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.tsk_insertdatehour),link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''};});
-   return res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore:pagina.hasMore,ms:Date.now()-started});
- }
  if(!filters.ss&&inicio&&fim){values.push(inicio,fim);const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dateCol} >= $${values.length-1}::date AND ${dateCol} < ($${values.length}::date + INTERVAL '1 day')`)}
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
  const localFilterKeys=['ss','logradouro','bairro','cidade'];
- const localFirst=Boolean(filters.ss); // SS: restringir locais antes de consultar tarefas
- const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('UPPER(TRIM(l.'));
+ const localFirst=localFilterKeys.some(k=>filters[k])||cidades.length>0;
+ const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('(l.')||x.startsWith('UPPER(TRIM(l.'));
  const taskPredicates=where.filter(x=>!localPredicates.includes(x));
- const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')} ${/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(filters.ss||'')?'LIMIT 1':''}) `:'';
+ const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
  const sql=`${localCte}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.age_id,t.tty_id FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN ${localFirst?'locais_filtrados':'u45468.local'} l ON l.loc_id=t.loc_id WHERE ${localFirst?taskPredicates.join(' AND '):where.join(' AND ')} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`;
  const started=Date.now();const r=await pool.query({text:sql,values:[...values,limit+1,offset],query_timeout:12000});
  const hasMore=r.rows.length>limit,items=r.rows.slice(0,limit);
@@ -262,24 +170,14 @@ app.get('/api/localizar-ss', async (req,res)=>{
 app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.query('SELECT current_database() banco,NOW() agora')).rows[0]})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 // Consulta rápida: limita task primeiro e só consulta dbout_local para até 100 SS.
 app.get('/api/recepcao',async(req,res)=>{try{
- const inicio=req.query.inicio||'2026-10-01',fim=req.query.fim||'2026-10-05',limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),bairroBusca=String(req.query.bairro||'').trim().slice(0,100),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}:${bairroBusca.toLowerCase()}`,hit=getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
+ const inicio=req.query.inicio||'2026-10-01',fim=req.query.fim||'2026-10-05',limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
  const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL"};
  if(tela==='recepcao'){
-  // Caminho único indexado: não varrer blocos de 500 tarefas no carregamento inicial.
-  // Os filtros permanecem no SQL antes da paginação.
-  const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca,bairroBusca});
-  const selecaoMs=Date.now()-started;
-  const [locals,tasks,agents,types]=await Promise.all([
-   extrasLocal(pagina.rows.map(x=>x.loc_id)),extrasTask(pagina.rows.map(x=>x.tsk_id)),
-   pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])',values:[pagina.rows.map(x=>x.age_id).filter(Boolean)],query_timeout:4000}),
-   pool.query({text:'SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])',values:[pagina.rows.map(x=>x.tty_id).filter(Boolean)],query_timeout:4000})
-  ]);
-  const nomesAgentes=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));
-  const nomesServicos=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
+  const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca});
+  const [locals,tasks]=await Promise.all([extrasLocal(pagina.rows.map(x=>x.loc_id)),extrasTask(pagina.rows.map(x=>x.tsk_id))]);
   const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
-  const rows=pagina.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:l.ss||'',cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:nomesServicos.get(String(x.tty_id))||'',tecnico:nomesAgentes.get(String(x.age_id))||'',equipe_executou:nomesAgentes.get(String(x.age_id))||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:'',situacao_campo:x.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:'',informacao_bombeiro:'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:'',fim_atividade:'',fim_real:'',ultima_atividade:'',data_finalizacao:'',periodo_execucao:'',criado_em:fmt(x.tsk_insertdatehour)}});
+  const rows=pagina.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:l.ss||'',cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:'',situacao_campo:x.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:'',informacao_bombeiro:'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:'',fim_atividade:'',fim_real:'',ultima_atividade:'',data_finalizacao:'',periodo_execucao:'',criado_em:fmt(x.tsk_insertdatehour)}});
   const total=null; // Paginação leve: sem COUNT(*) a cada página.
-  console.info('[SS recepcao] selecao='+selecaoMs+'ms enriquecimento='+(Date.now()-started-selecaoMs)+'ms itens='+rows.length);
   const data={ok:true,count:rows.length,total,hasMore:total===null?pagina.hasMore:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');return res.json(data);
  }
  // Resolve IDs da equipe antes da consulta principal, evitando subconsulta por SS.
@@ -291,24 +189,16 @@ app.get('/api/recepcao',async(req,res)=>{try{
  const sqlPorStatus='';
  // A tabela dbout_local é enriquecida somente após limitar a página; juntá-la antes do LIMIT causava timeout.
  const limiteStatus=filtraPorUltimaAtividade?'$3':'$1',deslocamentoStatus=filtraPorUltimaAtividade?'$4':'$2',filtroDataStatus=filtraPorUltimaAtividade?"AND d.tsk_lastexecutiondatehour >= $1::date AND d.tsk_lastexecutiondatehour < ($2::date + INTERVAL '1 day')":'';
- const sqlPorStatusRapido=['WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao','FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id','WHERE '+condicoes[tela],(tela==='campo'?"AND t.tsk_situation='Em Campo'":tela==='baixar'?"AND t.tsk_situation='Retornada de Campo'":''),filtroDataStatus,equipeSql,macroSql,cidadeSql,'ORDER BY d.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC','LIMIT '+limiteStatus+' OFFSET '+deslocamentoStatus+')','SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico','FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id','ORDER BY t.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC'].join(' ');
+ const sqlPorStatusRapido=['WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao','FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id','WHERE '+condicoes[tela],filtroDataStatus,equipeSql,macroSql,cidadeSql,'ORDER BY d.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC','LIMIT '+limiteStatus+' OFFSET '+deslocamentoStatus+')','SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico','FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id','ORDER BY t.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC'].join(' ');
  const valoresExtras=[...(equipeBusca?[equipesIds]:[]),...(macroBusca.length?[macroBusca]:[]),...(cidadeBusca.length?[cidadeBusca]:[])];
  const valoresStatus=(filtraPorUltimaAtividade?[inicio,fim,consultaLimit,offset]:[consultaLimit,offset]).concat(valoresExtras);
  const valoresRecepcao=[inicio,fim,consultaLimit,offset].concat(valoresExtras);
- const paginaIndexada=(tela==='campo'||tela==='baixar')?await paginaStatusIndexada({tela,inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca}):null;
- const base=paginaIndexada?{rows:paginaIndexada.rows}:await pool.query({text:tela==='recepcao'?sqlRecepcao:sqlPorStatusRapido,values:tela==='recepcao'?valoresRecepcao:valoresStatus,query_timeout:9000});
+ const base=await pool.query({text:tela==='recepcao'?sqlRecepcao:sqlPorStatusRapido,values:tela==='recepcao'?valoresRecepcao:valoresStatus,query_timeout:9000});
  const registrosPagina=base.rows.slice(0,limit);
- const [locals,tasks,agents,types]=await Promise.all([
-  extrasLocal(registrosPagina.map(x=>x.loc_id)),
-  extrasTask(registrosPagina.map(x=>x.tsk_id)),
-  pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])',values:[registrosPagina.map(x=>x.age_id).filter(Boolean)],query_timeout:4000}),
-  pool.query({text:'SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])',values:[registrosPagina.map(x=>x.tty_id).filter(Boolean)],query_timeout:4000})
- ]);
- const agentePorId=new Map(agents.rows.map(a=>[String(a.age_id),a.age_name]));
- const servicoPorId=new Map(types.rows.map(t=>[String(t.tty_id),t.tty_description]));
- const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||l.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||servicoPorId.get(String(x.tty_id))||'',tecnico:x.tecnico||agentePorId.get(String(x.age_id))||'',equipe_executou:t.equipe_executou||x.tecnico||agentePorId.get(String(x.age_id))||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||t.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.data_referencia||x.tsk_insertdatehour)}});
+ const [locals,tasks]=await Promise.all([extrasLocal(registrosPagina.map(x=>x.loc_id)),extrasTask(registrosPagina.map(x=>x.tsk_id))]);
+ const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||t.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.data_referencia)}});
  const total=null; // Paginação leve: sem varredura para contar todas as SS.
- const data={ok:true,count:rows.length,total,hasMore:total===null?(paginaIndexada?paginaIndexada.hasMore:base.rows.length>limit):offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');res.json(data);
+ const data={ok:true,count:rows.length,total,hasMore:total===null?base.rows.length>limit:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');res.json(data);
 }catch(e){console.error('Recepção:',e);res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/macros',async(req,res)=>{try{const hit=getCache('macros',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(tty_description) AS macro FROM u45468.tasktype WHERE tty_description IS NOT NULL AND TRIM(tty_description)<>'' ORDER BY 1`,query_timeout:6000});setCache('macros',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/cidades',async(req,res)=>{try{const hit=getCache('cidades',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(e_localidade) AS cidade FROM u45468.dbout_local WHERE e_localidade IS NOT NULL AND TRIM(e_localidade)<>'' ORDER BY 1`,query_timeout:6000});setCache('cidades',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
@@ -325,18 +215,18 @@ app.post('/api/enviar-equipe',async(req,res)=>{
   const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
   if(situacaoId&&!/^[0-9]+$/.test(situacaoId))return res.status(400).json({ok:false,error:'UMOV_EM_CAMPO_SITUATION_ID deve ser numérico quando configurado.'});
   // Sem consulta SQL bloqueante: a API uMov valida o agente na gravação.
-  // Envia ate 5 SS simultaneamente. Nao faz consulta SQL por SS apos o POST:
-  // a confirmacao de situacao ocorre na sincronizacao normal do uMov.
   const resultados=[];
-  const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
-  for(let i=0;i<tarefas.length;i+=5){
-   const lote=await Promise.all(tarefas.slice(i,i+5).map(async tarefa=>{
-    try{
-     await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
-     return {tarefa,ok:true,confirmado:false,situacaoAtual:null,situacaoSolicitada:!!situacaoId,aviso:'Equipe atribuida pela API uMov. A situacao Em Campo depende de sincronizacao.'};
-    }catch(e){return {tarefa,ok:false,error:e.message}}
-   }));
-   resultados.push(...lote);
+  for(const tarefa of tarefas){
+   try{
+    // A situação precisa ser configurada conforme o ID REAL da API uMov.
+    // Não presumir que atribuir um agente altera automaticamente a situação.
+    const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
+    await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
+    // Conferir a situação observável no espelho, sem afirmar que a API alterou o status.
+    let situacaoAtual=null,confirmado=false;
+    try{const verificacao=await pool.query({text:'SELECT tsk_situation FROM u45468.dbout_task WHERE tsk_id=$1',values:[tarefa],query_timeout:3000});situacaoAtual=verificacao.rows[0]?.tsk_situation||null;confirmado=String(situacaoAtual||'').trim().toLowerCase()==='em campo'}catch(err){console.warn('Confirmação pendente',tarefa,err.message)}
+    resultados.push({tarefa,ok:true,confirmado,situacaoAtual,situacaoSolicitada:!!situacaoId,aviso:confirmado?'Situação Em Campo confirmada.':'Equipe atribuída; situação Em Campo ainda não confirmada no banco. Atualize após a sincronização.'});
+   }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
   res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'A atribuição e a mudança de situação são operações distintas. Somente confirmado=true comprova Em Campo no banco.'});
@@ -400,157 +290,6 @@ async function retornoHistorico(tarefa){
  }
  return setCache(key,saida);
 }
-// Relatório gerado a partir dos dados da SS exibidos na aba Para Baixar.
-// PDF autônomo, sem serviços externos ou dependências adicionais.
-function relatorioPdf(dados){
- const clean=v=>String(v??'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,2500);
- const rows=[
-  ['RELATORIO AUTOMATICO DE SERVICO',''],
-  ['SS',dados.ss],['Tarefa',dados.tarefa],['Abertura',dados.criado_em],
-  ['Cidade',dados.cidade],['Bairro',dados.bairro],['Endereco',[dados.logradouro,dados.numero].filter(Boolean).join(', ')],
-  ['Setor',dados.setor],['Macro / Servico',dados.servico],['Equipe',dados.equipe],
-  ['Tag',dados.tags],['Situacao',dados.situacao],['Referencia',dados.referencia],
-  ['Hidrometro',dados.hidrometro],['Inicio da atividade',dados.inicio],['Fim da atividade',dados.fim],
-  ['SERVICO EXECUTADO',dados.servico_executado],['MATERIAIS UTILIZADOS',dados.materiais],
-  ['PAVIMENTACAO',dados.pavimentacao],['INFORMACOES DO SOLICITANTE',dados.informacao_solicitante],
-  ['ESCLARECIMENTOS',dados.esclarecimento]
- ];
- // Helvetica WinAnsi; replace glyphs unsupported by this base font.
- const win=v=>clean(v).replace(/[\u2013\u2014]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/[^\u0020-\u007e\u00a0-\u00ff]/g,'?');
- const escape=v=>win(v).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
- const wrap=(v,max=92)=>{const words=win(v||'Nao informado').split(/\s+/);const out=[];let line='';for(const word of words){if(word.length>max){if(line){out.push(line);line=''}for(let k=0;k<word.length;k+=max)out.push(word.slice(k,k+max));continue}if((line+' '+word).trim().length>max){out.push(line);line=word}else line=(line+' '+word).trim()}if(line)out.push(line);return out.length?out:['Nao informado']};
- const pages=[];let commands=[],y=790;
- const add=(str,bold=false,size=10)=>{if(y<65){pages.push(commands.join('\n'));commands=[];y=790}commands.push(`BT /${bold?'F2':'F1'} ${size} Tf 44 ${y} Td (${escape(str)}) Tj ET`);y-=size+6};
- add('RELATORIO DE EXECUCAO - SS DE CAMPO',true,16);add('Gerado em '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}),false,9);y-=12;
- for(const [label,value] of rows.slice(1)){add(label+':',true,10);for(const line of wrap(value))add('   '+line,false,10);y-=5}
- add('Documento gerado a partir dos dados consultados no sistema SS de Campo.',false,8);
- pages.push(commands.join('\n'));
- const objects=[null];const put=body=>(objects.push(body),objects.length-1);
- const font=put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
- const bold=put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
- const pagesId=put('');const pageIds=[];
- for(const content of pages){const b=Buffer.from(content,'latin1');const streamId=put({stream:b});pageIds.push(put(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${streamId} 0 R >>`))}
- objects[pagesId]=`<< /Type /Pages /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
- const root=put(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
- const buffers=[Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n','latin1')];const offsets=[0];let length=buffers[0].length;
- for(let i=1;i<objects.length;i++){offsets[i]=length;const o=objects[i];const header=Buffer.from(`${i} 0 obj\n`);let body;
- if(typeof o==='string')body=Buffer.from(o+'\nendobj\n','latin1');else body=Buffer.concat([Buffer.from(`<< /Length ${o.stream.length} >>\nstream\n`),o.stream,Buffer.from('\nendstream\nendobj\n')]);
- buffers.push(header,body);length+=header.length+body.length}
- const xref=length;let trailer=`xref\n0 ${objects.length}\n0000000000 65535 f \n`;
- for(let i=1;i<objects.length;i++)trailer+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
- trailer+=`trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;
- buffers.push(Buffer.from(trailer));return Buffer.concat(buffers);
-}
-// Localiza TODAS as sequências no banco, sem depender da página/filtros da tela.
-app.get('/api/relatorios-agrupados',async(req,res)=>{
- try{
-  const ss=String(req.query.ss||'').trim();
-  const m=ss.match(/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/);
-  if(!m)return res.status(400).json({ok:false,error:'Número de SS inválido. Exemplo: 10/26-045913-03'});
-  const prefixo=m[1];
-  // Limita a pesquisa pela tabela local antes de consultar as tarefas e tokens.
-  const r=await pool.query({text:`WITH locais AS MATERIALIZED (
-   SELECT loc_id,loc_integrationid FROM u45468.local
-   WHERE loc_integrationid LIKE $1 AND loc_integrationid ~ $2
-   LIMIT 150
-  ) SELECT l.loc_integrationid AS ss,t.tsk_id AS tarefa,d.tss_id,d.tsk_accesstoken,
-   t.tsk_insertdatehour AS criado_em
-   FROM locais l JOIN u45468.task t ON t.loc_id=l.loc_id
-   LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
-   ORDER BY l.loc_integrationid,t.tsk_id DESC LIMIT 150`,
-   values:[prefixo+'-%','^'+prefixo.replace('/','\\/')+'-[0-9]{2}$'],query_timeout:8000});
-  const sequencias=new Map();
-  for(const x of r.rows){
-   const numero=String(x.ss||'');if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!numero.startsWith(prefixo+'-'))continue;
-   const link=Number(x.tss_id)===50&&x.tsk_accesstoken?
-    `https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tarefa}/${x.tsk_accesstoken}`:null;
-   const atual=sequencias.get(numero);
-   if(!atual||(!atual.link&&link))sequencias.set(numero,{ss:numero,tarefa:x.tarefa,link,disponivel:!!link});
-  }
-  const rows=[...sequencias.values()].sort((a,b)=>Number(a.ss.slice(-2))-Number(b.ss.slice(-2)));
-  res.json({ok:true,prefixo,rows,total:rows.length,comRelatorio:rows.filter(x=>x.link).length});
- }catch(e){console.error('Relatórios agrupados:',e.message);res.status(500).json({ok:false,error:'Erro ao localizar sequências: '+e.message})}
-});
-// PDF único com páginas ORIGINAIS de cada sequência, preservando imagens.
-app.post('/api/relatorios-agrupados/pdf',async(req,res)=>{
- let browser;
- try{
-  const links=req.body?.links;
-  if(!Array.isArray(links)||!links.length||links.length>20)return res.status(400).json({ok:false,error:'Selecione de 1 a 20 relatórios.'});
-  for(const item of links){
-   const url=new URL(String(item.link||''));
-   if(url.protocol!=='https:'||url.hostname!=='consglobalmetropole.umov.me'||
-     !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash)
-    return res.status(400).json({ok:false,error:'Link de relatório inválido.'});
-  }
-  const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
-  const {PDFDocument}=require('pdf-lib');
-  const merged=await PDFDocument.create();
-  browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
-  const page=await browser.newPage();
-  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
-  for(const item of links){
-   await page.goto(item.link,{waitUntil:'domcontentloaded',timeout:25000});
-   await page.evaluate(async()=>{
-    await Promise.race([Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,10000))]);
-   });
-   await page.emulateMediaType('print');
-   const bytes=await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}});
-   const doc=await PDFDocument.load(bytes);const pages=await merged.copyPages(doc,doc.getPageIndices());pages.forEach(p=>merged.addPage(p));
-  }
-  const bytes=await merged.save();
-  const prefixo=String(req.body?.prefixo||'SS').replace(/[^a-zA-Z0-9_-]/g,'_');
-  res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="Relatorios_Agrupados_${prefixo}.pdf"`);
-  res.setHeader('Cache-Control','no-store');res.send(Buffer.from(bytes));
- }catch(e){console.error('PDF agrupado:',e.message);if(!res.headersSent)res.status(502).json({ok:false,error:'Falha ao gerar PDF agrupado: '+e.message})}
- finally{if(browser)await browser.close().catch(()=>{})}
-});
-// Converte a própria página original do relatório uMov, inclusive imagens, em PDF.
-// Não usa os campos resumidos da SS: renderiza o HTML original no Chromium.
-app.post('/api/relatorio-original-pdf',async(req,res)=>{
- let browser;
- try{
-  const link=String(req.body?.link||'');
-  const url=new URL(link);
-  if(url.protocol!=='https:'||url.hostname!=='consglobalmetropole.umov.me'||
-    !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash){
-    return res.status(400).json({ok:false,error:'Endereço do relatório uMov inválido.'});
-  }
-  const chromium=require('@sparticuz/chromium');
-  const puppeteer=require('puppeteer-core');
-  browser=await puppeteer.launch({
-    args:chromium.args,executablePath:await chromium.executablePath(),
-    headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}
-  });
-  const page=await browser.newPage();
-  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
-  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
-  // Aguarda imagens do relatório original antes da impressão.
-  await page.evaluate(async()=>{
-    const imgs=Array.from(document.images);
-    await Promise.race([Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{
-      img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});
-    }))),new Promise(resolve=>setTimeout(resolve,14000))]);
-  });
-  await page.emulateMediaType('print');
-  const pdf=await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,
-    margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}});
-  res.setHeader('Content-Type','application/pdf');
-  res.setHeader('Content-Disposition',`attachment; filename="relatorio_original_${String(req.body?.ss||'ss').replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf"`);
-  res.setHeader('Cache-Control','no-store');res.send(Buffer.from(pdf));
- }catch(e){
-  console.error('PDF original uMov:',e.message);
-  if(!res.headersSent)res.status(502).json({ok:false,error:'Não foi possível converter o relatório original. Verifique se o link abre normalmente e se a função possui Chromium disponível.'});
- }finally{if(browser)await browser.close().catch(()=>{});}
-});
-app.post('/api/relatorio-pdf',(req,res)=>{
- try{
-  const d=req.body||{};if(!d.ss||!Number.isSafeInteger(Number(d.tarefa))||Number(d.tarefa)<=0)return res.status(400).json({ok:false,error:'SS invalida para o relatorio.'});
-  const pdf=relatorioPdf(d);
-  res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="relatorio_ss_${String(d.ss).replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf"`);
-  res.setHeader('Cache-Control','no-store');res.send(pdf);
- }catch(e){res.status(500).json({ok:false,error:'Falha ao gerar relatorio PDF.'})}
-});
 app.get('/api/retorno-equipe/:tarefa',async(req,res)=>{try{
  const tarefa=Number(req.params.tarefa);if(!Number.isSafeInteger(tarefa)||tarefa<=0)return res.status(400).json({ok:false,error:'Tarefa invalida.'});
  const dados=await retornoHistorico(tarefa);
@@ -658,11 +397,9 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
  }catch(error){res.status(500).json({ok:false,error:error.message})}
 });
 app.post('/api/tags',async(req,res)=>{try{
- const acao=String(req.body?.acao||'adicionar');
- if(!['adicionar','limpar'].includes(acao))return res.status(400).json({ok:false,error:'Ação de tag inválida.'});
- const tag=acao==='limpar'?'':String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
+ const tag=String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
- if(acao==='adicionar'&&!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
+ if(!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
  const resultados=[];
  for(const tarefa of tarefas){
