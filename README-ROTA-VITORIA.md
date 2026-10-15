@@ -1,0 +1,1 @@
+Rota /: banco original. Rota /vitoria: index2.html, consultas /api2/ no banco DB2. Configure DB2_HOST, DB2_PORT, DB2_NAME, DB2_USER, DB2_PASSWORD, DB2_SSL, DB2_SCHEMA na Vercel. As operacoes uMov permanecem com a API configurada originalmente; valide o ambiente antes de executar alteracoes.

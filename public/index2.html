@@ -1,0 +1,408 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SS / Tarefas - Recepção | Banco 2</title>
+<style>
+:root{--blue:#07599a;--blue2:#0879f7;--txt:#0d3970}*{box-sizing:border-box}body{margin:0;background:#eef3f8;font:12px Arial;color:var(--txt)}main{padding:8px 10px}.toolbar{display:flex;align-items:end;gap:7px;background:#fff;padding:10px;border:1px solid #d4e1ec;border-radius:8px;overflow:auto}.tab,.btn{height:40px;border:1px solid #c8d9e8;border-radius:6px;background:#fff;color:#123e6e;font-weight:700;padding:0 16px;white-space:nowrap}.tab.active,.btn.primary{background:var(--blue2);color:#fff}.f{min-width:180px}.f label{display:block;font-weight:700;margin-bottom:5px}.f input{width:100%;height:35px;border:1px solid #cbd9e6;border-radius:4px;padding:0 8px}.multi{position:relative}.multiBtn{width:100%;height:35px;border:1px solid #cbd9e6;border-radius:4px;background:#fff;text-align:left;padding:0 28px 0 8px;color:#153d69;cursor:pointer;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.multiBtn:after{content:'▾';position:absolute;right:9px}.multiMenu{display:none;position:absolute;top:59px;left:0;z-index:20;min-width:290px;max-width:480px;max-height:310px;overflow:auto;background:#fff;border:1px solid #b9cad9;border-radius:6px;box-shadow:0 8px 22px #17344f33;padding:5px}.multi.open .multiMenu{display:block}.multiMenu label{display:flex;align-items:center;gap:7px;padding:7px 8px;cursor:pointer;white-space:nowrap}.multiMenu label:hover,.modalItem:hover{background:#eef7ff}.box{margin-top:10px;background:#fff;border:1px solid #d4e1ec;border-radius:8px;overflow:hidden}.tableScroll{height:calc(100vh - 190px);min-height:420px;overflow:auto}.tableScroll thead th{position:sticky;top:0;z-index:3}table{width:100%;min-width:1400px;border-collapse:collapse;table-layout:fixed}th{background:linear-gradient(#0b64a7,#075795);color:#fff;padding:10px 11px;text-align:left;border-right:1px solid #4e86b2;font-size:11px;cursor:pointer}td{padding:8px 10px;border-right:1px solid #e0e8ef;border-bottom:1px solid #e0e8ef;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.filter td{padding:4px}.filter input{width:100%;height:29px;border:1px solid #cad9e6;border-radius:3px;padding:5px}.check{width:45px;text-align:center}.check input{accent-color:#0879f7}.ss{font-weight:700;color:#064d88}#rows tr:hover td{background:#edf7ff}.selected td{background:#b9ddfa!important}.sort{float:right}.pager{padding:10px 13px;display:flex;align-items:center;border-top:1px solid #e0e8ef}.listControls{margin-left:auto;display:flex;align-items:center;gap:7px;font-weight:600}.hint{padding:9px 12px;background:#f3f8fc;color:#55718c}.lower{display:none;grid-template-columns:1.25fr .85fr .9fr;gap:10px;margin-top:10px}.lower.open{display:grid}.card{background:#fff;border:1px solid #d4e1ec;border-radius:8px;padding:13px;min-height:215px}.card h3{margin:0 0 12px;font-size:13px;border-bottom:1px solid #d9e5ef;padding-bottom:8px}.details{display:grid;grid-template-columns:1fr 1fr;gap:5px 15px}.field{display:grid;grid-template-columns:115px 1fr;gap:5px;align-items:center}.val{background:#edf3f8;border:1px solid #dae4ec;border-radius:3px;padding:5px 7px;min-height:27px}.note{width:100%;height:155px;border:1px solid #cad9e6;border-radius:4px;padding:10px;resize:none}.executionGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.executionGrid[hidden]{display:none}.executionGrid .full{grid-column:1/-1}.executionGrid label{display:block;font-size:11px;font-weight:700;margin:0 0 4px;color:#315b84}.executionValue{min-height:36px;max-height:62px;overflow:auto;white-space:pre-wrap;line-height:1.35}.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.action{height:62px;background:#fff;border:1px solid #cbddeb;border-radius:7px;color:#0879f7;font-weight:700;font-size:11px}.action[hidden]{display:none}.action b{display:block;font-size:19px;margin-bottom:5px}.modalBg{display:none;position:fixed;inset:0;background:#0a294455;z-index:100;align-items:center;justify-content:center}.modalBg.open{display:flex}.modalBox{width:430px;background:#fff;border-radius:8px;padding:15px}.modalBox input{width:100%;height:38px;border:1px solid #cbd9e6;border-radius:5px;padding:0 9px}.modalList{max-height:260px;overflow:auto;border:1px solid #dbe5ed;margin-top:5px;border-radius:5px}.modalItem{padding:9px;cursor:pointer;border-bottom:1px solid #edf2f6}.modalBtns{display:flex;justify-content:flex-end;gap:7px;margin-top:12px}@media(max-width:1000px){.lower{grid-template-columns:1fr}}
+/* Mantém os menus acima da tabela e impede o recorte pelo cabeçalho. */
+.toolbar{overflow:visible;position:relative;z-index:50}.multiMenu{z-index:200;width:260px;min-width:260px;max-width:260px;max-height:230px;padding:3px;border-color:#b7c8d8;box-shadow:0 5px 13px #17344f29}.multiMenu label{gap:8px;padding:6px 8px;font-size:11px;line-height:18px}.multiMenu input{width:14px;height:14px;margin:0;flex:0 0 14px;accent-color:#0b74d0}.multiMenu .menuFind{display:block;width:calc(100% - 8px);height:29px;margin:4px;border:1px solid #b7c8d8;border-radius:3px;padding:0 7px;font-size:11px}.box{position:relative;z-index:1}
+body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:disabled{opacity:.48;cursor:not-allowed;background:#edf2f6;color:#6f8499}.pagination{display:flex;align-items:center;gap:4px;margin-left:12px}.pageBtn{height:29px;min-width:30px;padding:0 8px;border:1px solid #c8d9e8;border-radius:4px;background:#fff;color:#0b5d9f;font-weight:700;cursor:pointer}.pageBtn.active{background:#0879f7;color:#fff;border-color:#0879f7}.pageBtn:disabled{opacity:.45;cursor:not-allowed}@media(max-width:1000px){.pager{flex-wrap:wrap;gap:8px}.listControls{margin-left:0}.pagination{margin-left:0}}
+</style><style>
+.ssQuickSearch{display:flex;align-items:center;flex:0 0 230px;min-width:190px;height:35px;border:1px solid #cbd9e6;border-radius:5px;background:#fff;overflow:hidden;align-self:end}.ssQuickSearch input{width:100%;min-width:0;height:33px;border:0;outline:0;padding:0 8px;color:#123e6e;font-size:12px}.ssQuickSearch button{flex:0 0 29px;height:33px;border:0;background:#fff;color:#07599a;font-size:20px;cursor:pointer}.ssQuickSearch button:hover{background:#edf5fc}#buscaDiretaPainel{position:relative;z-index:2}#buscaDiretaPainel table{min-width:760px}@media(max-width:1100px){.toolbar{flex-wrap:wrap}.ssQuickSearch{flex-basis:220px}}
+</style></head><body><main>
+<section class="toolbar"><button class="tab active" data-screen="recepcao">▣ &nbsp; RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled title="Notas em preparação ainda não estão disponíveis">⚙ &nbsp; PREPARAÇÃO</button><button class="tab" data-screen="campo">▤ &nbsp; NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁ &nbsp; NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas">✓ &nbsp; NOTAS ENCERRADAS</button><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button type="button" class="multiBtn" id="macroBtn">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button type="button" class="multiBtn" id="cityBtn">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"></div><button class="btn primary" id="filterBtn">▽ &nbsp; Filtrar</button><button class="btn" id="clearBtn">× &nbsp; Limpar</button><div id="buscaDiretaBox" class="ssQuickSearch" title="Busca de SS em todas as datas, diretamente no PostgreSQL"><input id="buscaDiretaSS" type="search" placeholder="Pesquisar SS..." aria-label="Pesquisar SS no banco" autocomplete="off"><button id="buscaDiretaBtn" type="button" aria-label="Pesquisar SS" title="Pesquisar SS">⌕</button><button id="buscaDiretaLimpar" type="button" aria-label="Limpar pesquisa de SS" title="Limpar pesquisa">×</button></div></section>
+<section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div id="buscaDiretaStatus" aria-live="polite" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
+<section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"></th><th data-key="ss">SS<span class="sort">↕</span></th><th id="receptionTeamHeader" data-key="equipe_executou">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th id="lastHeader" data-key="criado_em">DATA DE ABERTURA<span class="sort">↕</span></th><th id="teamHeader" data-key="equipe_executou" hidden>EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th id="integrationHeader" data-key="status_integracao" hidden>STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."></td><td><input data-col="logradouro"></td><td><input data-col="bairro"></td><td><input data-col="cidade"></td><td><input data-col="setor"></td><td><input data-col="servico"></td><td><input data-col="tags"></td><td><input id="lastFilter" data-col="criado_em"></td><td id="teamFilterCell" hidden><input id="teamFilter" data-col="equipe_executou"></td><td id="integrationFilterCell" hidden><input id="integrationFilter" data-col="status_integracao"></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected>25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
+<section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣ &nbsp; DETALHES DA SS &nbsp; <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰ &nbsp; INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly></textarea><div class="executionGrid" id="executionInfo" hidden><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙ &nbsp; AÇÕES DA SS</h3><div class="actions"><button class="action" id="viewSSBtn" hidden><b>▤</b>Visualizar SS</button><button class="action" id="viewReportBtn" hidden><b>▤</b>Visualizar Relatório</button><button class="action" id="groupedBtn" hidden><b>♟</b>Visualizar Agrupado</button><button class="action" id="downloadBtn" hidden><b>↓</b>Baixar</button><button class="action" id="duplicateBtn" hidden><b>▣+</b>Duplicar</button><button class="action" id="rejectBtn" hidden><b>×</b>Rejeitar</button><button class="action" id="launchItemsBtn" hidden><b>☷+</b>Lançar Itens</button><button class="action" id="returnReceptionBtn" hidden><b>↩</b>Retornar para Recepção</button><button class="action" id="tagBtn" hidden><b>◆</b>Adicionar Tag</button><button class="action" id="sendTeamBtn" hidden><b>➜</b>Enviar para Equipe</button><button class="action" id="removeTeamBtn" hidden><b>↩</b>Remover da Equipe</button></div></div></section></main>
+<div id="teamModal" class="modalBg"><div class="modalBox"><h3>Enviar SS para Equipe</h3><div>Digite o <b>número</b> ou o <b>nome</b> da equipe/técnico:</div><input id="sendTeamSearch" autocomplete="off" placeholder="Ex.: 270 ou THIAGO"><div id="sendTeamList" class="modalList"></div><div id="sendTeamSelected" style="margin-top:8px;font-weight:bold"></div><div class="modalBtns"><button class="btn" id="cancelTeam">Cancelar</button><button class="btn primary" id="confirmTeam">Enviar para equipe</button></div></div></div>
+<script>
+// Notificação global, disponível desde o início da aplicação.
+window.notify = function(message, kind) {
+  let el = document.getElementById('integrationToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'integrationToast';
+    el.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:10000;max-width:360px;padding:12px 15px;border-radius:7px;color:#fff;font-weight:700;box-shadow:0 8px 24px #001a3a44';
+    document.body.appendChild(el);
+  }
+  el.style.background = kind === 'error' ? '#c63b3b' : '#0879f7';
+  el.textContent = String(message);
+  el.hidden = false;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.hidden = true; }, 5000);
+};
+</script>
+<script>
+const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));let currentScreen='recepcao';const fixedCols=['ss','logradouro','bairro','cidade','setor','servico','tags'];const currentCols=()=>currentScreen==='campo'?[...fixedCols,'equipe_executou']:(currentScreen==='baixar'?[...fixedCols,'data_finalizacao','equipe_executou']:(currentScreen==='encerradas'?[...fixedCols,'data_finalizacao','equipe_executou','status_integracao']:[fixedCols[0],'equipe_executou',...fixedCols.slice(1),'criado_em']));let raw=[],view=[],cities=[],macros=[],selected={},page=25,sort='',dir=1,target=null;
+const isoDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`};
+function setDefaultDateRange(){const fim=new Date(),inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);$('dateIni').value=isoDate(inicio);$('dateFim').value=isoDate(fim)}
+setDefaultDateRange();
+const val=(x,k)=>{const valor=String(x[k]??'').trim();return k==='status_integracao'&&valor.toLocaleLowerCase('pt-BR')==='baixada no siscom'?'Baixada':valor};
+const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','tagBtn'],baixar:['viewSSBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn'],encerradas:['viewReportBtn','groupedBtn']};
+function configureActions(screen){const allowed=actionSets[screen]||[];document.querySelectorAll('.actions .action').forEach(button=>button.hidden=!allowed.includes(button.id))}
+function norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+function screenMatch(x){
+  const situacao=norm(val(x,'situacao_campo'));
+  const statusIntegracao=norm(val(x,'status_integracao'));
+  const ultima=val(x,'ultima_atividade');
+
+  // RECEPÇÃO: somente pendentes de envio para campo.
+  if(currentScreen==='recepcao'){
+    return situacao.includes('pendente de envio para campo');
+  }
+
+  // PREPARAÇÃO permanece desativada e não lista dados.
+  if(currentScreen==='preparacao') return false;
+
+  // NOTAS EM CAMPO: somente tarefas efetivamente Em Campo.
+  if(currentScreen==='campo') return situacao.includes('em campo');
+
+  // NOTAS PARA BAIXAR: Retornada de Campo e sem status de integração.
+  if(currentScreen==='baixar'){
+    return situacao.includes('retornada de campo') && !statusIntegracao && !!ultima;
+  }
+
+  // NOTAS ENCERRADAS: qualquer nota já integrada (Baixada, Rejeitada, Duplicada etc.).
+  if(currentScreen==='encerradas') return !!statusIntegracao;
+
+  return true;
+}
+function apply(){
+  const q=Object.fromEntries([...document.querySelectorAll('.filter input')].map(i=>[i.dataset.col,i.value.toLowerCase()]));if(window.__globalSSSearch||window.__buscaSSAtiva)Object.keys(q).forEach(k=>q[k]='');
+  view=raw.filter(x=>(window.__buscaSSAtiva||screenMatch(x))&&(window.__globalSSSearch||window.__buscaSSAtiva||!cities.length||cities.includes(val(x,'cidade')))&&(window.__globalSSSearch||window.__buscaSSAtiva||!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
+  if(sort)view.sort((a,b)=>val(a,sort).localeCompare(val(b,sort),'pt-BR',{numeric:true})*dir);
+  render()
+}
+function render(){let a=view.slice(0,page);$('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(k==='data_finalizacao'?(val(x,'periodo_execucao')||val(x,k)):val(x,k))+'</td>').join('')+'</tr>').join('');[...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];fill(a[i]);render()});$('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';$('countInfo').textContent='Exibindo '+a.length+' de '+view.length+' SS'+(window.ms?' • consulta '+window.ms+' ms':'')}
+function fill(x){if(!x)return;window.__detailSS=x;document.body.classList.add('panel-open');$('lower').classList.add('open');$('titleSS').textContent=$('dss').textContent=val(x,'ss');[['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));const paraBaixar=currentScreen==='baixar';$('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; EXECUÇÃO DA ATIVIDADE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';$('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;if(paraBaixar){$('dInicioAtividade').textContent=val(x,'inicio_atividade')||'Não informado';$('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';$('dInfoExecucao').textContent=val(x,'info_execucao_siscom')||val(x,'informacao_solicitante')||'Não informado';$('dMateriais').textContent=val(x,'materiais_lancados')||'Não informado'}else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||x.info_execucao_siscom||''}
+function menu(box,button,items,selected,empty,suffix,set,label=v=>esc(v)){box.innerHTML='<input class="menuFind" autocomplete="off" placeholder="Digite para pesquisar..."><label style="font-weight:400;border-bottom:1px solid #d8e4ee"><input class="checkAll" type="checkbox" '+(items.length&&selected.length===items.length?'checked':'')+'> Selecione...</label>'+items.map(v=>'<label class="menuOption" data-text="'+esc(String(v).toLowerCase())+'"><input class="menuCheck" type="checkbox" value="'+esc(v)+'" '+(selected.includes(v)?'checked':'')+'> '+label(v)+'</label>').join('')||'<label>Nenhum registro encontrado.</label>';const sync=()=>{const chosen=[...box.querySelectorAll('.menuCheck:checked')].map(x=>x.value);set(chosen);button.textContent=!chosen.length?empty:chosen.length===1?chosen[0]:chosen.length+' '+suffix;box.querySelector('.checkAll').checked=chosen.length===items.length&&!!items.length;apply()};box.querySelector('.checkAll').onchange=e=>{box.querySelectorAll('.menuCheck').forEach(x=>x.checked=e.target.checked);sync()};box.querySelectorAll('.menuCheck').forEach(i=>i.onchange=sync);box.querySelector('.menuFind').oninput=e=>{const q=e.target.value.toLocaleLowerCase('pt-BR');box.querySelectorAll('.menuOption').forEach(x=>x.style.display=!q||x.dataset.text.includes(q)?'flex':'none')}}
+function macroLabel(v){const m=String(v).trim().match(/^(\\d+)\\s*[-–:]?\\s*(.*)$/);return m&&m[2]?'<b>'+esc(m[1])+'</b><span style="color:#58718a"> — '+esc(m[2])+'</span>':esc(v)}
+const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];
+async function loadMenus(){try{const a=await fetch('/api2/macros').then(r=>r.json());const ma=(a.rows||[]).map(x=>x.macro).filter(Boolean).sort((x,y)=>x.localeCompare(y,'pt-BR',{numeric:true}));menu($('macroMenu'),$('macroBtn'),ma,macros,'Todos','macros',x=>{macros=x;window.__pageOffset=0;load()},macroLabel);menu($('cityMenu'),$('cityBtn'),CIDADES_CONFIGURADAS,cities,'Todas','cidades',x=>{cities=x;window.__pageOffset=0;load()})}catch(e){$('macroMenu').innerHTML='<label>Erro ao carregar Macros.</label>';menu($('cityMenu'),$('cityBtn'),CIDADES_CONFIGURADAS,cities,'Todas','cidades',x=>{cities=x;window.__pageOffset=0;load()})}}
+async function load(){try{$('countInfo').textContent='Carregando SS...';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,tela:currentScreen}),r=await fetch('/api2/recepcao?'+p),j=await r.json();if(!r.ok)throw Error(j.error);raw=j.rows||[];window.ms=j.ms;selected={};apply()}catch(e){$('countInfo').textContent='Erro: '+e.message}}
+['macro','city'].forEach(n=>$(n+'Btn').onclick=e=>{e.stopPropagation();$(n+'Multi').classList.toggle('open')});document.addEventListener('click',()=>document.querySelectorAll('.multi.open').forEach(x=>x.classList.remove('open')));document.querySelectorAll('.multiMenu').forEach(x=>x.onclick=e=>e.stopPropagation());document.querySelectorAll('.filter input').forEach(i=>i.oninput=apply);document.querySelectorAll('th[data-key]').forEach(t=>t.onclick=()=>{sort===t.dataset.key?dir*=-1:(sort=t.dataset.key,dir=1);document.querySelectorAll('.sort').forEach(x=>x.textContent='↕');t.querySelector('.sort').textContent=dir===1?'↑':'↓';apply()});$('pageSize').onchange=e=>{page=+e.target.value;load()};$('filterBtn').onclick=load;$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();loadMenus();load()};$('all').onchange=e=>{view.slice(0,page).forEach(x=>e.target.checked?selected[x.tarefa]=x:delete selected[x.tarefa]);render()};$('closeDetail').onclick=()=>{$('lower').classList.remove('open');selected={};render()};
+async function teams(){try{let r=await fetch('/api2/equipes?q='+encodeURIComponent($('sendTeamSearch').value)),j=await r.json(),a=j.rows||[];$('sendTeamList').innerHTML=a.length?a.map(x=>'<div class="modalItem" data-id="'+esc(x.id)+'" data-name="'+esc(x.nome)+'"><b>'+esc(x.id)+'</b> - '+esc(x.nome)+'</div>').join(''):'<div class="modalItem">Nenhum técnico/equipe encontrado.</div>';document.querySelectorAll('.modalItem[data-id]').forEach(x=>x.onclick=()=>{target={id:x.dataset.id,nome:x.dataset.name};$('sendTeamSearch').value=target.id+' - '+target.nome;$('sendTeamSelected').textContent='Selecionado: '+$('sendTeamSearch').value})}catch(e){$('sendTeamList').textContent='Erro ao buscar equipes.'}}
+$('sendTeamBtn').onclick=async()=>{if(!Object.keys(selected).length&&window.__detailSS?.tarefa)selected[window.__detailSS.tarefa]=window.__detailSS;if(!Object.keys(selected).length)return alert('Selecione uma SS antes de enviar para uma equipe.');target=null;$('sendTeamSearch').value='';$('sendTeamSelected').textContent='';$('teamModal').classList.add('open');await teams();$('sendTeamSearch').focus()};let time;$('sendTeamSearch').oninput=()=>{clearTimeout(time);time=setTimeout(teams,180)};$('cancelTeam').onclick=()=>$('teamModal').classList.remove('open');$('teamModal').onclick=e=>{if(e.target===$('teamModal'))$('teamModal').classList.remove('open')};$('confirmTeam').onclick=async()=>{if(!target)return alert('Selecione uma equipe da lista.');const tarefas=Object.keys(selected).map(Number);if(!tarefas.length)return alert('Selecione pelo menos uma SS.');if(!confirm('Enviar '+tarefas.length+' SS para '+target.nome+'?'))return;const btn=$('confirmTeam');btn.disabled=true;btn.textContent='Enviando...';try{const r=await fetch('/api2/enviar-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas,agente:Number(target.id)})});const j=await r.json();if(!r.ok&&!j.resultados)throw Error(j.error||'Erro no envio');const sucesso=(j.resultados||[]).filter(x=>x.ok).length;const falhas=(j.resultados||[]).filter(x=>!x.ok);const confirmadas=(j.resultados||[]).filter(x=>x.confirmado).length;window.notify('Equipe atribuída: '+sucesso+' SS. Em Campo confirmadas: '+confirmadas+'.'+(falhas.length?' Falhas: '+falhas.length+'.':'')+(sucesso>confirmadas?' Aguarde sincronização e atualize para verificar a situação.':''),falhas.length?'error':'success');$('teamModal').classList.remove('open');if(sucesso){selected={};await load()}else await load()}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();load();
+$('closeDetail').addEventListener('click',()=>{document.body.classList.remove('panel-open');window.__detailSS=null});
+document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!document.querySelector('.pick:checked')){document.body.classList.remove('panel-open');$('lower').classList.remove('open')}});
+['macroBtn','cityBtn'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>{const box=id==='macroBtn'?'macroMenu':'cityMenu';$(box).querySelector('.menuFind')?.focus()},0)));
+
+// V10.1: apenas apresentação da aba. NÃO executa nova consulta.
+function setScreen(screen,btn){
+  if(screen==='preparacao') return;
+  currentScreen=screen;window.__detailSS=null;
+  configureActions(screen);
+  document.querySelectorAll('.tab[data-screen]').forEach(x=>x.classList.toggle('active',x===btn));
+  const h=$('lastHeader'), f=$('lastFilter'), teamHeader=$('teamHeader'), teamFilterCell=$('teamFilterCell'), teamFilter=$('teamFilter'), integrationHeader=$('integrationHeader'), integrationFilterCell=$('integrationFilterCell'), integrationFilter=$('integrationFilter');
+  $('receptionTeamHeader').hidden=screen!=='recepcao';
+  $('receptionTeamFilterCell').hidden=screen!=='recepcao';
+  const mostraEquipeComData=screen==='baixar'||screen==='encerradas';
+  teamHeader.hidden=!mostraEquipeComData;
+  teamFilterCell.hidden=!mostraEquipeComData;
+  integrationHeader.hidden=screen!=='encerradas';
+  integrationFilterCell.hidden=screen!=='encerradas';
+  if(screen==='campo'){
+    h.innerHTML='EQUIPE<span class="sort">↕</span>';
+    h.dataset.key='equipe_executou';
+    f.dataset.col='equipe_executou';
+    f.placeholder='Filtrar equipe...';
+  }else if(mostraEquipeComData){
+    h.innerHTML='QUANDO (EXECUTADO)<span class="sort">↕</span>';
+    h.dataset.key='data_finalizacao';
+    f.dataset.col='data_finalizacao';
+    f.placeholder='Filtrar início ou fim...';
+    teamHeader.innerHTML='EQUIPE QUE EXECUTOU<span class="sort">↕</span>';
+    teamHeader.dataset.key='equipe_executou';
+    teamFilter.dataset.col='equipe_executou';
+    teamFilter.placeholder='Filtrar equipe...';
+    if(screen==='encerradas'){
+      integrationHeader.innerHTML='STATUS INTEGRAÇÃO<span class="sort">↕</span>';
+      integrationHeader.dataset.key='status_integracao';
+      integrationFilter.dataset.col='status_integracao';
+      integrationFilter.placeholder='Baixada, rejeitada...';
+    }
+  }else{
+    h.innerHTML='DATA DE ABERTURA<span class="sort">↕</span>';
+    h.dataset.key='criado_em';
+    f.dataset.col='criado_em';
+    f.placeholder='';
+  }
+  f.value='';
+  teamFilter.value='';
+  integrationFilter.value='';
+  sort='';
+  load();
+}
+document.querySelectorAll('.tab[data-screen]').forEach(btn=>{
+  btn.addEventListener('click',()=>{if(!btn.disabled)setScreen(btn.dataset.screen,btn)});
+});
+
+configureActions(currentScreen);
+
+
+// ===== V10.5 - relatório sem qualquer nova consulta =====
+(function(){
+  function getSelectedSS(){
+    const checked=[...document.querySelectorAll('tbody input[type="checkbox"]:checked')];
+    if(checked.length){
+      const tr=checked[0].closest('tr');
+      const cell=tr && (tr.querySelector('td.ss') || tr.querySelector('td:nth-child(2)'));
+      if(cell) return cell.textContent.trim();
+    }
+    const d=document.getElementById('dss');
+    if(d) return String(d.value||d.textContent||'').trim();
+    return '';
+  }
+
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest('button');
+    if(!btn) return;
+    const name=(btn.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+    if(name!=='visualizar relatório' && name!=='visualizar relatorio') return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    const ss=getSelectedSS();
+    if(!ss){ alert('Selecione uma SS para visualizar o relatório.'); return; }
+
+    const rows=window.__rawReception || (typeof raw!=='undefined'?raw:[]) || [];
+    const row=rows.find(x=>String(x.ss||'').trim()===ss);
+    if(!row || !row.link){
+      alert('Relatório não disponível para esta SS.');
+      return;
+    }
+    window.open(row.link,'_blank','noopener,noreferrer');
+  },true);
+})();
+
+// ===== V10.6 - VISUALIZAR RELATÓRIO =====
+// Usa diretamente o objeto selecionado que já contém link. Não consulta o banco.
+$('viewReportBtn').onclick=()=>{
+  const itens=Object.values(selected||{});
+  if(!itens.length)return alert('Selecione uma SS pelo checkbox para visualizar o relatório.');
+  const x=itens[0];
+  if(!x.link)return alert('Esta SS não possui relatório disponível (tss_id diferente de 50 ou token indisponível).');
+  const w=window.open(x.link,'_blank');
+  if(!w) window.location.href=x.link;
+};
+$('viewSSBtn').onclick=()=>$('viewReportBtn').click();
+
+
+
+</script>
+<script>
+/* Paginação no banco: traz apenas a página exibida, mantendo a consulta rápida. */
+window.__pageOffset=0;
+window.__hasMore=false;
+function renderPagination(){
+  let area=$('pagination');
+  if(!area){area=document.createElement('div');area.id='pagination';area.className='pagination';document.querySelector('.listControls').appendChild(area)}
+  const atual=Math.floor(window.__pageOffset/page)+1,nums=[];const totalPaginas=Number.isFinite(window.__totalSS)?Math.max(1,Math.ceil(window.__totalSS/page)):null;
+  for(let n=Math.max(1,atual-2);n<=Math.min(totalPaginas||atual+(window.__hasMore?1:0),atual+2);n++)nums.push(n);
+  area.innerHTML='<button class="pageBtn" '+(atual===1?'disabled':'')+' data-page="'+(atual-1)+'">‹</button>'+nums.map(n=>'<button class="pageBtn '+(n===atual?'active':'')+'" data-page="'+n+'">'+n+'</button>').join('')+'<button class="pageBtn" '+(!window.__hasMore?'disabled':'')+' data-page="'+(atual+1)+'">›</button>';
+  area.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{if(window.__buscaSSAtiva)return;const destino=Number(b.dataset.page);if(destino<1||destino===atual)return;window.__pageOffset=(destino-1)*page;load()});
+}
+function render(){
+  let a=view.slice(0,page);
+  $('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(k==='data_finalizacao'?(val(x,'periodo_execucao')||val(x,k)):val(x,k))+'</td>').join('')+'</tr>').join('');
+  [...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];fill(a[i]);render()});
+  $('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);
+  let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';
+  const inicioPagina=a.length?window.__pageOffset+1:0,fimPagina=window.__pageOffset+a.length;
+  $('countInfo').textContent='Exibindo '+inicioPagina+'–'+fimPagina+' de '+(Number.isFinite(window.__totalSS)?window.__totalSS:'mais SS')+(window.ms?' • consulta '+window.ms+' ms':'');
+  renderPagination();
+}
+let consultaListaAtual=null,numeroConsultaLista=0;
+async function load(){
+  if(window.__buscaSSAtiva)return;
+  if(consultaListaAtual)consultaListaAtual.abort();
+  consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
+  try{
+    $('countInfo').textContent='Carregando SS...';
+    const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const global=filtros.length>0;let r=await fetch((global?'/api2/pesquisa-global?':'/api2/recepcao?')+p,{signal:consultaListaAtual.signal}),j=await r.json();if(numero!==numeroConsultaLista)return;
+    if(!r.ok)throw Error(j.error);
+    raw=j.rows||[];window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
+  }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
+}
+let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},500)}));
+let ssSearchTimer;const ssInput=document.querySelector('.filter input[data-col="ss"]');ssInput.placeholder='Buscar SS em todas as datas...';ssInput.addEventListener('input',()=>{clearTimeout(ssSearchTimer);ssSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},700)});$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
+$('filterBtn').onclick=()=>{window.__pageOffset=0;load()};
+let dateFilterTimer;
+['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
+  clearTimeout(dateFilterTimer);
+  dateFilterTimer=setTimeout(()=>{if($('dateIni').value&&$('dateFim').value){window.__pageOffset=0;load()}},250);
+}));
+let equipeFilterTimer;
+['teamFilter','lastFilter'].forEach(id=>$(id).oninput=()=>{
+  const ehFiltroEquipe=(id==='teamFilter'&&(currentScreen==='baixar'||currentScreen==='encerradas'))||(id==='lastFilter'&&currentScreen==='campo');
+  if(!ehFiltroEquipe){clearTimeout(equipeFilterTimer);equipeFilterTimer=setTimeout(()=>{window.__pageOffset=0;load()},500);return;}
+  clearTimeout(equipeFilterTimer);
+  equipeFilterTimer=setTimeout(()=>{window.__pageOffset=0;load()},300);
+});
+$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
+document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener('click',()=>{window.__pageOffset=0},{capture:true}));
+// Pesquisa direta no PostgreSQL, exibida na própria lista principal.
+(()=>{
+ const input=$('buscaDiretaSS'),botao=$('buscaDiretaBtn'),limpar=$('buscaDiretaLimpar');
+ const painel=$('buscaDiretaPainel');if(painel)painel.remove();
+ let seq=0,timer,anterior=null;
+ async function buscar(){
+  const ss=input.value.trim(),id=++seq;
+  if(ss.length<4){if(!ss)restaurar();else $('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return}
+  if(!window.__buscaSSAtiva)anterior={raw,offset:window.__pageOffset,total:window.__totalSS,hasMore:window.__hasMore,ms:window.ms};
+  window.__buscaSSAtiva=true;botao.disabled=true;$('countInfo').textContent='Pesquisando SS diretamente no PostgreSQL...';
+  try{
+   const r=await fetch('/api2/localizar-ss?ss='+encodeURIComponent(ss));const j=await r.json();if(id!==seq)return;
+   if(!r.ok||!j.ok)throw Error(j.error||'Erro na consulta');
+   raw=j.rows||[];selected={};window.__pageOffset=0;window.__totalSS=raw.length;window.__hasMore=false;window.ms=null;apply();
+   if(!raw.length)$('countInfo').textContent='Nenhuma SS encontrada para '+ss+'.';
+  }catch(e){if(id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
+  finally{if(id===seq)botao.disabled=false}
+ }
+ function restaurar(){seq++;clearTimeout(timer);window.__buscaSSAtiva=false;botao.disabled=false;selected={};
+  if(anterior){raw=anterior.raw;window.__pageOffset=anterior.offset;window.__totalSS=anterior.total;window.__hasMore=anterior.hasMore;window.ms=anterior.ms;anterior=null;apply()}else load();
+ }
+ botao.onclick=buscar;
+ input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);buscar()}};
+ input.oninput=()=>{clearTimeout(timer);if(!input.value.trim()){restaurar();return}timer=setTimeout(buscar,550)};
+ limpar.onclick=()=>{input.value='';restaurar()};
+})();
+load();
+</script>
+<script>
+/* Lançamento em lista com consulta separada dos itens já gravados. */
+(function(){
+ let materiais=[],pendentes=[],ssAtual='';
+ const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+ function modal(){let box=$('itensModal');if(box)return box;box=document.createElement('div');box.id='itensModal';box.className='modalBg';box.innerHTML=`<div class="modalBox" style="width:850px;max-width:96vw;max-height:90vh;overflow:auto"><h3>Materiais da SS <span id="itensSS"></span></h3><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="verLancados">Visualizar itens lançados</button><button class="btn" id="verPendentes">Lista para salvar (<span id="qtdPendentes">0</span>)</button></div><div id="itensLista" style="max-height:240px;overflow:auto;margin:12px 0"></div><hr><h4>Adicionar material à lista</h4><input id="itemMaterial" list="itensMateriais" placeholder="Digite o material" style="width:100%;box-sizing:border-box"><datalist id="itensMateriais"></datalist><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><input id="itemUnidade" placeholder="Unidade"><input id="itemQuantidade" type="number" min="0.0001" step="0.0001" value="1" placeholder="Quantidade"><input id="itemValor" type="number" min="0" step="0.01" placeholder="Valor total"></div><p id="itensStatus" style="font-size:12px"></p><div class="modalBtns"><button class="btn" id="itensFechar">Fechar</button><button class="btn" id="itensAdicionar">Adicionar à lista</button><button class="btn primary" id="itensSalvar">Salvar todos os materiais</button></div></div>`;document.body.appendChild(box);
+ $('itensFechar').onclick=()=>box.classList.remove('open');box.onclick=e=>{if(e.target===box)box.classList.remove('open')};$('itemMaterial').onchange=preencher;$('itemQuantidade').oninput=calcular;$('verLancados').onclick=()=>carregar(ssAtual).catch(e=>$('itensStatus').textContent=e.message);$('verPendentes').onclick=renderPendentes;$('itensAdicionar').onclick=adicionar;$('itensSalvar').onclick=salvar;return box}
+ function selecionado(){const nome=$('itemMaterial').value.trim().toLocaleLowerCase('pt-BR');return materiais.find(x=>String(x.nome||'').trim().toLocaleLowerCase('pt-BR')===nome)}
+ function preencher(){const m=selecionado();if(m){$('itemUnidade').value=m.unidade||'UN';calcular()}}
+ function calcular(){const m=selecionado(),q=Number($('itemQuantidade').value||0);if(m&&Number(m.valor_unitario)>=0)$('itemValor').value=(q*Number(m.valor_unitario||0)).toFixed(2)}
+ function renderPendentes(){const lista=$('itensLista');$('qtdPendentes').textContent=pendentes.length;lista.innerHTML=pendentes.length?'<table style="width:100%"><thead><tr><th>Material</th><th>UN</th><th>Qtd.</th><th>Valor</th><th>Ação</th></tr></thead><tbody>'+pendentes.map((i,n)=>'<tr><td>'+esc(i.nome)+'</td><td>'+esc(i.unidade)+'</td><td>'+esc(i.quantidade)+'</td><td>'+moeda(i.valor_total)+'</td><td><button class="btn removerPendente" data-n="'+n+'">Remover</button></td></tr>').join('')+'</tbody></table>':'Nenhum material na lista. Adicione itens antes de salvar.';lista.querySelectorAll('.removerPendente').forEach(b=>b.onclick=()=>{pendentes.splice(Number(b.dataset.n),1);renderPendentes()})}
+ function adicionar(){const m=selecionado(),unidade=$('itemUnidade').value.trim(),quantidade=Number($('itemQuantidade').value),valor_total=$('itemValor').value;if(!m)return alert('Selecione um material cadastrado.');if(!unidade||!Number.isFinite(quantidade)||quantidade<=0)return alert('Informe unidade e quantidade válida.');if(valor_total!==''&&(!Number.isFinite(Number(valor_total))||Number(valor_total)<0))return alert('Valor inválido.');pendentes.push({material:m.id,nome:m.nome,unidade,quantidade,valor_total});$('itemMaterial').value='';$('itemUnidade').value='';$('itemQuantidade').value='1';$('itemValor').value='';$('itensStatus').textContent='Item adicionado à lista; ainda não foi gravado.';renderPendentes()}
+ async function carregar(ss){$('itensLista').textContent='Carregando itens já lançados...';const r=await fetch('/api2/itens?ss='+encodeURIComponent(ss)).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Erro ao consultar itens.');const itens=r.rows||[];$('itensLista').innerHTML=itens.length?'<table style="width:100%"><thead><tr><th>Material</th><th>UN</th><th>Qtd.</th><th>Valor</th><th>Ação</th></tr></thead><tbody>'+itens.map(i=>'<tr><td>'+esc(i.material||i.nome||'')+'</td><td>'+esc(i.unidade||'')+'</td><td>'+esc(i.quantidade||'')+'</td><td>'+moeda(i.valor_total||i.valor||0)+'</td><td><button class="btn excluirItem" data-id="'+esc(i.id||i.item_id||'')+'">Excluir</button></td></tr>').join('')+'</tbody></table>':'Nenhum item lançado nesta SS.';listaHandlers()}
+ function listaHandlers(){$('itensLista').querySelectorAll('.excluirItem').forEach(b=>b.onclick=async()=>{if(!b.dataset.id||!confirm('Excluir este item já lançado?'))return;try{const r=await fetch('/api2/itens/'+encodeURIComponent(b.dataset.id),{method:'DELETE'}).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Falha ao excluir');await carregar(ssAtual)}catch(e){alert(e.message)}})}
+ async function salvar(){if(!pendentes.length)return alert('Adicione materiais à lista.');const b=$('itensSalvar');b.disabled=true;$('itensStatus').textContent='Salvando itens no servidor...';try{const r=await fetch('/api2/itens/lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ss:ssAtual,itens:pendentes})}).then(x=>x.json());if(!Array.isArray(r.resultados))throw new Error(r.error||'Não foi possível confirmar o salvamento. Confira os itens lançados antes de tentar novamente.');const gravados=new Set(r.resultados.filter(i=>i.ok).map(i=>i.index));pendentes=pendentes.filter((_,i)=>!gravados.has(i));$('qtdPendentes').textContent=pendentes.length;$('itensStatus').textContent=r.gravados+' de '+r.total+' itens gravados. '+(pendentes.length?'Confira os pendentes antes de tentar novamente.':'Todos os itens foram processados.');await carregar(ssAtual)}catch(e){$('itensStatus').textContent=e.message}finally{b.disabled=false}}
+ $('launchItemsBtn').onclick=async()=>{const itens=Object.values(selected||{});if(itens.length!==1)return alert('Selecione somente uma SS.');const ss=itens[0].ss;if(!ss)return alert('SS sem número.');modal();if(ssAtual!==ss){pendentes=[];ssAtual=ss}$('itensSS').textContent=ss;$('qtdPendentes').textContent=pendentes.length;$('itensModal').classList.add('open');try{if(!materiais.length){const r=await fetch('/api2/materiais').then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível carregar os materiais.');materiais=r.rows||[];$('itensMateriais').innerHTML=materiais.map(x=>'<option value="'+esc(x.nome||'')+'">').join('')}await carregar(ss)}catch(e){$('itensLista').textContent='Erro: '+e.message}};
+})();
+</script>
+<script>
+// Ações de integração: somente na aba "Notas para Baixar". A chave do uMov
+// permanece no servidor; o navegador envia apenas tarefa(s) e o status.
+(function(){
+  function notify(message,kind){
+    let el=document.getElementById('integrationToast');
+    if(!el){el=document.createElement('div');el.id='integrationToast';el.style.cssText='position:fixed;right:18px;bottom:18px;z-index:1000;max-width:360px;padding:12px 15px;border-radius:7px;color:#fff;font-weight:700;box-shadow:0 8px 24px #001a3a44';document.body.appendChild(el)}
+    el.style.background=kind==='error'?'#c63b3b':'#0879f7';el.textContent=message;el.hidden=false;clearTimeout(el._timer);el._timer=setTimeout(()=>el.hidden=true,5000);
+  }
+  // Disponibiliza o aviso discreto também para o envio de equipes.
+  window.notify = notify;
+  async function changeIntegrationStatus(status,label){
+    const items=Object.values(selected||{});
+    if(currentScreen!=='baixar')return notify('Esta ação é permitida somente em Notas para Baixar.','error');
+    if(!items.length)return notify('Selecione ao menos uma SS.','error');
+    const count=items.length;
+    if(!confirm(`Confirmar ${label.toLowerCase()} ${count===1?'esta SS':count+' SS'}?`))return;
+    const buttons=['downloadBtn','rejectBtn','duplicateBtn'].map(id=>$(id)).filter(Boolean);
+    buttons.forEach(button=>button.disabled=true);
+    try{
+      const response=await fetch('/api2/status-integracao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,tarefas:items.map(item=>item.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||result.resultados?.find(item=>!item.ok)?.error||'A ação não foi concluída.');
+      const sucesso=Number(result.sucesso||0),falhas=Number(result.falhas||0);
+      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated&&updated.ok)item.status_integracao=status});
+      selected={};apply();
+      notify(`${label}: ${sucesso} concluída(s)${falhas?' • '+falhas+' falha(s)':''}.`,falhas?'error':'success');
+    }catch(error){notify(error.message||'Não foi possível concluir a ação.','error')}
+    finally{buttons.forEach(button=>button.disabled=false)}
+  }
+  $('downloadBtn').onclick=()=>changeIntegrationStatus('Baixada','Baixa');
+  $('rejectBtn').onclick=()=>changeIntegrationStatus('Rejeitada','Rejeição');
+  $('duplicateBtn').onclick=()=>changeIntegrationStatus('Duplicada','Duplicação');
+  $('removeTeamBtn').onclick=async()=>{
+    if(currentScreen!=='recepcao')return;
+    const escolhidas=Object.values(selected||{});
+    if(!escolhidas.length&&window.__detailSS?.tarefa)escolhidas.push(window.__detailSS);
+    if(!escolhidas.length)return notify('Selecione ou abra uma SS.','error');
+    const comEquipe=escolhidas.filter(x=>String(x.equipe_executou||x.tecnico||'').trim());
+    if(!comEquipe.length)return notify('As SS selecionadas não possuem equipe vinculada.','error');
+    if(!confirm(`Remover a equipe de ${comEquipe.length} SS na Recepção? A situação da SS não será alterada.`))return;
+    const button=$('removeTeamBtn');button.disabled=true;
+    try{
+      const response=await fetch('/api2/remover-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:comEquipe.map(x=>x.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível remover a equipe.');
+      const okIds=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+      for(const x of raw){if(okIds.has(String(x.tarefa))){x.equipe_executou='';x.tecnico='';}}
+      if(window.__detailSS&&okIds.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou='';window.__detailSS.tecnico='';}
+      selected={};apply();
+      notify(`Solicitação enviada ao uMov: ${result.sucesso||0} SS. ${result.falhas||0} falha(s). Confirme a atualização após a sincronização.`,result.falhas?'error':'success');
+    }catch(error){notify(error.message||'Erro ao remover equipe.','error')}
+    finally{button.disabled=false}
+  };
+  $('returnReceptionBtn').onclick=async()=>{
+    if(currentScreen!=='campo')return;
+    const items=Object.values(selected||{});
+    if(!items.length)return notify('Selecione uma SS em campo.','error');
+    if(!confirm(`Solicitar retorno de ${items.length} SS para Recepção pelo uMov? A equipe será removida; a mudança de situação será verificada após a sincronização.`))return;
+    const button=$('returnReceptionBtn');button.disabled=true;
+    try{
+      const response=await fetch('/api2/retornar-recepcao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:items.map(item=>item.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||'Falha ao retornar SS.');
+      const confirmadas=(result.resultados||[]).filter(item=>item.confirmado).length;notify(`Retirada de equipe solicitada ao uMov: ${result.sucesso||0} SS.${result.falhas?' Falhas: '+result.falhas+'.':''} Situação Pendente de envio ainda não confirmada.`,result.falhas?'error':'success');
+      const ids=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));if(ids.size){raw=raw.filter(x=>!ids.has(String(x.tarefa)));selected={};apply()}else{selected={};await load()}
+    }catch(error){notify(error.message||'Não foi possível retornar para Recepção.','error')}
+    finally{button.disabled=false}
+  };
+  $('tagBtn').onclick=async()=>{
+    if(!['recepcao','campo'].includes(currentScreen))return notify('A tag está disponível nas abas Recepção e Em Campo.','error');
+    const items=Object.values(selected||{});
+    if(!items.length&&window.__detailSS?.tarefa)items.push(window.__detailSS);
+    if(!items.length)return notify('Selecione ao menos uma SS.','error');
+    const tag=prompt(`Digite a tag para ${items.length===1?'esta SS':'as '+items.length+' SS'}:`,'');
+    if(tag===null)return;
+    const valor=tag.trim().replace(/\s+/g,' ');
+    if(!valor)return notify('Informe uma tag.','error');
+    $('tagBtn').disabled=true;
+    try{
+      const response=await fetch('/api2/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:valor,tarefas:items.map(item=>item.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||'Não foi possível gravar a tag.');
+      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated?.ok)item.tags=valor});
+      selected={};apply();
+      notify(`Tag adicionada em ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
+    }catch(error){notify(error.message||'Não foi possível gravar a tag.','error')}
+    finally{$('tagBtn').disabled=false}
+  };
+})();
+</script>
+<script>
+// Exibe o retorno informado pela equipe no uMov; não utiliza dados do SISCOM.
+(function(){
+  document.querySelector('label[for="dInfoExecucao"]')?.remove();
+  window.fill=function(x){
+    if(!x)return;
+    document.body.classList.add('panel-open');$('lower').classList.add('open');
+    $('titleSS').textContent=$('dss').textContent=val(x,'ss');
+    [['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));
+    const paraBaixar=currentScreen==='baixar'||currentScreen==='encerradas';
+    $('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; RETORNO PREENCHIDO PELA EQUIPE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';
+    $('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;
+    if(paraBaixar){
+      $('dInicioAtividade').textContent=val(x,'inicio_atividade')||'Não informado';
+      $('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';
+      $('dInfoExecucao').textContent=val(x,'servico_executado')||'Não informado';
+      $('dMateriais').textContent=val(x,'materiais_bombeiro')||'Não informado';
+      $('dPavimentacao').textContent=val(x,'pavimentacao')||'Não informado';
+      const tarefaAtual=String(x.tarefa);
+      fetch('/api2/retorno-equipe/'+encodeURIComponent(x.tarefa)).then(r=>r.json()).then(retorno=>{
+        if(!retorno.ok||String(document.querySelector('#titleSS')?.textContent)!==String(x.ss))return;
+        if(retorno.pavimentacao)$('dPavimentacao').textContent=retorno.pavimentacao;
+        if(retorno.servico_executado)$('dInfoExecucao').textContent=retorno.servico_executado;
+        if(retorno.materiais_bombeiro)$('dMateriais').textContent=retorno.materiais_bombeiro;
+      }).catch(()=>{});
+    }else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||'';
+  };
+})();
+</script><div style="position:fixed;bottom:10px;right:10px;background:#194b72;color:white;padding:7px 12px;border-radius:8px;z-index:99999;font:600 12px Arial">BANCO 2 · umovme_dbview_consglobalmetropole1</div></body></html>

@@ -15,6 +15,36 @@ const pool=new Pool({
  idleTimeoutMillis:20000,
  allowExitOnIdle:true
 });
+// Versão 2: contexto isolado por requisição, inclusive durante awaits.
+const {AsyncLocalStorage}=require('node:async_hooks');
+const dbContext=new AsyncLocalStorage();
+const pool2=new Pool({
+ host:process.env.DB2_HOST||process.env.DB_HOST,
+ port:Number(process.env.DB2_PORT||process.env.DB_PORT||5432),
+ database:process.env.DB2_NAME||'umovme_dbview_consglobalmetropole1',
+ user:process.env.DB2_USER||process.env.DB_USER,
+ password:String(process.env.DB2_PASSWORD||process.env.DB_PASSWORD||''),
+ ssl:String(process.env.DB2_SSL||process.env.DB_SSL||'false').toLowerCase()==='true'?{rejectUnauthorized:false}:false,
+ max:3,connectionTimeoutMillis:10000,idleTimeoutMillis:20000,allowExitOnIdle:true
+});
+const originalQuery=pool.query.bind(pool);
+const secondaryQuery=pool2.query.bind(pool2);
+pool.query=(query,...args)=>{
+ if(dbContext.getStore()!=='v2')return originalQuery(query,...args);
+ const schema=process.env.DB2_SCHEMA||'u45468';
+ if(!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schema))throw Error('DB2_SCHEMA inválido');
+ const replaceSql=sql=>sql.replace(/\bu45468\./g,schema+'.');
+ if(typeof query==='string')return secondaryQuery(replaceSql(query),...args);
+ return secondaryQuery({...query,text:replaceSql(query.text)},...args);
+};
+// /api2/... usa as mesmas rotas e lógica, porém com conexão secundária.
+app.use((req,res,next)=>{
+ if(req.url.startsWith('/api2/')){
+  req.url='/api/'+req.url.slice('/api2/'.length);
+  return dbContext.run('v2',next);
+ }
+ next();
+});
 app.use(express.json({limit:'100kb'}));
 // Teste de SSO OIDC (desativado por padrão). Nunca recebe senhas do uMov.
 const crypto=require('node:crypto');
@@ -39,8 +69,10 @@ app.post('/api/auth/logout',(req,res)=>{cookie(res,OIDC_COOKIE,'',0);res.json({o
 // Modo SSO de teste: bloquear todas as rotas de negócio até as permissões do uMov serem verificadas.
 // Mesmo um login válido NÃO libera dados ou ações administrativas.
 app.use('/api',(req,res,next)=>{if(!OIDC_ENABLED)return next();const x=verified(cookies(req)[OIDC_COOKIE]);if(!x)return res.status(401).json({ok:false,error:'Faça login com uMov.'});return res.status(403).json({ok:false,error:'Login validado. Aguardando integração de permissões do uMov; acesso às SS bloqueado por segurança.'})});
+app.get('/vitoria', (req,res)=>res.sendFile(path.join(__dirname,'public','index2.html')));
+app.get('/vitoria/', (req,res)=>res.sendFile(path.join(__dirname,'public','index2.html')));
 app.use(express.static(path.join(__dirname,'public')));
-const cache=new Map(),getCache=(k,ttl)=>{const x=cache.get(k);return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(k,{ts:Date.now(),data:v}),v);
+const cache=new Map(),cacheKey=k=>(dbContext.getStore()==='v2'?'v2:':'v1:')+k,getCache=(k,ttl)=>{const x=cache.get(cacheKey(k));return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(cacheKey(k),{ts:Date.now(),data:v}),v);
 async function extrasLocal(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT loc_id,loc_integrationid AS ss,e_localidade AS cidade,e_bairro AS bairro,e_setor AS setor,e_reflocalizacao AS referencia_localizacao,loc_description AS localizacao,loc_street AS logradouro,loc_streetnumber AS numero,e_hidrometro AS hidrometro,e_situacao AS status_integracao,e_servicoexecutadosiscom AS servico_executado,e_informacaoexecucaosiscom AS informacao_bombeiro,e_informacaosolicitante AS informacao_solicitante,e_esclarecimentosolicitante AS esclarecimento_solicitante,to_jsonb(dbout_local) AS campos FROM u45468.dbout_local WHERE loc_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.loc_id),x));return m}
 async function extrasTask(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT d.tsk_id,d.tss_id,d.tsk_accesstoken,d.tsk_situation AS situacao_campo,d.e_tag AS tags,d.e_situacao AS status_integracao,d.tsk_realinitialdatehour AS inicio_atividade_raw,d.tsk_lastexecutiondatehour AS ultima_atividade_raw,d.tsk_realfinaldatehour AS fim_real_raw,to_jsonb(d) AS campos FROM u45468.dbout_task d WHERE d.tsk_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.tsk_id),x));return m}
 const campo=(row,...nomes)=>{const dados=row?.campos||{};for(const nome of nomes){const valor=dados[nome];if(valor!==null&&valor!==undefined&&String(valor).trim()!=='')return String(valor)}return ''};
@@ -228,7 +260,7 @@ app.post('/api/enviar-equipe',async(req,res)=>{
     resultados.push({tarefa,ok:true,confirmado,situacaoAtual,situacaoSolicitada:!!situacaoId,aviso:confirmado?'Situação Em Campo confirmada.':'Equipe atribuída; situação Em Campo ainda não confirmada no banco. Atualize após a sincronização.'});
    }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
   }
-  for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
+  for(const k of [...cache.keys()])if(k.startsWith((dbContext.getStore()==='v2'?'v2:':'v1:')+'ss:'))cache.delete(k);
   res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'A atribuição e a mudança de situação são operações distintas. Somente confirmado=true comprova Em Campo no banco.'});
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
