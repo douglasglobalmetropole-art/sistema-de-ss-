@@ -4,13 +4,16 @@
 /* Mantém os menus acima da tabela e impede o recorte pelo cabeçalho. */
 .toolbar{overflow:visible;position:relative;z-index:50}.multiMenu{z-index:200;width:260px;min-width:260px;max-width:260px;max-height:230px;padding:3px;border-color:#b7c8d8;box-shadow:0 5px 13px #17344f29}.multiMenu label{gap:8px;padding:6px 8px;font-size:11px;line-height:18px}.multiMenu input{width:14px;height:14px;margin:0;flex:0 0 14px;accent-color:#0b74d0}.multiMenu .menuFind{display:block;width:calc(100% - 8px);height:29px;margin:4px;border:1px solid #b7c8d8;border-radius:3px;padding:0 7px;font-size:11px}.box{position:relative;z-index:1}
 body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:disabled{opacity:.48;cursor:not-allowed;background:#edf2f6;color:#6f8499}.pagination{display:flex;align-items:center;gap:4px;margin-left:12px}.pageBtn{height:29px;min-width:30px;padding:0 8px;border:1px solid #c8d9e8;border-radius:4px;background:#fff;color:#0b5d9f;font-weight:700;cursor:pointer}.pageBtn.active{background:#0879f7;color:#fff;border-color:#0879f7}.pageBtn:disabled{opacity:.45;cursor:not-allowed}@media(max-width:1000px){.pager{flex-wrap:wrap;gap:8px}.listControls{margin-left:0}.pagination{margin-left:0}}
+#buscaDiretaBox,#buscaDiretaPainel{display:none!important}
+#refreshBtn{margin-left:auto;white-space:nowrap;background:#f0f7ff;color:#07599a;border-color:#8bb9e2;font-weight:bold}#refreshBtn:disabled{opacity:.6;cursor:wait}#refreshBtn .spin{display:inline-block}#refreshBtn:disabled .spin{animation:refreshSpin .9s linear infinite}@keyframes refreshSpin{to{transform:rotate(360deg)}}
 </style><style>
 .ssQuickSearch{display:flex;align-items:center;flex:0 0 230px;min-width:190px;height:35px;border:1px solid #cbd9e6;border-radius:5px;background:#fff;overflow:hidden;align-self:end}.ssQuickSearch input{width:100%;min-width:0;height:33px;border:0;outline:0;padding:0 8px;color:#123e6e;font-size:12px}.ssQuickSearch button{flex:0 0 29px;height:33px;border:0;background:#fff;color:#07599a;font-size:20px;cursor:pointer}.ssQuickSearch button:hover{background:#edf5fc}#buscaDiretaPainel{position:relative;z-index:2}#buscaDiretaPainel table{min-width:760px}@media(max-width:1100px){.toolbar{flex-wrap:wrap}.ssQuickSearch{flex-basis:220px}}
 </style></head><body><main>
-<section class="toolbar"><button class="tab active" data-screen="recepcao">▣ &nbsp; RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled title="Notas em preparação ainda não estão disponíveis">⚙ &nbsp; PREPARAÇÃO</button><button class="tab" data-screen="campo">▤ &nbsp; NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁ &nbsp; NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas">✓ &nbsp; NOTAS ENCERRADAS</button><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button type="button" class="multiBtn" id="macroBtn">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button type="button" class="multiBtn" id="cityBtn">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"></div><button class="btn primary" id="filterBtn">▽ &nbsp; Filtrar</button><button class="btn" id="clearBtn">× &nbsp; Limpar</button><button class="btn" id="refreshBtn" type="button" title="Atualizar os dados da aba atual">↻ &nbsp; Atualizar</button></section>
-
+<section class="toolbar"><button class="tab active" data-screen="recepcao">▣ &nbsp; RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled title="Notas em preparação ainda não estão disponíveis">⚙ &nbsp; PREPARAÇÃO</button><button class="tab" data-screen="campo">▤ &nbsp; NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁ &nbsp; NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas">✓ &nbsp; NOTAS ENCERRADAS</button><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button type="button" class="multiBtn" id="macroBtn">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button type="button" class="multiBtn" id="cityBtn">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"></div><button class="btn primary" id="filterBtn">▽ &nbsp; Filtrar</button><button class="btn" id="clearBtn">× &nbsp; Limpar</button><button class="btn" id="refreshBtn" type="button" title="Consultar novamente o banco sem perder os filtros"><span class="spin">⟳</span> &nbsp; Atualizar</button><div id="buscaDiretaBox" class="ssQuickSearch" title="Busca de SS em todas as datas, diretamente no PostgreSQL"><input id="buscaDiretaSS" type="search" placeholder="Pesquisar SS..." aria-label="Pesquisar SS no banco" autocomplete="off"><button id="buscaDiretaBtn" type="button" aria-label="Pesquisar SS" title="Pesquisar SS">⌕</button><button id="buscaDiretaLimpar" type="button" aria-label="Limpar pesquisa de SS" title="Limpar pesquisa">×</button></div></section>
+<section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div id="buscaDiretaStatus" aria-live="polite" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
 <section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"></th><th data-key="ss">SS<span class="sort">↕</span></th><th id="receptionTeamHeader" data-key="equipe_executou">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th id="lastHeader" data-key="criado_em">DATA DE ABERTURA<span class="sort">↕</span></th><th id="teamHeader" data-key="equipe_executou" hidden>EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th id="integrationHeader" data-key="status_integracao" hidden>STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."></td><td><input data-col="logradouro"></td><td><input data-col="bairro"></td><td><input data-col="cidade"></td><td><input data-col="setor"></td><td><input data-col="servico"></td><td><input data-col="tags"></td><td><input id="lastFilter" data-col="criado_em"></td><td id="teamFilterCell" hidden><input id="teamFilter" data-col="equipe_executou"></td><td id="integrationFilterCell" hidden><input id="integrationFilter" data-col="status_integracao"></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected>25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
-<section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣ &nbsp; DETALHES DA SS &nbsp; <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰ &nbsp; INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly></textarea><div class="executionGrid" id="executionInfo" hidden><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙ &nbsp; AÇÕES DA SS</h3><div class="actions"><button class="action" id="viewSSBtn" hidden><b>▤</b>Visualizar SS</button><button class="action" id="viewReportBtn" hidden><b>▤</b>Visualizar Relatório</button><button class="action" id="groupedBtn" hidden><b>♟</b>Visualizar Agrupado</button><button class="action" id="downloadBtn" hidden><b>↓</b>Baixar</button><button class="action" id="duplicateBtn" hidden><b>▣+</b>Duplicar</button><button class="action" id="rejectBtn" hidden><b>×</b>Rejeitar</button><button class="action" id="launchItemsBtn" hidden><b>☷+</b>Lançar Itens</button><button class="action" id="returnReceptionBtn" hidden><b>↩</b>Retornar para Recepção</button><button class="action" id="tagBtn" hidden><b>◆</b>Adicionar Tag</button><button class="action" id="sendTeamBtn" hidden><b>➜</b>Enviar para Equipe</button><button class="action" id="removeTeamBtn" hidden><b>↩</b>Remover da Equipe</button></div></div></section></main>
+<section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣ &nbsp; DETALHES DA SS &nbsp; <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰ &nbsp; INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly></textarea><div class="executionGrid" id="executionInfo" hidden><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙ &nbsp; AÇÕES DA SS</h3><div class="actions"><button class="action" id="viewSSBtn" hidden><b>▤</b>Visualizar Arquivo</button><button class="action" id="generatePdfBtn" hidden><b>▣</b>Gerar PDF do Relatório</button><button class="action" id="viewReportBtn" hidden><b>▤</b>Visualizar Relatório</button><button class="action" id="groupedBtn" hidden><b>♟</b>Visualizar Agrupado</button><button class="action" id="downloadBtn" hidden><b>↓</b>Baixar</button><button class="action" id="duplicateBtn" hidden><b>▣+</b>Duplicar</button><button class="action" id="rejectBtn" hidden><b>×</b>Rejeitar</button><button class="action" id="launchItemsBtn" hidden><b>☷+</b>Lançar Itens</button><button class="action" id="returnReceptionBtn" hidden><b>↩</b>Retornar para Recepção</button><button class="action" id="tagBtn" hidden><b>◆</b>Adicionar Tag</button><button class="action" id="sendTeamBtn" hidden><b>➜</b>Enviar para Equipe</button><button class="action" id="removeTeamBtn" hidden><b>↩</b>Remover da Equipe</button></div></div></section></main>
+<div id="tagModal" class="modalBg" role="dialog" aria-modal="true" aria-labelledby="tagModalTitle"><div class="modalBox" style="width:460px;max-width:95vw"><h3 id="tagModalTitle">Gerenciar tag das SS</h3><p id="tagModalCount" style="margin:10px 0;color:#476481"></p><label for="tagModalInput" style="display:block;margin-bottom:6px;font-weight:700">Tag</label><input id="tagModalInput" maxlength="120" placeholder="Digite a tag que deseja adicionar" style="width:100%;padding:11px;border:1px solid #bed1e2;border-radius:6px"><p style="color:#526b80;font-size:12px">Adicionar substitui a tag atual. Limpar remove a tag das SS selecionadas.</p><div id="tagModalError" style="color:#b42318;min-height:18px" aria-live="polite"></div><div class="modalBtns" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn" id="tagModalCancel">Cancelar</button><button type="button" class="btn" id="tagModalClear" style="border-color:#c94c4c;color:#a92b2b">Limpar tag</button><button type="button" class="btn primary" id="tagModalSave">Adicionar tag</button></div></div></div>
 <div id="teamModal" class="modalBg"><div class="modalBox"><h3>Enviar SS para Equipe</h3><div>Digite o <b>número</b> ou o <b>nome</b> da equipe/técnico:</div><input id="sendTeamSearch" autocomplete="off" placeholder="Ex.: 270 ou THIAGO"><div id="sendTeamList" class="modalList"></div><div id="sendTeamSelected" style="margin-top:8px;font-weight:bold"></div><div class="modalBtns"><button class="btn" id="cancelTeam">Cancelar</button><button class="btn primary" id="confirmTeam">Enviar para equipe</button></div></div></div>
 <script>
 // Notificação global, disponível desde o início da aplicação.
@@ -35,7 +38,7 @@ const isoDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0
 function setDefaultDateRange(){const fim=new Date(),inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);$('dateIni').value=isoDate(inicio);$('dateFim').value=isoDate(fim)}
 setDefaultDateRange();
 const val=(x,k)=>{const valor=String(x[k]??'').trim();return k==='status_integracao'&&valor.toLocaleLowerCase('pt-BR')==='baixada no siscom'?'Baixada':valor};
-const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','tagBtn'],baixar:['viewSSBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn','tagBtn'],encerradas:['viewReportBtn','groupedBtn']};
+const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','sendTeamBtn','tagBtn'],baixar:['viewSSBtn','generatePdfBtn','tagBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn'],encerradas:['viewReportBtn','groupedBtn']};
 function configureActions(screen){const allowed=actionSets[screen]||[];document.querySelectorAll('.actions .action').forEach(button=>button.hidden=!allowed.includes(button.id))}
 function norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function screenMatch(x){
@@ -60,7 +63,7 @@ function screenMatch(x){
   }
 
   // NOTAS ENCERRADAS: qualquer nota já integrada (Baixada, Rejeitada, Duplicada etc.).
-  if(currentScreen==='encerradas') return situacao.includes('retornada de campo') && !!statusIntegracao;
+  if(currentScreen==='encerradas') return !!statusIntegracao;
 
   return true;
 }
@@ -79,7 +82,14 @@ async function loadMenus(){try{const a=await fetch('/api/macros').then(r=>r.json
 async function load(){try{$('countInfo').textContent='Carregando SS...';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,tela:currentScreen}),r=await fetch('/api/recepcao?'+p),j=await r.json();if(!r.ok)throw Error(j.error);raw=j.rows||[];window.ms=j.ms;selected={};apply()}catch(e){$('countInfo').textContent='Erro: '+e.message}}
 ['macro','city'].forEach(n=>$(n+'Btn').onclick=e=>{e.stopPropagation();$(n+'Multi').classList.toggle('open')});document.addEventListener('click',()=>document.querySelectorAll('.multi.open').forEach(x=>x.classList.remove('open')));document.querySelectorAll('.multiMenu').forEach(x=>x.onclick=e=>e.stopPropagation());document.querySelectorAll('.filter input').forEach(i=>i.oninput=apply);document.querySelectorAll('th[data-key]').forEach(t=>t.onclick=()=>{sort===t.dataset.key?dir*=-1:(sort=t.dataset.key,dir=1);document.querySelectorAll('.sort').forEach(x=>x.textContent='↕');t.querySelector('.sort').textContent=dir===1?'↑':'↓';apply()});$('pageSize').onchange=e=>{page=+e.target.value;load()};$('filterBtn').onclick=load;$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();loadMenus();load()};$('all').onchange=e=>{view.slice(0,page).forEach(x=>e.target.checked?selected[x.tarefa]=x:delete selected[x.tarefa]);render()};$('closeDetail').onclick=()=>{$('lower').classList.remove('open');selected={};render()};
 async function teams(){try{let r=await fetch('/api/equipes?q='+encodeURIComponent($('sendTeamSearch').value)),j=await r.json(),a=j.rows||[];$('sendTeamList').innerHTML=a.length?a.map(x=>'<div class="modalItem" data-id="'+esc(x.id)+'" data-name="'+esc(x.nome)+'"><b>'+esc(x.id)+'</b> - '+esc(x.nome)+'</div>').join(''):'<div class="modalItem">Nenhum técnico/equipe encontrado.</div>';document.querySelectorAll('.modalItem[data-id]').forEach(x=>x.onclick=()=>{target={id:x.dataset.id,nome:x.dataset.name};$('sendTeamSearch').value=target.id+' - '+target.nome;$('sendTeamSelected').textContent='Selecionado: '+$('sendTeamSearch').value})}catch(e){$('sendTeamList').textContent='Erro ao buscar equipes.'}}
-$('sendTeamBtn').onclick=async()=>{if(!Object.keys(selected).length&&window.__detailSS?.tarefa)selected[window.__detailSS.tarefa]=window.__detailSS;if(!Object.keys(selected).length)return alert('Selecione uma SS antes de enviar para uma equipe.');target=null;$('sendTeamSearch').value='';$('sendTeamSelected').textContent='';$('teamModal').classList.add('open');await teams();$('sendTeamSearch').focus()};let time;$('sendTeamSearch').oninput=()=>{clearTimeout(time);time=setTimeout(teams,180)};$('cancelTeam').onclick=()=>$('teamModal').classList.remove('open');$('teamModal').onclick=e=>{if(e.target===$('teamModal'))$('teamModal').classList.remove('open')};$('confirmTeam').onclick=async()=>{if(!target)return alert('Selecione uma equipe da lista.');const tarefas=Object.keys(selected).map(Number);if(!tarefas.length)return alert('Selecione pelo menos uma SS.');if(!confirm('Enviar '+tarefas.length+' SS para '+target.nome+'?'))return;const btn=$('confirmTeam');btn.disabled=true;btn.textContent='Enviando...';try{const r=await fetch('/api/enviar-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas,agente:Number(target.id)})});const j=await r.json();if(!r.ok&&!j.resultados)throw Error(j.error||'Erro no envio');const sucesso=(j.resultados||[]).filter(x=>x.ok).length;const falhas=(j.resultados||[]).filter(x=>!x.ok);const confirmadas=(j.resultados||[]).filter(x=>x.confirmado).length;window.notify('Equipe atribuída: '+sucesso+' SS. Em Campo confirmadas: '+confirmadas+'.'+(falhas.length?' Falhas: '+falhas.length+'.':'')+(sucesso>confirmadas?' Aguarde sincronização e atualize para verificar a situação.':''),falhas.length?'error':'success');$('teamModal').classList.remove('open');if(sucesso){selected={};await load()}else await load()}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();load();
+$('sendTeamBtn').onclick=async()=>{if(!Object.keys(selected).length&&window.__detailSS?.tarefa)selected[window.__detailSS.tarefa]=window.__detailSS;if(!Object.keys(selected).length)return alert('Selecione uma SS antes de enviar para uma equipe.');target=null;$('sendTeamSearch').value='';$('sendTeamSelected').textContent='';$('teamModal').classList.add('open');await teams();$('sendTeamSearch').focus()};let time;$('sendTeamSearch').oninput=()=>{clearTimeout(time);time=setTimeout(teams,180)};$('cancelTeam').onclick=()=>$('teamModal').classList.remove('open');$('teamModal').onclick=e=>{if(e.target===$('teamModal'))$('teamModal').classList.remove('open')};$('confirmTeam').onclick=async()=>{if(!target)return alert('Selecione uma equipe da lista.');const tarefas=Object.keys(selected).map(Number);if(!tarefas.length)return alert('Selecione pelo menos uma SS.');if(!confirm('Enviar '+tarefas.length+' SS para '+target.nome+'?'))return;const btn=$('confirmTeam');btn.disabled=true;btn.textContent='Enviando...';try{const r=await fetch('/api/enviar-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas,agente:Number(target.id)})});const j=await r.json();if(!r.ok&&!j.resultados)throw Error(j.error||'Erro no envio');const sucesso=(j.resultados||[]).filter(x=>x.ok).length;for(const x of (j.resultados||[])){if(x.ok)equipesPendentes.set(String(x.tarefa),{nome:target.nome,em:Date.now()})}const falhas=(j.resultados||[]).filter(x=>!x.ok);const confirmadas=(j.resultados||[]).filter(x=>x.confirmado).length;window.notify('Equipe atribuída: '+sucesso+' SS. Em Campo confirmadas: '+confirmadas+'.'+(falhas.length?' Falhas: '+falhas.length+'.':'')+(sucesso>confirmadas?' Aguarde sincronização e atualize para verificar a situação.':''),falhas.length?'error':'success');$('teamModal').classList.remove('open');if(sucesso){
+  const ids=new Set((j.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+  for(const item of raw){if(ids.has(String(item.tarefa))){item.equipe_executou=target.nome;item.tecnico=target.nome;}}
+  if(window.__detailSS&&ids.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou=target.nome;window.__detailSS.tecnico=target.nome;}
+  selected={};apply();
+  // A atualização visual é imediata. Uma nova consulta não deve bloquear o botão
+  // nem apagar o nome antes de o uMov sincronizar a atribuição.
+}else{selected={};apply()}}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();load();
 $('closeDetail').addEventListener('click',()=>{document.body.classList.remove('panel-open');window.__detailSS=null});
 document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!document.querySelector('.pick:checked')){document.body.classList.remove('panel-open');$('lower').classList.remove('open')}});
 ['macroBtn','cityBtn'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>{const box=id==='macroBtn'?'macroMenu':'cityMenu';$(box).querySelector('.menuFind')?.focus()},0)));
@@ -87,6 +97,13 @@ document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!
 // V10.1: apenas apresentação da aba. NÃO executa nova consulta.
 function setScreen(screen,btn){
   if(screen==='preparacao') return;
+  // Em Campo: sem restrição de datas por padrão. Preservar as datas que
+  // o programador preencher até sair da aba.
+  if(screen==='campo' && currentScreen!=='campo'){
+    $('dateIni').value='';$('dateFim').value='';
+  }else if(currentScreen==='campo' && screen!=='campo'){
+    setDefaultDateRange();
+  }
   currentScreen=screen;window.__detailSS=null;
   configureActions(screen);
   document.querySelectorAll('.tab[data-screen]').forEach(x=>x.classList.toggle('active',x===btn));
@@ -184,7 +201,28 @@ $('viewReportBtn').onclick=()=>{
   if(!w) window.location.href=x.link;
 };
 $('viewSSBtn').onclick=()=>$('viewReportBtn').click();
-
+$('generatePdfBtn').onclick=async()=>{
+  if(currentScreen!=='baixar')return;
+  const itens=Object.values(selected||{});
+  const x=itens[0]||window.__detailSS;
+  if(!x?.link)return window.notify('Esta SS não possui link do relatório original uMov.','error');
+  const btn=$('generatePdfBtn');btn.disabled=true;
+  const old=btn.innerHTML;btn.innerHTML='<b>◌</b>Gerando PDF...';
+  try{
+    const r=await fetch('/api/relatorio-original-pdf',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({link:x.link,ss:x.ss})
+    });
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Falha ao converter relatório original em PDF.');}
+    const blob=await r.blob();
+    if(blob.type!=='application/pdf')throw Error('O servidor não retornou um PDF válido.');
+    const url=URL.createObjectURL(blob);const el=document.createElement('a');
+    el.href=url;el.download='Relatorio_Original_SS_'+String(x.ss||x.tarefa).replace(/[^\w-]/g,'_')+'.pdf';
+    document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+    window.notify('Relatório original convertido em PDF com as fotos.','success');
+  }catch(e){window.notify(e.message||'Erro ao converter relatório original.','error')}
+  finally{btn.disabled=false;btn.innerHTML=old}
+};
 
 
 </script>
@@ -210,26 +248,42 @@ function render(){
   $('countInfo').textContent='Exibindo '+inicioPagina+'–'+fimPagina+' de '+(Number.isFinite(window.__totalSS)?window.__totalSS:'mais SS')+(window.ms?' • consulta '+window.ms+' ms':'');
   renderPagination();
 }
+// Atribuições aceitas pela API podem levar alguns segundos para aparecer no banco.
+// Mostra o vínculo pendente imediatamente, sem atribuí-lo falsamente como confirmado.
+const equipesPendentes=new Map();
+function reconciliarEquipes(rows){
+  for(const x of rows){
+    const key=String(x.tarefa),pendente=equipesPendentes.get(key);
+    if(!pendente)continue;
+    const banco=String(x.equipe_executou||x.tecnico||'').trim();
+    if(banco&&banco===pendente.nome){equipesPendentes.delete(key);continue}
+    if(Date.now()-pendente.em>600000){equipesPendentes.delete(key);continue}
+    x.equipe_executou=pendente.nome;
+    x.tecnico=x.equipe_executou;
+  }
+  return rows;
+}
 let consultaListaAtual=null,numeroConsultaLista=0;
-async function load(){
+async function load(forcarAtualizacao=false){
   if(window.__buscaSSAtiva)return;
   if(consultaListaAtual)consultaListaAtual.abort();
   consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
-    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const global=filtros.length>0;let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal}),j=await r.json();if(numero!==numeroConsultaLista)return;
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!somenteEquipe;if(forcarAtualizacao)p.set('_refresh',String(Date.now()));let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
-    raw=j.rows||[];window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
+    raw=reconciliarEquipes(j.rows||[]);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
 }
 let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},500)}));
 let ssSearchTimer;const ssInput=document.querySelector('.filter input[data-col="ss"]');ssInput.placeholder='Buscar SS em todas as datas...';ssInput.addEventListener('input',()=>{clearTimeout(ssSearchTimer);ssSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},700)});$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
 $('filterBtn').onclick=()=>{window.__pageOffset=0;load()};
+$('refreshBtn').onclick=async()=>{const b=$('refreshBtn');if(b.disabled)return;b.disabled=true;try{await load(true)}finally{b.disabled=false}};
 let dateFilterTimer;
 ['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
   clearTimeout(dateFilterTimer);
-  dateFilterTimer=setTimeout(()=>{if($('dateIni').value&&$('dateFim').value){window.__pageOffset=0;load()}},250);
+  dateFilterTimer=setTimeout(()=>{if(currentScreen==='campo'||($('dateIni').value&&$('dateFim').value)){window.__pageOffset=0;load()}},250);
 }));
 let equipeFilterTimer;
 ['teamFilter','lastFilter'].forEach(id=>$(id).oninput=()=>{
@@ -238,10 +292,34 @@ let equipeFilterTimer;
   clearTimeout(equipeFilterTimer);
   equipeFilterTimer=setTimeout(()=>{window.__pageOffset=0;load()},300);
 });
-$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
+$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');if(currentScreen==='campo'){$('dateIni').value='';$('dateFim').value=''}else setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
 document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener('click',()=>{window.__pageOffset=0},{capture:true}));
-// Atualiza a aba atual sem apagar filtros, datas ou paginação.
-$('refreshBtn').onclick=()=>load();
+// Pesquisa direta no PostgreSQL, exibida na própria lista principal.
+(()=>{
+ const input=$('buscaDiretaSS'),botao=$('buscaDiretaBtn'),limpar=$('buscaDiretaLimpar');
+ const painel=$('buscaDiretaPainel');if(painel)painel.remove();
+ let seq=0,timer,anterior=null;
+ async function buscar(){
+  const ss=input.value.trim(),id=++seq;
+  if(ss.length<4){if(!ss)restaurar();else $('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return}
+  if(!window.__buscaSSAtiva)anterior={raw,offset:window.__pageOffset,total:window.__totalSS,hasMore:window.__hasMore,ms:window.ms};
+  window.__buscaSSAtiva=true;botao.disabled=true;$('countInfo').textContent='Pesquisando SS diretamente no PostgreSQL...';
+  try{
+   const r=await fetch('/api/localizar-ss?ss='+encodeURIComponent(ss));const j=await r.json();if(id!==seq)return;
+   if(!r.ok||!j.ok)throw Error(j.error||'Erro na consulta');
+   raw=j.rows||[];selected={};window.__pageOffset=0;window.__totalSS=raw.length;window.__hasMore=false;window.ms=null;apply();
+   if(!raw.length)$('countInfo').textContent='Nenhuma SS encontrada para '+ss+'.';
+  }catch(e){if(id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
+  finally{if(id===seq)botao.disabled=false}
+ }
+ function restaurar(){seq++;clearTimeout(timer);window.__buscaSSAtiva=false;botao.disabled=false;selected={};
+  if(anterior){raw=anterior.raw;window.__pageOffset=anterior.offset;window.__totalSS=anterior.total;window.__hasMore=anterior.hasMore;window.ms=anterior.ms;anterior=null;apply()}else load();
+ }
+ botao.onclick=buscar;
+ input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);buscar()}};
+ input.oninput=()=>{clearTimeout(timer);if(!input.value.trim()){restaurar();return}timer=setTimeout(buscar,550)};
+ limpar.onclick=()=>{input.value='';restaurar()};
+})();
 load();
 </script>
 <script>
@@ -286,11 +364,8 @@ load();
       const result=await response.json();
       if(!response.ok&&!result.sucesso)throw new Error(result.error||result.resultados?.find(item=>!item.ok)?.error||'A ação não foi concluída.');
       const sucesso=Number(result.sucesso||0),falhas=Number(result.falhas||0);
-      const okIds=new Set((result.resultados||[]).filter(row=>row.ok).map(row=>String(row.tarefa)));
-      items.forEach(item=>{if(okIds.has(String(item.tarefa)))item.status_integracao=status});
-      if(okIds.size){raw=raw.filter(row=>!okIds.has(String(row.tarefa)));window.__detailSS=null;$('lower').classList.remove('open');document.body.classList.remove('panel-open')}
+      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated&&updated.ok)item.status_integracao=status});
       selected={};apply();
-      if(okIds.size)await load();
       notify(`${label}: ${sucesso} concluída(s)${falhas?' • '+falhas+' falha(s)':''}.`,falhas?'error':'success');
     }catch(error){notify(error.message||'Não foi possível concluir a ação.','error')}
     finally{buttons.forEach(button=>button.disabled=false)}
@@ -311,7 +386,7 @@ load();
       const response=await fetch('/api/remover-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:comEquipe.map(x=>x.tarefa)})});
       const result=await response.json();
       if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível remover a equipe.');
-      const okIds=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+      const okIds=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));for(const id of okIds)equipesPendentes.delete(id);
       for(const x of raw){if(okIds.has(String(x.tarefa))){x.equipe_executou='';x.tecnico='';}}
       if(window.__detailSS&&okIds.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou='';window.__detailSS.tecnico='';}
       selected={};apply();
@@ -334,26 +409,43 @@ load();
     }catch(error){notify(error.message||'Não foi possível retornar para Recepção.','error')}
     finally{button.disabled=false}
   };
-  $('tagBtn').onclick=async()=>{
-    if(!['recepco','recepcao','campo','baixar'].includes(currentScreen))return notify('A tag está disponível nas abas Recepção, Em Campo e Para Baixar.','error');
-    const items=Object.values(selected||{});
-    if(!items.length&&window.__detailSS?.tarefa)items.push(window.__detailSS);
-    if(!items.length)return notify('Selecione ao menos uma SS.','error');
-    const tag=prompt(`Digite a tag para ${items.length===1?'esta SS':'as '+items.length+' SS'}:`,'');
-    if(tag===null)return;
-    const valor=tag.trim().replace(/\s+/g,' ');
-    if(!valor)return notify('Informe uma tag.','error');
-    $('tagBtn').disabled=true;
-    try{
-      const response=await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tag:valor,tarefas:items.map(item=>item.tarefa)})});
-      const result=await response.json();
-      if(!response.ok&&!result.sucesso)throw new Error(result.error||'Não foi possível gravar a tag.');
-      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated?.ok)item.tags=valor});
-      selected={};apply();
-      notify(`Tag adicionada em ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
-    }catch(error){notify(error.message||'Não foi possível gravar a tag.','error')}
-    finally{$('tagBtn').disabled=false}
+  let tagModalItems=[];
+  const closeTagModal=()=>{$('tagModal').classList.remove('open');$('tagModalError').textContent='';};
+  $('tagModalCancel').onclick=closeTagModal;
+  $('tagModal').addEventListener('click',e=>{if(e.target===$('tagModal'))closeTagModal()});
+  $('tagModal').addEventListener('keydown',e=>{if(e.key==='Escape')closeTagModal()});
+  $('tagBtn').onclick=()=>{
+    if(!['recepcao','campo','baixar'].includes(currentScreen))return notify('A tag está disponível nas abas Recepção, Em Campo e Para Baixar.','error');
+    tagModalItems=Object.values(selected||{});
+    if(!tagModalItems.length&&window.__detailSS?.tarefa)tagModalItems=[window.__detailSS];
+    if(!tagModalItems.length)return notify('Selecione ao menos uma SS.','error');
+    if(tagModalItems.length>25)return notify('Selecione no máximo 25 SS por operação de tag.','error');
+    $('tagModalCount').textContent=`${tagModalItems.length} SS selecionada(s)`;
+    $('tagModalInput').value=tagModalItems.length===1?String(tagModalItems[0].tags||''):'';
+    $('tagModalError').textContent='';
+    $('tagModal').classList.add('open');$('tagModalInput').focus();
   };
+  async function executarTag(limpar){
+    const valor=limpar?'':$('tagModalInput').value.trim().replace(/\s+/g,' ');
+    if(!limpar&&!valor){$('tagModalError').textContent='Digite uma tag para adicionar.';return;}
+    if(limpar&&!confirm(`Limpar a tag de ${tagModalItems.length} SS?`))return;
+    const buttons=[$('tagModalSave'),$('tagModalClear'),$('tagModalCancel')];buttons.forEach(b=>b.disabled=true);
+    $('tagModalError').textContent='';
+    try{
+      const response=await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:limpar?'limpar':'adicionar',tag:valor,tarefas:tagModalItems.map(x=>x.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível atualizar a tag.');
+      const ids=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+      for(const item of tagModalItems)if(ids.has(String(item.tarefa)))item.tags=valor;
+      for(const item of raw)if(ids.has(String(item.tarefa)))item.tags=valor;
+      if(window.__detailSS&&ids.has(String(window.__detailSS.tarefa))){window.__detailSS.tags=valor;$('dtag').textContent=valor;}
+      selected={};apply();closeTagModal();
+      notify(`${limpar?'Limpeza':'Atualização'} de tag enviada ao uMov para ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
+    }catch(error){$('tagModalError').textContent=error.message||'Erro ao atualizar tag.'}
+    finally{buttons.forEach(b=>b.disabled=false)}
+  }
+  $('tagModalSave').onclick=()=>executarTag(false);
+  $('tagModalClear').onclick=()=>executarTag(true);
 })();
 </script>
 <script>

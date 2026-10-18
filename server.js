@@ -75,7 +75,7 @@ async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBu
 app.get('/api/busca-ss',async(req,res)=>{try{
  const ss=String(req.query.ss||'').trim();if(ss.length<3)return res.json({ok:true,rows:[],total:0,hasMore:false});
  const tela=String(req.query.tela||'recepcao'),limit=Math.min(Math.max(Number(req.query.limit)||25,1),100),offset=Math.max(Number(req.query.offset)||0,0);
- const cond={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL"};
+ const cond={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL"};
  if(!cond[tela])return res.status(400).json({ok:false,error:'Aba inválida'});
  const base=`FROM u45468.local l JOIN u45468.task t ON t.loc_id=l.loc_id JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id WHERE l.loc_integrationid ILIKE $1 AND ${cond[tela]}`;
  const values=['%'+ss+'%'];
@@ -94,19 +94,17 @@ app.get('/api/busca-ss',async(req,res)=>{try{
 // somente quando o respectivo filtro estiver preenchido.
 app.get('/api/pesquisa-global',async(req,res)=>{try{
  const tela=String(req.query.tela||'recepcao');
- const status={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL"};
+ const status={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL"};
  if(!status[tela])return res.status(400).json({ok:false,error:'Aba inválida'});
  const limit=Math.min(Math.max(Number(req.query.limit)||25,1),100),offset=Math.max(Number(req.query.offset)||0,0);
  const allowed={ss:'l.loc_integrationid',logradouro:'l.loc_street',bairro:'l.loc_neighborhood',cidade:'l.loc_city',setor:'dl.e_setor',servico:'tt.tty_description',tags:'d.e_tag',equipe_executou:'a.age_name',status_integracao:'d.e_situacao',criado_em:"TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')"};
  const values=[],where=[status[tela]];
  // Cada campo consulta SOMENTE a sua coluna. Bairro também contempla o bairro enriquecido.
- const keys=['ss','equipe_executou','logradouro','bairro','cidade','setor','servico','tags','criado_em','status_integracao'];
+ const keys=tela==='recepcao'?['ss','equipe_executou','logradouro','bairro','cidade','setor','servico','tags','criado_em']:tela==='campo'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou']:tela==='baixar'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou','criado_em']:Object.keys(allowed);
  const filters={};for(const k of keys){const q=String(req.query[k]||'').trim().slice(0,100);if(q)filters[k]=q}
  const add=(expr,val)=>{values.push(val);where.push(`${expr} ILIKE $${values.length}`)};
  for(const [key,q] of Object.entries(filters)){
-   if(key==='bairro'){values.push('%'+q+'%');where.push(`(l.loc_neighborhood ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local bx WHERE bx.loc_id=l.loc_id AND bx.e_bairro ILIKE $${values.length}))`)}
-   else if(key==='logradouro'){values.push('%'+q+'%');where.push(`(l.loc_street ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local rx WHERE rx.loc_id=l.loc_id AND rx.loc_street ILIKE $${values.length}))`)}
-   else if(key==='cidade'){values.push('%'+q+'%');where.push(`(l.loc_city ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local cx WHERE cx.loc_id=l.loc_id AND cx.e_localidade ILIKE $${values.length}))`)}
+   if(key==='bairro'){values.push('%'+q+'%');where.push(`l.loc_neighborhood ILIKE $${values.length}`)}
    else if(key==='servico'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tt WHERE tt.tty_id=t.tty_id AND tt.tty_description ILIKE $${values.length})`)}
    else if(key==='equipe_executou'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.agent ag WHERE ag.age_id=t.age_id AND ag.age_name ILIKE $${values.length})`)}
    else if(key==='setor'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.dbout_local sx WHERE sx.loc_id=t.loc_id AND sx.e_setor ILIKE $${values.length})`)}
@@ -115,14 +113,14 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  }
  const macros=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidades=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean);
  if(macros.length){values.push(macros);where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tm WHERE tm.tty_id=t.tty_id AND TRIM(tm.tty_description)=ANY($${values.length}::text[]))`)}
- if(cidades.length){values.push(cidades);where.push(`(UPPER(TRIM(COALESCE(l.loc_city,'')))=ANY($${values.length}::text[]) OR EXISTS (SELECT 1 FROM u45468.dbout_local cx WHERE cx.loc_id=l.loc_id AND UPPER(TRIM(COALESCE(cx.e_localidade,'')))=ANY($${values.length}::text[])))`)}
+ if(cidades.length){values.push(cidades);where.push(`UPPER(TRIM(l.loc_city))=ANY($${values.length}::text[])`)}
  const inicio=String(req.query.inicio||''),fim=String(req.query.fim||'');
  if(!filters.ss&&inicio&&fim){values.push(inicio,fim);const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dateCol} >= $${values.length-1}::date AND ${dateCol} < ($${values.length}::date + INTERVAL '1 day')`)}
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
  const localFilterKeys=['ss','logradouro','bairro','cidade'];
  const localFirst=localFilterKeys.some(k=>filters[k])||cidades.length>0;
- const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('(l.')||x.startsWith('(UPPER(TRIM(')||x.startsWith('UPPER(TRIM(l.'));
+ const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('UPPER(TRIM(l.'));
  const taskPredicates=where.filter(x=>!localPredicates.includes(x));
  const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
  const sql=`${localCte}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.age_id,t.tty_id FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN ${localFirst?'locais_filtrados':'u45468.local'} l ON l.loc_id=t.loc_id WHERE ${localFirst?taskPredicates.join(' AND '):where.join(' AND ')} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`;
@@ -132,7 +130,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const agentMap=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));const typeMap=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
  const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:typeMap.get(String(x.tty_id))||'',tecnico:agentMap.get(String(x.age_id))||'',equipe_executou:agentMap.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.tsk_insertdatehour),link:Number(t.tss_id)===50&&t.tsk_accesstoken?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
- res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-started,filtersApplied:{...filters,macro:macros,cidade:cidades,inicio:filters.ss?null:inicio,fim:filters.ss?null:fim,tela}});
+ res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-started});
  }catch(e){console.error('Pesquisa por coluna:',e);res.status(500).json({ok:false,error:e.message})}});
 // Pesquisa independente por numero de SS, sem filtros de tela ou data.
 // Restringe a busca na tabela local antes de acessar as tarefas.
@@ -171,12 +169,12 @@ app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.quer
 // Consulta rápida: limita task primeiro e só consulta dbout_local para até 100 SS.
 app.get('/api/recepcao',async(req,res)=>{try{
  const inicio=req.query.inicio||'2026-10-01',fim=req.query.fim||'2026-10-05',limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
- const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL"};
+ const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL"};
  if(tela==='recepcao'){
   const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca});
   const [locals,tasks]=await Promise.all([extrasLocal(pagina.rows.map(x=>x.loc_id)),extrasTask(pagina.rows.map(x=>x.tsk_id))]);
   const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
-  const rows=pagina.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:l.ss||'',cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:'',situacao_campo:x.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao??t.status_integracao??'',hidrometro:l.hidrometro||'',servico_executado:'',informacao_bombeiro:'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:'',fim_atividade:'',fim_real:'',ultima_atividade:'',data_finalizacao:'',periodo_execucao:'',criado_em:fmt(x.tsk_insertdatehour)}});
+  const rows=pagina.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:l.ss||'',cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:'',situacao_campo:x.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:'',informacao_bombeiro:'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:'',fim_atividade:'',fim_real:'',ultima_atividade:'',data_finalizacao:'',periodo_execucao:'',criado_em:fmt(x.tsk_insertdatehour)}});
   const total=null; // Paginação leve: sem COUNT(*) a cada página.
   const data={ok:true,count:rows.length,total,hasMore:total===null?pagina.hasMore:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');return res.json(data);
  }
@@ -196,7 +194,7 @@ app.get('/api/recepcao',async(req,res)=>{try{
  const base=await pool.query({text:tela==='recepcao'?sqlRecepcao:sqlPorStatusRapido,values:tela==='recepcao'?valoresRecepcao:valoresStatus,query_timeout:9000});
  const registrosPagina=base.rows.slice(0,limit);
  const [locals,tasks]=await Promise.all([extrasLocal(registrosPagina.map(x=>x.loc_id)),extrasTask(registrosPagina.map(x=>x.tsk_id))]);
- const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao??t.status_integracao??'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.data_referencia)}});
+ const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://consglobalmetropole.umov.me/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||t.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.data_referencia)}});
  const total=null; // Paginação leve: sem varredura para contar todas as SS.
  const data={ok:true,count:rows.length,total,hasMore:total===null?base.rows.length>limit:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');res.json(data);
 }catch(e){console.error('Recepção:',e);res.status(500).json({ok:false,error:e.message})}});
@@ -215,18 +213,18 @@ app.post('/api/enviar-equipe',async(req,res)=>{
   const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
   if(situacaoId&&!/^[0-9]+$/.test(situacaoId))return res.status(400).json({ok:false,error:'UMOV_EM_CAMPO_SITUATION_ID deve ser numérico quando configurado.'});
   // Sem consulta SQL bloqueante: a API uMov valida o agente na gravação.
+  // Envia ate 5 SS simultaneamente. Nao faz consulta SQL por SS apos o POST:
+  // a confirmacao de situacao ocorre na sincronizacao normal do uMov.
   const resultados=[];
-  for(const tarefa of tarefas){
-   try{
-    // A situação precisa ser configurada conforme o ID REAL da API uMov.
-    // Não presumir que atribuir um agente altera automaticamente a situação.
-    const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
-    await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
-    // Conferir a situação observável no espelho, sem afirmar que a API alterou o status.
-    let situacaoAtual=null,confirmado=false;
-    try{const verificacao=await pool.query({text:'SELECT tsk_situation FROM u45468.dbout_task WHERE tsk_id=$1',values:[tarefa],query_timeout:3000});situacaoAtual=verificacao.rows[0]?.tsk_situation||null;confirmado=String(situacaoAtual||'').trim().toLowerCase()==='em campo'}catch(err){console.warn('Confirmação pendente',tarefa,err.message)}
-    resultados.push({tarefa,ok:true,confirmado,situacaoAtual,situacaoSolicitada:!!situacaoId,aviso:confirmado?'Situação Em Campo confirmada.':'Equipe atribuída; situação Em Campo ainda não confirmada no banco. Atualize após a sincronização.'});
-   }catch(e){resultados.push({tarefa,ok:false,error:e.message})}
+  const situacaoXml=situacaoId?`<situation><id>${xmlEscape(situacaoId)}</id></situation>`:'';
+  for(let i=0;i<tarefas.length;i+=5){
+   const lote=await Promise.all(tarefas.slice(i,i+5).map(async tarefa=>{
+    try{
+     await postUmovXml('schedule',tarefa,`<schedule><agent><id>${agente}</id></agent>${situacaoXml}</schedule>`);
+     return {tarefa,ok:true,confirmado:false,situacaoAtual:null,situacaoSolicitada:!!situacaoId,aviso:'Equipe atribuida pela API uMov. A situacao Em Campo depende de sincronizacao.'};
+    }catch(e){return {tarefa,ok:false,error:e.message}}
+   }));
+   resultados.push(...lote);
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
   res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'A atribuição e a mudança de situação são operações distintas. Somente confirmado=true comprova Em Campo no banco.'});
@@ -290,6 +288,93 @@ async function retornoHistorico(tarefa){
  }
  return setCache(key,saida);
 }
+// Relatório gerado a partir dos dados da SS exibidos na aba Para Baixar.
+// PDF autônomo, sem serviços externos ou dependências adicionais.
+function relatorioPdf(dados){
+ const clean=v=>String(v??'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,2500);
+ const rows=[
+  ['RELATORIO AUTOMATICO DE SERVICO',''],
+  ['SS',dados.ss],['Tarefa',dados.tarefa],['Abertura',dados.criado_em],
+  ['Cidade',dados.cidade],['Bairro',dados.bairro],['Endereco',[dados.logradouro,dados.numero].filter(Boolean).join(', ')],
+  ['Setor',dados.setor],['Macro / Servico',dados.servico],['Equipe',dados.equipe],
+  ['Tag',dados.tags],['Situacao',dados.situacao],['Referencia',dados.referencia],
+  ['Hidrometro',dados.hidrometro],['Inicio da atividade',dados.inicio],['Fim da atividade',dados.fim],
+  ['SERVICO EXECUTADO',dados.servico_executado],['MATERIAIS UTILIZADOS',dados.materiais],
+  ['PAVIMENTACAO',dados.pavimentacao],['INFORMACOES DO SOLICITANTE',dados.informacao_solicitante],
+  ['ESCLARECIMENTOS',dados.esclarecimento]
+ ];
+ // Helvetica WinAnsi; replace glyphs unsupported by this base font.
+ const win=v=>clean(v).replace(/[\u2013\u2014]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/[^\u0020-\u007e\u00a0-\u00ff]/g,'?');
+ const escape=v=>win(v).replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+ const wrap=(v,max=92)=>{const words=win(v||'Nao informado').split(/\s+/);const out=[];let line='';for(const word of words){if(word.length>max){if(line){out.push(line);line=''}for(let k=0;k<word.length;k+=max)out.push(word.slice(k,k+max));continue}if((line+' '+word).trim().length>max){out.push(line);line=word}else line=(line+' '+word).trim()}if(line)out.push(line);return out.length?out:['Nao informado']};
+ const pages=[];let commands=[],y=790;
+ const add=(str,bold=false,size=10)=>{if(y<65){pages.push(commands.join('\n'));commands=[];y=790}commands.push(`BT /${bold?'F2':'F1'} ${size} Tf 44 ${y} Td (${escape(str)}) Tj ET`);y-=size+6};
+ add('RELATORIO DE EXECUCAO - SS DE CAMPO',true,16);add('Gerado em '+new Date().toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}),false,9);y-=12;
+ for(const [label,value] of rows.slice(1)){add(label+':',true,10);for(const line of wrap(value))add('   '+line,false,10);y-=5}
+ add('Documento gerado a partir dos dados consultados no sistema SS de Campo.',false,8);
+ pages.push(commands.join('\n'));
+ const objects=[null];const put=body=>(objects.push(body),objects.length-1);
+ const font=put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+ const bold=put('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+ const pagesId=put('');const pageIds=[];
+ for(const content of pages){const b=Buffer.from(content,'latin1');const streamId=put({stream:b});pageIds.push(put(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> /Contents ${streamId} 0 R >>`))}
+ objects[pagesId]=`<< /Type /Pages /Kids [${pageIds.map(x=>x+' 0 R').join(' ')}] /Count ${pageIds.length} >>`;
+ const root=put(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+ const buffers=[Buffer.from('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n','latin1')];const offsets=[0];let length=buffers[0].length;
+ for(let i=1;i<objects.length;i++){offsets[i]=length;const o=objects[i];const header=Buffer.from(`${i} 0 obj\n`);let body;
+ if(typeof o==='string')body=Buffer.from(o+'\nendobj\n','latin1');else body=Buffer.concat([Buffer.from(`<< /Length ${o.stream.length} >>\nstream\n`),o.stream,Buffer.from('\nendstream\nendobj\n')]);
+ buffers.push(header,body);length+=header.length+body.length}
+ const xref=length;let trailer=`xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+ for(let i=1;i<objects.length;i++)trailer+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+ trailer+=`trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+ buffers.push(Buffer.from(trailer));return Buffer.concat(buffers);
+}
+// Converte a própria página original do relatório uMov, inclusive imagens, em PDF.
+// Não usa os campos resumidos da SS: renderiza o HTML original no Chromium.
+app.post('/api/relatorio-original-pdf',async(req,res)=>{
+ let browser;
+ try{
+  const link=String(req.body?.link||'');
+  const url=new URL(link);
+  if(url.protocol!=='https:'||url.hostname!=='consglobalmetropole.umov.me'||
+    !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash){
+    return res.status(400).json({ok:false,error:'Endereço do relatório uMov inválido.'});
+  }
+  const chromium=require('@sparticuz/chromium');
+  const puppeteer=require('puppeteer-core');
+  browser=await puppeteer.launch({
+    args:chromium.args,executablePath:await chromium.executablePath(),
+    headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}
+  });
+  const page=await browser.newPage();
+  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
+  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
+  // Aguarda imagens do relatório original antes da impressão.
+  await page.evaluate(async()=>{
+    const imgs=Array.from(document.images);
+    await Promise.race([Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{
+      img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});
+    }))),new Promise(resolve=>setTimeout(resolve,14000))]);
+  });
+  await page.emulateMediaType('print');
+  const pdf=await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,
+    margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}});
+  res.setHeader('Content-Type','application/pdf');
+  res.setHeader('Content-Disposition',`attachment; filename="relatorio_original_${String(req.body?.ss||'ss').replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf"`);
+  res.setHeader('Cache-Control','no-store');res.send(Buffer.from(pdf));
+ }catch(e){
+  console.error('PDF original uMov:',e.message);
+  if(!res.headersSent)res.status(502).json({ok:false,error:'Não foi possível converter o relatório original. Verifique se o link abre normalmente e se a função possui Chromium disponível.'});
+ }finally{if(browser)await browser.close().catch(()=>{});}
+});
+app.post('/api/relatorio-pdf',(req,res)=>{
+ try{
+  const d=req.body||{};if(!d.ss||!Number.isSafeInteger(Number(d.tarefa))||Number(d.tarefa)<=0)return res.status(400).json({ok:false,error:'SS invalida para o relatorio.'});
+  const pdf=relatorioPdf(d);
+  res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="relatorio_ss_${String(d.ss).replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf"`);
+  res.setHeader('Cache-Control','no-store');res.send(pdf);
+ }catch(e){res.status(500).json({ok:false,error:'Falha ao gerar relatorio PDF.'})}
+});
 app.get('/api/retorno-equipe/:tarefa',async(req,res)=>{try{
  const tarefa=Number(req.params.tarefa);if(!Number.isSafeInteger(tarefa)||tarefa<=0)return res.status(400).json({ok:false,error:'Tarefa invalida.'});
  const dados=await retornoHistorico(tarefa);
@@ -345,7 +430,6 @@ app.post('/api/status-integracao',async(req,res)=>{try{
  }
  const sucesso=resultados.filter(item=>item.ok).length;
  const primeiraFalha=resultados.find(item=>!item.ok);
- if(sucesso)cache.clear(); // Invalida as páginas e pesquisas após atualização no uMov.
  res.status(sucesso?200:502).json({ok:sucesso>0,status,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
 }catch(error){
  console.error('Status integração:',error);
@@ -398,9 +482,11 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
  }catch(error){res.status(500).json({ok:false,error:error.message})}
 });
 app.post('/api/tags',async(req,res)=>{try{
- const tag=String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
+ const acao=String(req.body?.acao||'adicionar');
+ if(!['adicionar','limpar'].includes(acao))return res.status(400).json({ok:false,error:'Ação de tag inválida.'});
+ const tag=acao==='limpar'?'':String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
- if(!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
+ if(acao==='adicionar'&&!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
  const resultados=[];
  for(const tarefa of tarefas){
