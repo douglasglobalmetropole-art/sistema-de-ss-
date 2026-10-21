@@ -67,6 +67,19 @@ app.post('/api/siscom-gateway/healthcheck', async (req,res) => {
   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
  } catch (e) { console.error('Gateway:',e.message);res.status(502).json({error:'Falha ao criar tarefa'}); }
 });
+// Consulta SS: API restrita ao token do gateway, sem senha de usuário na fila.
+app.post('/api/siscom-gateway/consultar-ss', async (req,res) => {
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ const numero = String(req.body?.numero_ss || '').trim();
+ if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)) return res.status(400).json({error:'Formato inválido de SS'});
+ try {
+  const jobs = await gatewayRest('siscom_gateway_jobs', {
+   method:'POST',headers:{Prefer:'return=representation'},
+   body:JSON.stringify({operation:'consultar_ss',payload:{numero_ss:numero}})
+  });
+  res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+ } catch(e) { console.error('Gateway consulta:',e.message);res.status(502).json({error:'Falha ao criar consulta'}); }
+});
 app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
