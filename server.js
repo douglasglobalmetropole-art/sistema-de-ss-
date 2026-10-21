@@ -36,6 +36,48 @@ app.get('/api/auth/login',async(req,res)=>{if(!ready())return res.status(503).se
 app.get('/api/auth/callback',async(req,res)=>{cookie(res,OIDC_FLOW,'',0);if(!ready())return res.status(503).send('SSO indisponível');const flow=verified(cookies(req)[OIDC_FLOW]);if(!flow||!req.query.code||req.query.state!==flow.state)return res.status(400).send('Sessão de login inválida ou expirada.');try{const m=await metadata();const body=new URLSearchParams({grant_type:'authorization_code',client_id:OIDC_CLIENT,code:String(req.query.code),redirect_uri:OIDC_BASE+'/api/auth/callback',code_verifier:flow.verifier});if(process.env.UMOV_OIDC_CLIENT_SECRET)body.set('client_secret',process.env.UMOV_OIDC_CLIENT_SECRET);const tr=await fetch(m.token_endpoint,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body,signal:AbortSignal.timeout(8000)});if(!tr.ok)throw Error('Troca do código rejeitada ('+tr.status+'). Verifique cliente e URL de retorno.');const tokens=await tr.json();if(!tokens.id_token)throw Error('ID token não recebido');const parts=tokens.id_token.split('.');if(parts.length!==3)throw Error('ID token inválido');const hdr=JSON.parse(Buffer.from(parts[0],'base64url')),claims=JSON.parse(Buffer.from(parts[1],'base64url'));const jwks=await fetch(m.jwks_uri,{signal:AbortSignal.timeout(6000)}).then(r=>r.json());const jwk=jwks.keys.find(k=>k.kid===hdr.kid&&k.kty==='RSA');if(hdr.alg!=='RS256'||!jwk)throw Error('Algoritmo ou chave de assinatura não aceitos');const key=crypto.createPublicKey({key:jwk,format:'jwk'});if(!crypto.verify('RSA-SHA256',Buffer.from(parts[0]+'.'+parts[1]),key,Buffer.from(parts[2],'base64url')))throw Error('Assinatura inválida');const now=Math.floor(Date.now()/1000);if(claims.iss!==OIDC_ISSUER||!(claims.aud===OIDC_CLIENT||(Array.isArray(claims.aud)&&claims.aud.includes(OIDC_CLIENT)))||claims.exp<=now||claims.iat>now+60||claims.nonce!==flow.nonce)throw Error('Claims OIDC inválidas');cookie(res,OIDC_COOKIE,signed({sub:claims.sub,name:claims.preferred_username||claims.name||claims.sub,exp:Date.now()+Math.min(3600000,(claims.exp-now)*1000)}),3600);res.redirect('/')}catch(e){res.status(401).send('Não foi possível concluir o login: '+e.message)}});
 app.get('/api/auth/me',(req,res)=>{const x=OIDC_ENABLED?verified(cookies(req)[OIDC_COOKIE]):null;res.json({enabled:OIDC_ENABLED,authenticated:!!x,user:x?{id:x.sub,name:x.name}:null,permissionsVerified:false})});
 app.post('/api/auth/logout',(req,res)=>{cookie(res,OIDC_COOKIE,'',0);res.json({ok:true})});
+
+// SISCOM Gateway: healthcheck de integração. Não encaminha requisições arbitrárias à VPN.
+// Protegido por token exclusivo de servidor, mesmo quando o SSO opcional está desativado.
+function gatewayAuthorized(req) {
+ const token = process.env.SISCOM_GATEWAY_API_TOKEN || '';
+ const provided = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+ if (token.length < 32 || provided.length !== token.length) return false;
+ return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(token));
+}
+async function gatewayRest(route, options = {}) {
+ const url = process.env.SUPABASE_URL;
+ const key = process.env.SUPABASE_SECRET_KEY;
+ if (!url || !/^https:\/\//.test(url) || !key) throw Error('Supabase não configurado no servidor');
+ const response = await fetch(url.replace(/\/$/, '') + '/rest/v1/' + route, {
+  ...options,
+  headers: { apikey:key, Authorization:'Bearer '+key, 'Content-Type':'application/json', ...(options.headers || {}) },
+  signal:AbortSignal.timeout(10000)
+ });
+ if (!response.ok) throw Error('Supabase HTTP '+response.status);
+ return response.json();
+}
+app.post('/api/siscom-gateway/healthcheck', async (req,res) => {
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ try {
+  const jobs = await gatewayRest('siscom_gateway_jobs', {
+   method:'POST', headers:{Prefer:'return=representation'},
+   body:JSON.stringify({operation:'healthcheck',payload:{}})
+  });
+  res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+ } catch (e) { console.error('Gateway:',e.message);res.status(502).json({error:'Falha ao criar tarefa'}); }
+});
+app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
+  return res.status(400).json({error:'ID inválido'});
+ try {
+  const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,error_message,created_at,finished_at&id=eq.'+req.params.id+'&limit=1');
+  if (!jobs.length) return res.status(404).json({error:'Tarefa não encontrada'});
+  res.json(jobs[0]);
+ } catch (e) { console.error('Gateway:',e.message);res.status(502).json({error:'Falha ao consultar tarefa'}); }
+});
+
 // Modo SSO de teste: bloquear todas as rotas de negócio até as permissões do uMov serem verificadas.
 // Mesmo um login válido NÃO libera dados ou ações administrativas.
 app.use('/api',(req,res,next)=>{if(!OIDC_ENABLED)return next();const x=verified(cookies(req)[OIDC_COOKIE]);if(!x)return res.status(401).json({ok:false,error:'Faça login com uMov.'});return res.status(403).json({ok:false,error:'Login validado. Aguardando integração de permissões do uMov; acesso às SS bloqueado por segurança.'})});

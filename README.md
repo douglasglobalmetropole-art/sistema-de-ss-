@@ -1,1 +1,0 @@
-Correção de desempenho: pesquisa global no banco permanece na Recepção; nas demais abas restaura a consulta paginada rápida e filtros locais. Atenção: pesquisa nas demais abas volta a filtrar apenas a página carregada; pesquisa global dessas abas exige otimização SQL separada. Sem alterações nas rotas de envio/retorno de equipes.
