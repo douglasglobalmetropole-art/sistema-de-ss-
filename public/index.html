@@ -762,6 +762,15 @@ load();
    status(causas.length+' causas oficiais carregadas.');
   }catch(e){if(g===generation)status('Erro ao carregar causas: '+e.message);}
  };
+ async function mostrarTentativaExistente(){
+  try{
+   const r=await fetch('/api/siscom-gateway/tentativa-baixa/'+encodeURIComponent(current),{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+   const x=await r.json();if(!r.ok)throw Error(x.error||'Falha ao consultar tentativa');
+   const detalhes=[x.status_baixa&&'Resultado: '+x.status_baixa,x.http_status&&'HTTP SISCOM: '+x.http_status,x.diagnostico_validacao&&'Validação: '+x.diagnostico_validacao,x.mensagem,x.error_message].filter(Boolean).join(' | ');
+   status('Tentativa anterior ('+x.status+'): '+(detalhes||'sem diagnóstico disponível')+'. NÃO reenviar automaticamente.');
+   return x;
+  }catch(e){status('Não foi possível consultar a tentativa anterior: '+e.message+'. NÃO reenviar.');return null;}
+ }
  $('sbPrevia').onclick=async()=>{
   const code=$('sbEquipes').value,micro=$('sbMicro').value,desc=$('sbDescricao').value.trim();
   if(!code||!equipes.some(x=>String(x.cdEquipe)===code))return status('Selecione uma equipe validada pelo GET.');
@@ -776,7 +785,7 @@ load();
    ' | Última SS '+($('sbUltima').value||'não informado')+' | Pronta para confirmação.');
   if(!window.confirm('ATENÇÃO: Encerrar definitivamente a SS '+current+' no SISCOM? Esta operação não deve ser repetida.'))return;
   const btn=$('sbPrevia');btn.disabled=true;status('Enviando baixa real. Não feche nem reenvie...');
-  try{const r=await job('baixar-ss',{numero_ss:current,confirmacao:'BAIXAR '+current,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},generation);status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+' — '+(r.mensagem||''));if(r.status_baixa==='CONFIRMADA'){
+  try{const r=await job('baixar-ss',{numero_ss:current,confirmacao:'BAIXAR '+current,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},generation);status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+(r.http_status?' | HTTP '+r.http_status:'')+(r.diagnostico_validacao?' | Validação: '+r.diagnostico_validacao:'')+' — '+(r.mensagem||''));if(r.status_baixa==='CONFIRMADA'){
     status('Baixa confirmada no SISCOM. Atualizando status no uMov...');
     try{
      const sync=await fetch('/api/siscom-gateway/sincronizar-baixa',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({numero_ss:current,job_id:r.__job_id}),cache:'no-store'});
@@ -787,7 +796,7 @@ load();
      alert('SS '+current+' encerrada e movida para Notas Encerradas.');
      if(typeof load==='function')load();
     }catch(syncErr){status('SS encerrada no SISCOM, porém sincronização local pendente: '+syncErr.message+'. NÃO reenviar baixa.');alert('Baixa oficial confirmada, mas não foi possível mover a SS automaticamente. NÃO envie novamente.');}
-   }else alert('Resultado não confirmado. NÃO tente novamente antes de conferir o SISCOM.');}catch(e){status('Resultado do envio não confirmado: '+e.message+' — NÃO reenviar antes de consultar o SISCOM.');}
+   }else alert('Resultado não confirmado. NÃO tente novamente antes de conferir o SISCOM.');}catch(e){status('Envio não confirmado: '+e.message+' — NÃO reenviar.');await mostrarTentativaExistente();}
  };
 })();
 </script>

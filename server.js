@@ -88,6 +88,19 @@ app.post('/api/siscom-gateway/consultar-ss-baixa', async(req,res)=>{
  try {const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'consultar_ss_baixa',payload:{numero_ss:numero}})});res.status(202).json({id:jobs[0].id,status:jobs[0].status});}
  catch(e){console.error('Gateway SS baixa:',e.message);res.status(502).json({error:'Falha ao iniciar consulta oficial da SS'});}
 });
+// Diagnóstico somente leitura da tentativa existente: jamais cria outro POST.
+app.get('/api/siscom-gateway/tentativa-baixa/:numero',async(req,res)=>{
+ if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
+ const numero=String(req.params.numero||'').trim();
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ try{
+  const qs=new URLSearchParams({select:'id,status,result,error_message,created_at,finished_at',operation:'eq.baixar_ss_real','payload->>numero_ss':'eq.'+numero,order:'created_at.desc',limit:'1'});
+  const jobs=await gatewayRest('siscom_gateway_jobs?'+qs.toString());
+  if(!jobs.length)return res.status(404).json({error:'Nenhuma tentativa de baixa registrada para esta SS'});
+  const j=jobs[0],r=j.result||{};
+  res.set('Cache-Control','no-store').json({id:j.id,status:j.status,created_at:j.created_at,finished_at:j.finished_at,http_status:r.http_status??null,status_baixa:r.status_baixa??null,diagnostico_validacao:r.diagnostico_validacao??null,mensagem:r.mensagem??null,error_message:j.error_message??null});
+ }catch(e){console.error('Consulta de tentativa:',e.message);res.status(502).json({error:'Falha ao consultar tentativa anterior'});}
+});
 // Encerramento controlado: somente com confirmação explícita e chave única por SS.
 app.post('/api/siscom-gateway/baixar-ss',async(req,res)=>{
  if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
@@ -102,7 +115,7 @@ app.post('/api/siscom-gateway/baixar-ss',async(req,res)=>{
  try{
   const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'baixar_ss_real',status:'pendente',payload})});
   return res.status(202).json({id:jobs[0].id,status:jobs[0].status});
- }catch(e){console.error('Gravação SISCOM:',e.message);return res.status(409).json({error:'Envio não iniciado ou já registrado. Consulte o histórico de jobs antes de tentar novamente.'});}
+ }catch(e){console.error('Gravação SISCOM:',e.message);return res.status(409).json({error:'Envio não iniciado ou já registrado. Consulte a tentativa existente; nenhuma nova baixa foi enviada.',consulta_tentativa:'/api/siscom-gateway/tentativa-baixa/'+encodeURIComponent(numero)});}
 });
 app.post('/api/siscom-gateway/consultar-eventos-ss', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
