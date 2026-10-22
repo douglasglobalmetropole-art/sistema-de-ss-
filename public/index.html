@@ -37,37 +37,87 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
 <section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"></th><th data-key="ss">SS<span class="sort">↕</span></th><th id="receptionTeamHeader" data-key="equipe_executou">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th id="lastHeader" data-key="criado_em">DATA DE ABERTURA<span class="sort">↕</span></th><th id="teamHeader" data-key="equipe_executou" hidden>EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th id="integrationHeader" data-key="status_integracao" hidden>STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."></td><td><input data-col="logradouro"></td><td><input data-col="bairro"></td><td><input data-col="cidade"></td><td><input data-col="setor"></td><td><input data-col="servico"></td><td><input data-col="tags"></td><td><input id="lastFilter" data-col="criado_em"></td><td id="teamFilterCell" hidden><input id="teamFilter" data-col="equipe_executou"></td><td id="integrationFilterCell" hidden><input id="integrationFilter" data-col="status_integracao"></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected>25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
 <section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣ &nbsp; DETALHES DA SS &nbsp; <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰ &nbsp; INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly></textarea><div class="executionGrid" id="executionInfo" hidden><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙ &nbsp; AÇÕES DA SS</h3><div class="actions"><button class="action" id="viewSSBtn" hidden><b>▤</b>Visualizar Arquivo</button><button class="action" id="generatePdfBtn" hidden><b>▣</b>Gerar PDF do Relatório</button><button class="action" id="viewReportBtn" hidden><b>▤</b>Visualizar Relatório</button><button class="action" id="groupedBtn" hidden><b>♟</b>Visualizar Agrupado</button><button class="action" id="downloadBtn" hidden><b>↓</b>Baixar</button><button class="action" id="duplicateBtn" hidden><b>▣+</b>Duplicar</button><button class="action" id="rejectBtn" hidden><b>×</b>Rejeitar</button><button class="action" id="launchItemsBtn" hidden><b>☷+</b>Lançar Itens</button><button class="action" id="returnReceptionBtn" hidden><b>↩</b>Retornar para Recepção</button><button class="action" id="tagBtn" hidden><b>◆</b>Adicionar Tag</button><button class="action" id="sendTeamBtn" hidden><b>➜</b>Enviar para Equipe</button><button class="action" id="removeTeamBtn" hidden><b>↩</b>Remover da Equipe</button></div></div></section><section id="siscomPanel" aria-label="Auditoria oficial SISCOM"><div class="siscomHeader"><h3>◷ &nbsp; SITUAÇÃO E HISTÓRICO OFICIAL SISCOM — <span id="siscomNumber"></span></h3><span id="siscomState" class="siscomState">Não verificado</span></div><div class="siscomRow"><label>Token administrativo do Gateway (somente nesta consulta)<input id="siscomGatewayToken" type="password" autocomplete="off" placeholder="Cole o token do Gateway Vercel"></label><button type="button" id="siscomVerify">Verificar no SISCOM</button></div><div class="siscomMeta"><div class="siscomTile"><small>Status no sistema</small><strong id="siscomLocal">—</strong></div><div class="siscomTile"><small>Status SISCOM</small><strong id="siscomOfficial">Não verificado</strong></div><div class="siscomTile"><small>Responsável / evento final</small><strong id="siscomUser">—</strong></div><div class="siscomTile"><small>Data e hora do evento</small><strong id="siscomDate">—</strong></div></div><div id="siscomFeedback" role="status" style="margin-top:10px"></div><details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">Histórico de eventos do SISCOM (<span id="siscomCount">0</span>)</summary><ol id="siscomTimeline" class="siscomTimeline"></ol></details><div class="siscomHint">Consulta somente leitura. O token não é salvo no navegador; o status local não é alterado. Uso administrativo temporário até a implantação do login individual.</div></section></main>
 <div id="tagModal" class="modalBg" role="dialog" aria-modal="true" aria-labelledby="tagModalTitle"><div class="modalBox" style="width:460px;max-width:95vw"><h3 id="tagModalTitle">Gerenciar tag das SS</h3><p id="tagModalCount" style="margin:10px 0;color:#476481"></p><label for="tagModalInput" style="display:block;margin-bottom:6px;font-weight:700">Tag</label><input id="tagModalInput" maxlength="120" placeholder="Digite a tag que deseja adicionar" style="width:100%;padding:11px;border:1px solid #bed1e2;border-radius:6px"><p style="color:#526b80;font-size:12px">Adicionar substitui a tag atual. Limpar remove a tag das SS selecionadas.</p><div id="tagModalError" style="color:#b42318;min-height:18px" aria-live="polite"></div><div class="modalBtns" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn" id="tagModalCancel">Cancelar</button><button type="button" class="btn" id="tagModalClear" style="border-color:#c94c4c;color:#a92b2b">Limpar tag</button><button type="button" class="btn primary" id="tagModalSave">Adicionar tag</button></div></div></div>
+<style>
+#siscomBaixaModal .sbShell{width:min(1480px,98vw);max-height:96vh;background:#f4f8fc}
+#siscomBaixaModal .sbHeader{padding:14px 22px}
+#siscomBaixaModal .sbHeader #sbCloseTop{border:0;background:transparent;color:white;font-size:28px;cursor:pointer}
+#siscomBaixaModal .sbColumns{grid-template-columns:1.1fr 1fr;gap:14px}
+#siscomBaixaModal .sbPane{padding:15px}
+#siscomBaixaModal .sbPane h4{margin:-15px -15px 16px;padding:14px 15px;font-size:15px}
+#siscomBaixaModal .sbInnerTitle{margin:18px -15px 14px!important;border-radius:0!important}
+#siscomBaixaModal .sbOfficialGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#siscomBaixaModal .sbOfficialGrid label{display:block;font-size:11px;font-weight:bold;color:#0b4f91;margin-bottom:5px}
+#siscomBaixaModal .sbOfficialGrid .sbRead{min-height:37px;display:flex;align-items:center}
+#siscomBaixaModal .sbOfficialGrid select{height:37px;width:100%;border:1px solid #c8d7e6;border-radius:5px;color:#143c63;background:#fff}
+#siscomBaixaModal .sbPill{float:right;background:#e3f4ec;color:#12603e;border-radius:16px;padding:5px 9px;font-size:11px;font-weight:600}
+#siscomBaixaModal .sbDuration{background:#e5f7ef;color:#176943;font-weight:bold;justify-content:center}
+#siscomBaixaModal .sbSummaryTop{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:10px;margin-bottom:16px}
+#siscomBaixaModal .sbSummaryTop b{display:block;color:#0a4c89;margin-bottom:6px;font-size:11px}
+#siscomBaixaModal .sbSummaryTop .sbRead{min-height:43px}
+#siscomBaixaModal .sbSummaryDates{margin-bottom:14px}
+#siscomBaixaModal .sbSummaryField{margin-bottom:14px}
+#siscomBaixaModal .sbSummaryField .sbRead{min-height:55px;white-space:pre-wrap}
+#siscomBaixaModal .executionGrid textarea{resize:vertical}
+#siscomBaixaModal #sbEquipes{margin-top:4px}
+#siscomBaixaModal .sbFooter{position:sticky;bottom:0;background:#fff;padding:12px 18px;border-top:1px solid #d8e5f1;z-index:2}
+@media(max-width:900px){#siscomBaixaModal .sbColumns{grid-template-columns:1fr}#siscomBaixaModal .sbSummaryTop{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){#siscomBaixaModal .sbOfficialGrid,#siscomBaixaModal .sbSummaryTop{grid-template-columns:1fr 1fr}}
+</style>
 <div id="siscomBaixaModal" class="modalBg" role="dialog" aria-modal="true" aria-labelledby="siscomBaixaTitle">
  <div class="modalBox sbShell">
-  <div class="sbHeader"><h3 id="siscomBaixaTitle">Baixar SS no SISCOM <span>— Prévia de preenchimento</span></h3><strong>⚠ Nenhuma baixa será enviada</strong></div>
+  <div class="sbHeader"><h3 id="siscomBaixaTitle">▣ Baixar SS no SISCOM <span>— Prévia de preenchimento (somente teste)</span></h3><strong>⚠ Nenhuma baixa será enviada</strong><button id="sbCloseTop" type="button" aria-label="Fechar">×</button></div>
   <div class="sbColumns">
-   <section class="sbPane"><h4>▣ Formulário para baixar a SS</h4>
-  <div class="executionGrid">
-   <div><label>SS</label><input id="sbSS" readonly></div>
-   <div><label>Token administrativo do gateway (somente nesta consulta)</label><input id="sbToken" type="password" autocomplete="off" placeholder="Informe para consultar"></div>
-   <div><label>Código da unidade executora (GET equipes)</label><input id="sbExecutor" inputmode="numeric" readonly placeholder="Consultando executor..."></div>
-   <div><label>Equipe — digite o número ou selecione</label><input id="sbEquipeBusca" inputmode="numeric" placeholder="Ex.: 304" autocomplete="off"><select id="sbEquipes" style="width:100%;height:36px;margin-top:4px"><option value="">Consulte as equipes</option></select></div>
-   <div><label>Macro (código oficial)</label><input id="sbMacro" inputmode="numeric" readonly placeholder="Consultando macro..."></div>
-   <div><label>Serviço Executado</label><select id="sbMicro" style="width:100%;height:36px"><option value="">Carregando serviços...</option></select></div>
-   <div id="sbCausaBox" hidden><label>Causa do problema</label><select id="sbCausa" style="width:100%;height:36px"><option value="">Selecione primeiro o serviço executado</option></select></div>
-   <div><label>Última SS</label><select id="sbUltima" style="width:100%;height:36px"><option value="">Não informado</option><option value="S">Sim</option><option value="N">Não</option></select></div>
-   <div><label>Início da execução</label><input id="sbInicio" placeholder="Data e hora da equipe"></div>
-   <div><label>Fim da execução</label><input id="sbFim" placeholder="Data e hora da equipe"></div>
-   <div class="full"><label>Descrição da execução</label><textarea id="sbDescricao" style="width:100%;min-height:80px"></textarea></div>
-  </div>
-
+   <section class="sbPane sbFormPane">
+    <h4>❶ Dados da SS (retorno oficial do SISCOM) <span class="sbPill" id="sbLoadBadge">Aguardando consulta</span></h4>
+    <div class="sbOfficialGrid">
+      <div><label>SS</label><div class="sbRead" id="sbOfficialSS">—</div></div>
+      <div><label>Situação</label><div class="sbRead" id="sbOfficialStatus">Não informado</div></div>
+      <div><label>Data de registro</label><div class="sbRead" id="sbOfficialData">Não informado</div></div>
+      <div><label>Unidade executora</label><div class="sbRead" id="sbOfficialExecutor">—</div></div>
+      <div><label>Macro (código oficial)</label><div class="sbRead" id="sbOfficialMacro">—</div></div>
+      <div><label>Última SS</label><select id="sbUltima"><option value="">Não informado</option><option value="S">Sim</option><option value="N">Não</option></select></div>
+      <div><label>Início da execução</label><div class="sbRead" id="sbOfficialInicio">Não informado</div></div>
+      <div><label>Fim da execução</label><div class="sbRead" id="sbOfficialFim">Não informado</div></div>
+      <div><label>Duração</label><div class="sbRead sbDuration" id="sbDuracao">Não informado</div></div>
+    </div>
+    <h4 class="sbInnerTitle">❷ Preenchimento da baixa</h4>
+    <div class="executionGrid">
+     <div><label>Token administrativo do gateway (somente nesta consulta)</label><input id="sbToken" type="password" autocomplete="off" placeholder="Informe para consultar"></div>
+     <div><label>Equipe *</label><input id="sbEquipeBusca" inputmode="numeric" placeholder="Digite o código" autocomplete="off"><select id="sbEquipes"><option value="">Consulte as equipes</option></select></div>
+     <div><label>Código da unidade executora</label><input id="sbExecutor" inputmode="numeric" readonly placeholder="Consultando executor..."></div>
+     <div><label>Serviço Executado *</label><select id="sbMicro"><option value="">Carregando serviços...</option></select></div>
+     <div><label>Macro (código oficial)</label><input id="sbMacro" inputmode="numeric" readonly placeholder="Consultando macro..."></div>
+     <div id="sbCausaBox" hidden><label>Causa do problema *</label><select id="sbCausa"><option value="">Selecione primeiro o serviço executado</option></select></div>
+     <div><label>Início da execução</label><input id="sbInicio" placeholder="Data e hora da equipe"></div>
+     <div><label>Fim da execução</label><input id="sbFim" placeholder="Data e hora da equipe"></div>
+     <div class="full"><label>Descrição da execução *</label><textarea id="sbDescricao" style="min-height:78px"></textarea></div>
+     <div class="full"><label>Observações adicionais (prévia)</label><textarea id="sbObservacoes" placeholder="Observações complementares..." style="min-height:65px" maxlength="500"></textarea></div>
+    </div>
     <p id="sbStatus" aria-live="polite" class="sbStatus"></p>
    </section>
-   <aside class="sbPane sbSummary"><h4>▤ Resumo da SS — retorno da equipe</h4>
-    <div class="sbSummarySS"><b>SS</b><div id="sbResumoSS">—</div></div>
-    <div class="sbSummaryDates"><div><b>Quando (executado) — início</b><div class="sbRead" id="sbResumoInicio">Não informado</div></div><div><b>Quando (executado) — fim</b><div class="sbRead" id="sbResumoFim">Não informado</div></div></div>
+   <aside class="sbPane sbSummary">
+    <h4>▣ Resumo da SS <small>(retorno preenchido pela equipe)</small></h4>
+    <div class="sbSummaryTop">
+     <div><b>SS</b><div class="sbRead" id="sbResumoSS">—</div></div>
+     <div><b>Endereço</b><div class="sbRead" id="sbResumoEndereco">Não informado</div></div>
+     <div><b>Bairro</b><div class="sbRead" id="sbResumoBairro">Não informado</div></div>
+     <div><b>Setor</b><div class="sbRead" id="sbResumoSetor">Não informado</div></div>
+     <div><b>Macro (oficial)</b><div class="sbRead" id="sbResumoMacro">Não informado</div></div>
+     <div><b>Tipo de solicitação</b><div class="sbRead" id="sbResumoTipo">Não informado</div></div>
+    </div>
+    <h4 class="sbInnerTitle">▤ Retorno preenchido pela equipe</h4>
+    <div class="sbSummaryDates">
+     <div><b>Quando (executado) — início</b><div class="sbRead" id="sbResumoInicio">Não informado</div></div>
+     <div><b>Quando (executado) — fim</b><div class="sbRead" id="sbResumoFim">Não informado</div></div>
+    </div>
     <div class="sbSummaryField"><b>Informação da execução</b><div class="sbRead sbMultiline" id="sbResumoExecucao">Não informado</div></div>
     <div class="sbSummaryField"><b>Materiais lançados</b><div class="sbRead sbMultiline" id="sbResumoMateriais">Não informado</div></div>
     <div class="sbSummaryField"><b>Pavimentação</b><div class="sbRead sbMultiline" id="sbResumoPavimentacao">Não informado</div></div>
-    <p class="sbSource">Dados do retorno preenchido pela equipe. Campos não informados não serão inventados.</p>
+    <p class="sbSource">Informações do retorno real da equipe. Campos não informados não serão inventados.</p>
    </aside>
   </div>
-  <div class="modalBtns sbFooter"><button class="btn" id="sbRecarregar">Recarregar consultas</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">Validar prévia (sem POST)</button></div>
+  <div class="modalBtns sbFooter"><button class="btn" id="sbRecarregar">↻ Recarregar consultas</button><button class="btn" id="sbLimpar">Limpar campos</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">✓ Validar prévia (sem POST)</button></div>
+  <input id="sbSS" type="hidden">
  </div>
 </div>
 <div id="teamModal" class="modalBg"><div class="modalBox"><h3>Enviar SS para Equipe</h3><div>Digite o <b>número</b> ou o <b>nome</b> da equipe/técnico:</div><input id="sendTeamSearch" autocomplete="off" placeholder="Ex.: 270 ou THIAGO"><div id="sendTeamList" class="modalList"></div><div id="sendTeamSelected" style="margin-top:8px;font-weight:bold"></div><div class="modalBtns"><button class="btn" id="cancelTeam">Cancelar</button><button class="btn primary" id="confirmTeam">Enviar para equipe</button></div></div></div>
@@ -641,11 +691,11 @@ load();
    const executor=obj.unidadeExecutoraDTO?.cdExecutor??obj.unidadeExecutoraDTO?.cdUnidadeExecutora;
    if(!macro)throw Error('SISCOM não retornou o macro oficial');
    if(!executor)throw Error('SISCOM não retornou o código da unidade executora');
-   $('sbMacro').value=macro;$('sbExecutor').value=executor;
+   $('sbMacro').value=macro;$('sbExecutor').value=executor;sbResumoSet('sbOfficialMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbResumoMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbOfficialExecutor',executor);$('sbLoadBadge').textContent='Consulta oficial concluída';
    if(obj.codEquipe!=null)$('sbEquipeBusca').value=String(obj.codEquipe);
    if(!$('sbInicio').value&&obj.dataHoraExecucaoIni)$('sbInicio').value=obj.dataHoraExecucaoIni;
    if(!$('sbFim').value&&obj.dataHoraExecucaoFim)$('sbFim').value=obj.dataHoraExecucaoFim;
-   if(!$('sbDescricao').value&&obj.descricaoExecucao)$('sbDescricao').value=obj.descricaoExecucao;
+   if(!$('sbDescricao').value&&obj.descricaoExecucao)$('sbDescricao').value=obj.descricaoExecucao;sbAtualizarDuracao();
    status('Macro '+macro+' identificado. Carregando equipes e serviços...');
    const results=await Promise.allSettled([loadEquipes(executor,g),loadMicros(macro,g)]);
    if(g!==generation)return;
@@ -655,13 +705,20 @@ load();
   }catch(e){if(g===generation)status('Erro: '+e.message);}
  }
  function sbResumoSet(id,v){$(id).textContent=String(v??'').trim()||'Não informado';}
+ function sbAtualizarDuracao(){
+  const a=$('sbInicio').value,b=$('sbFim').value;
+  sbResumoSet('sbOfficialInicio',a);sbResumoSet('sbOfficialFim',b);
+  const parse=t=>{const m=String(t||'').match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);return m?new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]).getTime():NaN;};
+  const d=Math.round((parse(b)-parse(a))/60000);
+  $('sbDuracao').textContent=Number.isFinite(d)&&d>=0?(Math.floor(d/60)+'h '+String(d%60).padStart(2,'0')+'min'):'Não informado';
+ }
  function sbResumoPreencher(x){
-  sbResumoSet('sbResumoSS',x.ss);
+  sbResumoSet('sbResumoSS',x.ss);sbResumoSet('sbOfficialSS',x.ss);sbResumoSet('sbResumoEndereco',[x.logradouro,x.numero].filter(Boolean).join(', '));sbResumoSet('sbResumoBairro',x.bairro);sbResumoSet('sbResumoSetor',x.setor);sbResumoSet('sbResumoTipo',x.servico);sbResumoSet('sbResumoMacro',x.macro);sbResumoSet('sbOfficialStatus',x.situacao_campo||x.status_integracao);sbResumoSet('sbOfficialData',x.criado_em);sbResumoSet('sbOfficialMacro',x.macro);
   sbResumoSet('sbResumoInicio',x.inicio_atividade);
   sbResumoSet('sbResumoFim',x.fim_atividade||x.data_finalizacao);
   sbResumoSet('sbResumoExecucao',x.servico_executado);
   sbResumoSet('sbResumoMateriais',x.materiais_bombeiro);
-  sbResumoSet('sbResumoPavimentacao',x.pavimentacao);
+  sbResumoSet('sbResumoPavimentacao',x.pavimentacao);sbAtualizarDuracao();
   const ss=String(x.ss||''),tarefa=x.tarefa;
   if(!tarefa)return;
   fetch('/api/retorno-equipe/'+encodeURIComponent(tarefa),{cache:'no-store'})
@@ -672,22 +729,23 @@ load();
     if(retorno.fim_atividade)sbResumoSet('sbResumoFim',retorno.fim_atividade);
     if(retorno.servico_executado)sbResumoSet('sbResumoExecucao',retorno.servico_executado);
     if(retorno.materiais_bombeiro)sbResumoSet('sbResumoMateriais',retorno.materiais_bombeiro);
-    if(retorno.pavimentacao)sbResumoSet('sbResumoPavimentacao',retorno.pavimentacao);
+    if(retorno.pavimentacao)sbResumoSet('sbResumoPavimentacao',retorno.pavimentacao);if(retorno.inicio_atividade&&!$('sbInicio').value)$('sbInicio').value=retorno.inicio_atividade;if(retorno.fim_atividade&&!$('sbFim').value)$('sbFim').value=retorno.fim_atividade;if(retorno.servico_executado&&!$('sbDescricao').value)$('sbDescricao').value=retorno.servico_executado;sbAtualizarDuracao();
    }).catch(()=>{});
  }
  window.openSiscomBaixa=()=>{
   if(typeof currentScreen!=='undefined'&&currentScreen!=='baixar')return alert('Disponível somente em Notas para Baixar');
   const items=Object.values(selected||{});if(items.length!==1)return alert('Selecione exatamente uma SS.');
   const x=items[0];current=String(x.ss||'');generation++;equipes=[];micros=[];causas=[];
-  $('sbSS').value=current;sbResumoPreencher(x);$('sbExecutor').value='';$('sbMacro').value='';$('sbEquipeBusca').value='';
+  $('sbSS').value=current;$('sbLoadBadge').textContent='Aguardando consulta';sbResumoPreencher(x);$('sbExecutor').value='';$('sbMacro').value='';$('sbEquipeBusca').value='';
   options('sbEquipes',[],'Aguardando consulta',e=>e.cdEquipe,e=>e.cdEquipe);
   options('sbMicro',[],'Aguardando macro oficial',m=>m.cdServico,m=>m.dcServico);
   options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
   $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
-  $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';
+  $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbObservacoes').value='';sbAtualizarDuracao();
   status('Informe o token do gateway uma vez para carregar automaticamente SS, equipes e serviços.');
   $('siscomBaixaModal').classList.add('open');if(token)loadAll();
  };
+ $('sbCloseTop').onclick=()=>$('sbFechar').click();$('sbLimpar').onclick=()=>{$('sbEquipeBusca').value='';$('sbEquipes').value='';$('sbMicro').value='';$('sbCausaBox').hidden=true;$('sbDescricao').value='';$('sbObservacoes').value='';status('Campos editáveis limpos. Dados oficiais e retorno da equipe preservados.');};['sbInicio','sbFim'].forEach(id=>$(id).addEventListener('input',sbAtualizarDuracao));
  $('sbFechar').onclick=()=>{generation++;token='';$('sbToken').value='';$('siscomBaixaModal').classList.remove('open');};
  $('sbToken').addEventListener('change',()=>{if($('sbToken').value.trim())loadAll();});
  $('sbToken').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loadAll();}});
