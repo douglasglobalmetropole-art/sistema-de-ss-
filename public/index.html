@@ -65,7 +65,7 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
 </style>
 <div id="siscomBaixaModal" class="modalBg" role="dialog" aria-modal="true" aria-labelledby="siscomBaixaTitle">
  <div class="modalBox sbShell">
-  <div class="sbHeader"><h3 id="siscomBaixaTitle">▣ Baixar SS no SISCOM <span>— Prévia de preenchimento (somente teste)</span></h3><strong>⚠ Nenhuma baixa será enviada</strong><button id="sbCloseTop" type="button" aria-label="Fechar">×</button></div>
+  <div class="sbHeader"><h3 id="siscomBaixaTitle">▣ Baixar SS no SISCOM <span>— Baixa real (somente teste)</span></h3><strong>⚠ Baixa real — confirme antes de enviar</strong><button id="sbCloseTop" type="button" aria-label="Fechar">×</button></div>
   <div class="sbColumns">
    <section class="sbPane sbFormPane">
     <h4>❶ Dados da SS (retorno oficial do SISCOM) <span class="sbPill" id="sbLoadBadge">Aguardando consulta</span></h4>
@@ -116,7 +116,7 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
     <p class="sbSource">Informações do retorno real da equipe. Campos não informados não serão inventados.</p>
    </aside>
   </div>
-  <div class="modalBtns sbFooter"><button class="btn" id="sbRecarregar">↻ Recarregar consultas</button><button class="btn" id="sbLimpar">Limpar campos</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">✓ Validar e preparar baixa (sem POST)</button></div>
+  <div class="modalBtns sbFooter"><button class="btn" id="sbRecarregar">↻ Recarregar consultas</button><button class="btn" id="sbLimpar">Limpar campos</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">✓ Confirmar e baixar SS no SISCOM</button></div>
   <input id="sbSS" type="hidden">
  </div>
 </div>
@@ -762,17 +762,21 @@ load();
    status(causas.length+' causas oficiais carregadas.');
   }catch(e){if(g===generation)status('Erro ao carregar causas: '+e.message);}
  };
- $('sbPrevia').onclick=()=>{
+ $('sbPrevia').onclick=async()=>{
   const code=$('sbEquipes').value,micro=$('sbMicro').value,desc=$('sbDescricao').value.trim();
   if(!code||!equipes.some(x=>String(x.cdEquipe)===code))return status('Selecione uma equipe validada pelo GET.');
   if(!micro||!micros.some(x=>String(x.cdServico)===micro))return status('Selecione um serviço executado validado pelo GET.');
   if(!desc)return status('Preencha a descrição da execução.');
   const m=micros.find(x=>String(x.cdServico)===micro);
   if(requiredCause(m)&&!$('sbCausa').value)return status('O serviço exige causa do problema.');
+  if(!['S','N'].includes($('sbUltima').value))return status('Informe se é a última SS.');
   status('PRÉVIA VALIDADA — SS '+current+' | Equipe '+code+' | Macro '+$('sbMacro').value+
    ' | Serviço executado '+micro+' | Causa '+($('sbCausa').value||'não exigida')+
    ' | Início '+$('sbInicio').value+' | Fim '+$('sbFim').value+
-   ' | Última SS '+($('sbUltima').value||'não informado')+'\nNenhum POST de baixa foi enviado.');
+   ' | Última SS '+($('sbUltima').value||'não informado')+' | Pronta para confirmação.');
+  if(!window.confirm('ATENÇÃO: Encerrar definitivamente a SS '+current+' no SISCOM? Esta operação não deve ser repetida.'))return;
+  const btn=$('sbPrevia');btn.disabled=true;status('Enviando baixa real. Não feche nem reenvie...');
+  try{const r=await job('baixar-ss',{numero_ss:current,confirmacao:'BAIXAR '+current,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},generation);status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+' — '+(r.mensagem||''));if(r.status_baixa==='CONFIRMADA')alert('SS encerrada e confirmada no SISCOM: '+current);else alert('Resultado não confirmado. NÃO tente novamente antes de conferir o SISCOM.');}catch(e){status('Resultado do envio não confirmado: '+e.message+' — NÃO reenviar antes de consultar o SISCOM.');}
  };
 })();
 </script>

@@ -88,15 +88,21 @@ app.post('/api/siscom-gateway/consultar-ss-baixa', async(req,res)=>{
  try {const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'consultar_ss_baixa',payload:{numero_ss:numero}})});res.status(202).json({id:jobs[0].id,status:jobs[0].status});}
  catch(e){console.error('Gateway SS baixa:',e.message);res.status(502).json({error:'Falha ao iniciar consulta oficial da SS'});}
 });
-// Preparação de baixa, somente consulta GET; não grava no SISCOM.
-app.post('/api/siscom-gateway/preparar-baixa',async(req,res)=>{
+// Encerramento controlado: somente com confirmação explícita e chave única por SS.
+app.post('/api/siscom-gateway/baixar-ss',async(req,res)=>{
  if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
- const numero=String(req.body?.numero_ss||'').trim();
+ const p=req.body||{},numero=String(p.numero_ss||'').trim();
  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ if(p.confirmacao!==`BAIXAR ${numero}`)return res.status(400).json({error:'Confirmação obrigatória'});
+ const inteiro=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
+ if(![p.executor,p.equipe,p.macro,p.micro].every(inteiro))return res.status(400).json({error:'Códigos inválidos'});
+ if(!['S','N'].includes(p.ultima_ss)||!String(p.descricao||'').trim()||String(p.descricao).length>1000)return res.status(400).json({error:'Dados de execução incompletos'});
+ if(!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.inicio)||!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.fim))return res.status(400).json({error:'Datas inválidas'});
+ const payload={numero_ss:numero,executor:Number(p.executor),equipe:Number(p.equipe),macro:Number(p.macro),micro:Number(p.micro),ultima_ss:p.ultima_ss,inicio:p.inicio,fim:p.fim,descricao:p.descricao.trim(),causa:p.causa?Number(p.causa):null};
  try{
-  const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'preparar_baixa_ss',payload:{numero_ss:numero}})});
-  res.status(202).json({id:jobs[0].id,status:jobs[0].status});
- }catch(e){console.error('Pré-baixa:',e.message);res.status(502).json({error:'Não foi possível iniciar pré-baixa'});}
+  const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'baixar_ss_real',status:'pendente',payload})});
+  return res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+ }catch(e){console.error('Gravação SISCOM:',e.message);return res.status(409).json({error:'Envio não iniciado ou já registrado. Consulte o histórico de jobs antes de tentar novamente.'});}
 });
 app.post('/api/siscom-gateway/consultar-eventos-ss', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
