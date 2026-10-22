@@ -23,18 +23,18 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
   <div class="executionGrid">
    <div><label>SS</label><input id="sbSS" readonly></div>
    <div><label>Token administrativo do gateway (somente nesta consulta)</label><input id="sbToken" type="password" autocomplete="off" placeholder="Informe para consultar"></div>
-   <div><label>Código da unidade executora (GET equipes)</label><input id="sbExecutor" inputmode="numeric" value="9914"></div>
+   <div><label>Código da unidade executora (GET equipes)</label><input id="sbExecutor" inputmode="numeric" readonly placeholder="Consultando executor..."></div>
    <div><label>Equipe — digite o número ou selecione</label><input id="sbEquipeBusca" inputmode="numeric" placeholder="Ex.: 304" autocomplete="off"><select id="sbEquipes" style="width:100%;height:36px;margin-top:4px"><option value="">Consulte as equipes</option></select></div>
-   <div><label>Macro (código oficial)</label><input id="sbMacro" inputmode="numeric" placeholder="Ex.: 3400"></div>
-   <div><label>Micro executado</label><select id="sbMicro" style="width:100%;height:36px"><option value="">Consulte os micros</option></select></div>
-   <div><label>Causa do problema</label><select id="sbCausa" style="width:100%;height:36px"><option value="">Selecione um micro</option></select></div>
+   <div><label>Macro (código oficial)</label><input id="sbMacro" inputmode="numeric" readonly placeholder="Consultando macro..."></div>
+   <div><label>Serviço Executado</label><select id="sbMicro" style="width:100%;height:36px"><option value="">Carregando serviços...</option></select></div>
+   <div id="sbCausaBox" hidden><label>Causa do problema</label><select id="sbCausa" style="width:100%;height:36px"><option value="">Selecione primeiro o serviço executado</option></select></div>
    <div><label>Última SS</label><select id="sbUltima" style="width:100%;height:36px"><option value="">Não informado</option><option value="S">Sim</option><option value="N">Não</option></select></div>
    <div><label>Início da execução</label><input id="sbInicio" placeholder="Data e hora da equipe"></div>
    <div><label>Fim da execução</label><input id="sbFim" placeholder="Data e hora da equipe"></div>
    <div class="full"><label>Descrição da execução</label><textarea id="sbDescricao" style="width:100%;min-height:80px"></textarea></div>
   </div>
   <p id="sbStatus" aria-live="polite" style="color:#355e83;white-space:pre-wrap"></p>
-  <div class="modalBtns" style="flex-wrap:wrap"><button class="btn" id="sbConsultarSS">Consultar SS</button><button class="btn" id="sbConsultarEquipes">GET equipes</button><button class="btn" id="sbConsultarMicros">GET micros</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">Validar prévia (sem POST)</button></div>
+  <div class="modalBtns" style="flex-wrap:wrap"><button class="btn" id="sbRecarregar">Recarregar consultas</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">Validar prévia (sem POST)</button></div>
  </div>
 </div>
 <div id="teamModal" class="modalBg"><div class="modalBox"><h3>Enviar SS para Equipe</h3><div>Digite o <b>número</b> ou o <b>nome</b> da equipe/técnico:</div><input id="sendTeamSearch" autocomplete="off" placeholder="Ex.: 270 ou THIAGO"><div id="sendTeamList" class="modalList"></div><div id="sendTeamSelected" style="margin-top:8px;font-weight:bold"></div><div class="modalBtns"><button class="btn" id="cancelTeam">Cancelar</button><button class="btn primary" id="confirmTeam">Enviar para equipe</button></div></div></div>
@@ -558,30 +558,110 @@ load();
  $id('closeDetail')?.addEventListener('click',()=>{generation++;panel.classList.remove('open');$id('siscomGatewayToken').value=''});
 })();
 </script><script>
-// Formulário de baixa: consultas GET enfileiradas no gateway; sem escrita no SISCOM.
+// Formulário de baixa automático, somente leitura; sem POST de baixa.
 (function(){
- const $=id=>document.getElementById(id);let equipes=[],micros=[],causas=[],token='',current='';
- const status=t=>$('sbStatus').textContent=t;
- function select(id,rows,value,label){const el=$(id);el.replaceChildren(new Option('Selecione...', ''));rows.forEach(x=>el.add(new Option(label(x),String(value(x)))));}
- async function job(route,payload){if(!token)throw Error('Informe o token do gateway e clique em GET.');
+ const $=id=>document.getElementById(id);let equipes=[],micros=[],causas=[],token='',current='',generation=0;
+ const status=t=>{$('sbStatus').textContent=t;};
+ const unwrap=v=>Array.isArray(v)?v:(v&&typeof v==='object'?['data','items','rows','resultado','equipes','servicos','causas','body','result'].map(k=>v[k]).find(Array.isArray)||[]:[]);
+ const requiredCause=m=>m?.obgCausaProbl===true||['S','SIM','TRUE','1','Y'].includes(String(m?.obgCausaProbl??'').toUpperCase());
+ function options(id,rows,placeholder,value,label){const el=$(id);el.replaceChildren(new Option(placeholder,''));rows.forEach(x=>el.add(new Option(label(x),String(value(x)))));}
+ async function job(route,payload,g){
+  if(!token)throw Error('Informe o token do gateway para consultar.');
   const headers={'Content-Type':'application/json',Authorization:'Bearer '+token};
-  const r=await fetch('/api/siscom-gateway/'+route,{method:'POST',headers,body:JSON.stringify(payload)});
-  const j=await r.json();if(!r.ok)throw Error(j.error||'Falha ao iniciar GET');
-  for(let i=0;i<35;i++){await new Promise(resolve=>setTimeout(resolve,1200));const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{headers:{Authorization:'Bearer '+token}});const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');if(['completed','concluido','done','success','completed_success','concluida','concluído','errored','failed','error'].includes(String(x.status).toLowerCase())){if(['failed','error','errored'].includes(String(x.status).toLowerCase()))throw Error(x.error_message||'Falha no worker');return x.result;}}
-  throw Error('A consulta não terminou. Confira o worker VPN.');
+  const r=await fetch('/api/siscom-gateway/'+route,{method:'POST',headers,body:JSON.stringify(payload),cache:'no-store'});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'Não foi possível iniciar a consulta');
+  for(let i=0;i<50;i++){
+   if(g!==generation)throw Error('Consulta cancelada');
+   await new Promise(resolve=>setTimeout(resolve,1200));
+   const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+   const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
+   const state=String(x.status).toLowerCase();
+   if(['concluido','concluído','completed','done','success'].includes(state))return x.result;
+   if(['erro','error','failed','errored'].includes(state))throw Error(x.error_message||'Falha no worker');
+  }
+  throw Error('Tempo excedido. Confira o worker VPN.');
  }
- function unwrap(v){if(Array.isArray(v))return v;if(!v||typeof v!=='object')return [];for(const k of ['data','items','rows','resultado','equipes','servicos','causas','body','result'])if(Array.isArray(v[k]))return v[k];return [];}
- function keepToken(){token=$('sbToken').value.trim();$('sbToken').value='';}
- async function run(fn){keepToken();status('Consultando SISCOM pelo gateway...');try{await fn()}catch(e){status('Erro: '+e.message)}}
- window.openSiscomBaixa=()=>{if(typeof currentScreen!=='undefined'&&currentScreen!=='baixar')return alert('Disponível somente em Notas para Baixar');const items=Object.values(selected||{});if(items.length!==1)return alert('Selecione exatamente uma SS para preparar a baixa.');const x=items[0];current=String(x.ss||'');$('sbSS').value=current;$('sbInicio').value=x.inicio_atividade||'';$('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbStatus').textContent='Consulte a SS oficial para identificar macro e executor. Nenhuma baixa será enviada.';$('siscomBaixaModal').classList.add('open')};
- $('sbFechar').onclick=()=>{token='';$('sbToken').value='';$('siscomBaixaModal').classList.remove('open')};
- $('sbConsultarSS').onclick=()=>run(async()=>{const data=await job('consultar-ss',{numero_ss:current});const obj=data?.data||data?.result||data||{};if(obj.servicoMacroDTO?.cdServico)$('sbMacro').value=obj.servicoMacroDTO.cdServico;if(obj.unidadeExecutoraDTO?.cdExecutor)$('sbExecutor').value=obj.unidadeExecutoraDTO.cdExecutor;status('Consulta concluída. Macro: '+($('sbMacro').value||'não encontrado')+'. Confira os dados.')});
- $('sbConsultarEquipes').onclick=()=>run(async()=>{const rows=unwrap(await job('equipes',{cd_executor:$('sbExecutor').value}));equipes=[...new Map(rows.filter(x=>x.cdEquipe!=null).map(x=>[String(x.cdEquipe),x])).values()].sort((a,b)=>Number(a.cdEquipe)-Number(b.cdEquipe));renderEquipes();status(equipes.length+' equipes únicas recebidas do GET.')});
- function renderEquipes(){const q=$('sbEquipeBusca').value.trim();const list=equipes.filter(x=>String(x.cdEquipe).includes(q));select('sbEquipes',list,x=>x.cdEquipe,x=>String(x.cdEquipe));if(q&&list.length===1&&String(list[0].cdEquipe)===q)$('sbEquipes').value=q;}
- $('sbEquipeBusca').oninput=renderEquipes;$('sbEquipes').onchange=()=>{$('sbEquipeBusca').value=$('sbEquipes').value};
- $('sbConsultarMicros').onclick=()=>run(async()=>{micros=unwrap(await job('micros',{cd_macro:$('sbMacro').value}));select('sbMicro',micros,x=>x.cdServico,x=>x.cdServico+' — '+(x.dcServico||''));status(micros.length+' serviços micro recebidos do GET.')});
- $('sbMicro').onchange=()=>run(async()=>{if(!$('sbMicro').value)return;causas=unwrap(await job('causas',{cd_micro:$('sbMicro').value}));select('sbCausa',causas,x=>x.id,x=>x.descricao||x.id);status(causas.length+' causas recebidas do GET.')});
- $('sbPrevia').onclick=()=>{const code=$('sbEquipes').value;const micro=$('sbMicro').value;const desc=$('sbDescricao').value.trim();if(!code||!equipes.some(x=>String(x.cdEquipe)===code))return status('Selecione uma equipe validada pelo GET.');if(!micro||!micros.some(x=>String(x.cdServico)===micro))return status('Selecione um micro validado pelo GET.');if(!desc)return status('Preencha a descrição da execução.');const m=micros.find(x=>String(x.cdServico)===micro);if(m?.obgCausaProbl&&!$('sbCausa').value)return status('O serviço exige causa do problema.');status('PRÉVIA VALIDADA — SS '+current+' | Equipe '+code+' | Macro '+$('sbMacro').value+' | Micro '+micro+' | Causa '+($('sbCausa').value||'não informada')+' | Início '+$('sbInicio').value+' | Fim '+$('sbFim').value+' | Última SS '+($('sbUltima').value||'não informado')+'\nNenhum POST de baixa foi enviado.');};
+ function renderEquipes(){
+  const q=$('sbEquipeBusca').value.trim(),chosen=$('sbEquipes').value;
+  options('sbEquipes',equipes.filter(e=>String(e.cdEquipe).includes(q)),'Selecione a equipe',e=>e.cdEquipe,e=>String(e.cdEquipe));
+  if(equipes.some(e=>String(e.cdEquipe)===q))$('sbEquipes').value=q;
+  else if([...$('sbEquipes').options].some(o=>o.value===chosen))$('sbEquipes').value=chosen;
+ }
+ async function loadEquipes(executor,g){
+  const rows=unwrap(await job('equipes',{cd_executor:executor},g));
+  equipes=[...new Map(rows.filter(x=>x.cdEquipe!=null).map(x=>[String(x.cdEquipe),x])).values()].sort((a,b)=>Number(a.cdEquipe)-Number(b.cdEquipe));
+  renderEquipes();if(!equipes.length)throw Error('GET de equipes retornou lista vazia');
+ }
+ async function loadMicros(macro,g){
+  micros=unwrap(await job('micros',{cd_macro:macro},g));
+  options('sbMicro',micros,'Selecione o serviço executado',m=>m.cdServico,m=>m.cdServico+' — '+(m.dcServico||''));
+  if(!micros.length)throw Error('GET de serviços executados retornou lista vazia');
+ }
+ async function loadAll(){
+  const g=++generation;token=$('sbToken').value.trim()||token;$('sbToken').value='';
+  if(!token){status('Informe o token administrativo e pressione Enter para iniciar as consultas.');return;}
+  status('Consultando SS oficial...');
+  try{
+   const data=await job('consultar-ss-baixa',{numero_ss:current},g);if(g!==generation)return;
+   const obj=data?.data||data?.result||data||{};
+   const macro=obj.servicoMacroDTO?.cdServico;
+   const executor=obj.unidadeExecutoraDTO?.cdExecutor??obj.unidadeExecutoraDTO?.cdUnidadeExecutora;
+   if(!macro)throw Error('SISCOM não retornou o macro oficial');
+   if(!executor)throw Error('SISCOM não retornou o código da unidade executora');
+   $('sbMacro').value=macro;$('sbExecutor').value=executor;
+   if(obj.codEquipe!=null)$('sbEquipeBusca').value=String(obj.codEquipe);
+   if(!$('sbInicio').value&&obj.dataHoraExecucaoIni)$('sbInicio').value=obj.dataHoraExecucaoIni;
+   if(!$('sbFim').value&&obj.dataHoraExecucaoFim)$('sbFim').value=obj.dataHoraExecucaoFim;
+   if(!$('sbDescricao').value&&obj.descricaoExecucao)$('sbDescricao').value=obj.descricaoExecucao;
+   status('Macro '+macro+' identificado. Carregando equipes e serviços...');
+   const results=await Promise.allSettled([loadEquipes(executor,g),loadMicros(macro,g)]);
+   if(g!==generation)return;
+   const failures=results.filter(x=>x.status==='rejected').map(x=>x.reason.message);
+   status(failures.length?'Consultas parcialmente concluídas: '+failures.join('; '):
+    'Consultas concluídas: '+equipes.length+' equipes e '+micros.length+' serviços executados. Selecione o serviço.');
+  }catch(e){if(g===generation)status('Erro: '+e.message);}
+ }
+ window.openSiscomBaixa=()=>{
+  if(typeof currentScreen!=='undefined'&&currentScreen!=='baixar')return alert('Disponível somente em Notas para Baixar');
+  const items=Object.values(selected||{});if(items.length!==1)return alert('Selecione exatamente uma SS.');
+  const x=items[0];current=String(x.ss||'');generation++;equipes=[];micros=[];causas=[];
+  $('sbSS').value=current;$('sbExecutor').value='';$('sbMacro').value='';$('sbEquipeBusca').value='';
+  options('sbEquipes',[],'Aguardando consulta',e=>e.cdEquipe,e=>e.cdEquipe);
+  options('sbMicro',[],'Aguardando macro oficial',m=>m.cdServico,m=>m.dcServico);
+  options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
+  $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
+  $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';
+  status('Informe o token do gateway uma vez para carregar automaticamente SS, equipes e serviços.');
+  $('siscomBaixaModal').classList.add('open');if(token)loadAll();
+ };
+ $('sbFechar').onclick=()=>{generation++;token='';$('sbToken').value='';$('siscomBaixaModal').classList.remove('open');};
+ $('sbToken').addEventListener('change',()=>{if($('sbToken').value.trim())loadAll();});
+ $('sbToken').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loadAll();}});
+ $('sbRecarregar').onclick=loadAll;$('sbEquipeBusca').oninput=renderEquipes;
+ $('sbEquipes').onchange=()=>{$('sbEquipeBusca').value=$('sbEquipes').value;};
+ $('sbMicro').onchange=async()=>{
+  const g=++generation,code=$('sbMicro').value;$('sbCausaBox').hidden=true;
+  options('sbCausa',[],'Não aplicável',c=>c.id,c=>c.descricao);
+  if(!code)return;const micro=micros.find(x=>String(x.cdServico)===code);
+  if(!requiredCause(micro)){status('Serviço selecionado. Causa do problema não obrigatória.');return;}
+  $('sbCausaBox').hidden=false;status('Consultando causas oficiais...');
+  try{causas=unwrap(await job('causas',{cd_micro:code},g));if(g!==generation)return;
+   options('sbCausa',causas,'Selecione a causa',c=>c.id,c=>c.descricao||c.id);
+   status(causas.length+' causas oficiais carregadas.');
+  }catch(e){if(g===generation)status('Erro ao carregar causas: '+e.message);}
+ };
+ $('sbPrevia').onclick=()=>{
+  const code=$('sbEquipes').value,micro=$('sbMicro').value,desc=$('sbDescricao').value.trim();
+  if(!code||!equipes.some(x=>String(x.cdEquipe)===code))return status('Selecione uma equipe validada pelo GET.');
+  if(!micro||!micros.some(x=>String(x.cdServico)===micro))return status('Selecione um serviço executado validado pelo GET.');
+  if(!desc)return status('Preencha a descrição da execução.');
+  const m=micros.find(x=>String(x.cdServico)===micro);
+  if(requiredCause(m)&&!$('sbCausa').value)return status('O serviço exige causa do problema.');
+  status('PRÉVIA VALIDADA — SS '+current+' | Equipe '+code+' | Macro '+$('sbMacro').value+
+   ' | Serviço executado '+micro+' | Causa '+($('sbCausa').value||'não exigida')+
+   ' | Início '+$('sbInicio').value+' | Fim '+$('sbFim').value+
+   ' | Última SS '+($('sbUltima').value||'não informado')+'\nNenhum POST de baixa foi enviado.');
+ };
 })();
 </script>
 </body></html>

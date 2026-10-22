@@ -81,6 +81,13 @@ app.post('/api/siscom-gateway/consultar-ss', async (req,res) => {
  } catch(e) { console.error('Gateway consulta:',e.message);res.status(502).json({error:'Falha ao criar consulta'}); }
 });
 // Consulta somente leitura do histórico de eventos oficiais da SS.
+app.post('/api/siscom-gateway/consultar-ss-baixa', async(req,res)=>{
+ if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
+ const numero=String(req.body?.numero_ss||'').trim();
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ try {const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'consultar_ss_baixa',payload:{numero_ss:numero}})});res.status(202).json({id:jobs[0].id,status:jobs[0].status});}
+ catch(e){console.error('Gateway SS baixa:',e.message);res.status(502).json({error:'Falha ao iniciar consulta oficial da SS'});}
+});
 app.post('/api/siscom-gateway/consultar-eventos-ss', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
  const numero = String(req.body?.numero_ss || '').trim();
