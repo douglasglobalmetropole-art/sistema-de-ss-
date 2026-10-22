@@ -1,0 +1,1 @@
+Atualização de sincronização: após job baixar_ss_real CONFIRMADA, backend verifica job e SS e atualiza situação no uMov. Se sincronização falhar, mantém aviso e não repete POST SISCOM. Requer UMOV_API_TOKEN válido. Não altera worker.js. Não há necessidade de SQL adicional.

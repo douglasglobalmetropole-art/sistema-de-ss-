@@ -1,0 +1,1 @@
+ATENCAO: faça backup, rode a migração SQL ANTES do deploy e reinicie o worker. A primeira tentativa de baixa real não pode ser repetida automaticamente. Em caso de status INCERTO, consulte o SISCOM oficial. Não exponha token SISCOM no navegador.

@@ -40,10 +40,18 @@ app.post('/api/auth/logout',(req,res)=>{cookie(res,OIDC_COOKIE,'',0);res.json({o
 // SISCOM Gateway: healthcheck de integração. Não encaminha requisições arbitrárias à VPN.
 // Protegido por token exclusivo de servidor, mesmo quando o SSO opcional está desativado.
 function gatewayAuthorized(req) {
- const token = process.env.SISCOM_GATEWAY_API_TOKEN || '';
- const provided = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
- if (token.length < 32 || provided.length !== token.length) return false;
- return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(token));
+ // O segredo do gateway fica SOMENTE no servidor, nunca no navegador.
+ // Sem SSO configurado, falha fechado (não expõe a VPN publicamente).
+ if (!ready()) return false;
+ const sessao = verified(cookies(req)[OIDC_COOKIE]);
+ return !!(sessao && sessao.sub);
+}
+function gatewayCanWrite(req) {
+ if (!gatewayAuthorized(req)) return false;
+ const sessao = verified(cookies(req)[OIDC_COOKIE]);
+ const allow = String(process.env.SISCOM_BAIXA_ALLOWED_USERS || '')
+   .split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+ return allow.length > 0 && allow.includes(String(sessao.name||'').toLowerCase());
 }
 async function gatewayRest(route, options = {}) {
  const url = process.env.SUPABASE_URL;
@@ -67,6 +75,88 @@ app.post('/api/siscom-gateway/healthcheck', async (req,res) => {
   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
  } catch (e) { console.error('Gateway:',e.message);res.status(502).json({error:'Falha ao criar tarefa'}); }
 });
+// Consulta SS: API restrita ao token do gateway, sem senha de usuário na fila.
+app.post('/api/siscom-gateway/consultar-ss', async (req,res) => {
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ const numero = String(req.body?.numero_ss || '').trim();
+ if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)) return res.status(400).json({error:'Formato inválido de SS'});
+ try {
+  const jobs = await gatewayRest('siscom_gateway_jobs', {
+   method:'POST',headers:{Prefer:'return=representation'},
+   body:JSON.stringify({operation:'consultar_ss',payload:{numero_ss:numero}})
+  });
+  res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+ } catch(e) { console.error('Gateway consulta:',e.message);res.status(502).json({error:'Falha ao criar consulta'}); }
+});
+// Consulta somente leitura do histórico de eventos oficiais da SS.
+app.post('/api/siscom-gateway/consultar-ss-baixa', async(req,res)=>{
+ if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
+ const numero=String(req.body?.numero_ss||'').trim();
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ try {const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'consultar_ss_baixa',payload:{numero_ss:numero}})});res.status(202).json({id:jobs[0].id,status:jobs[0].status});}
+ catch(e){console.error('Gateway SS baixa:',e.message);res.status(502).json({error:'Falha ao iniciar consulta oficial da SS'});}
+});
+// Diagnóstico somente leitura da tentativa existente: jamais cria outro POST.
+app.get('/api/siscom-gateway/tentativa-baixa/:numero',async(req,res)=>{
+ if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
+ const numero=String(req.params.numero||'').trim();
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ try{
+  const qs=new URLSearchParams({select:'id,status,result,error_message,created_at,finished_at',operation:'eq.baixar_ss_real','payload->>numero_ss':'eq.'+numero,order:'created_at.desc',limit:'1'});
+  const jobs=await gatewayRest('siscom_gateway_jobs?'+qs.toString());
+  if(!jobs.length)return res.status(404).json({error:'Nenhuma tentativa de baixa registrada para esta SS'});
+  const j=jobs[0],r=j.result||{};
+  res.set('Cache-Control','no-store').json({id:j.id,status:j.status,created_at:j.created_at,finished_at:j.finished_at,http_status:r.http_status??null,status_baixa:r.status_baixa??null,diagnostico_validacao:r.diagnostico_validacao??null,mensagem:r.mensagem??null,error_message:j.error_message??null});
+ }catch(e){console.error('Consulta de tentativa:',e.message);res.status(502).json({error:'Falha ao consultar tentativa anterior'});}
+});
+// Encerramento controlado: somente com confirmação explícita e chave única por SS.
+app.post('/api/siscom-gateway/baixar-ss',async(req,res)=>{
+ if(!gatewayCanWrite(req))return res.status(401).json({error:'Não autorizado'});
+ const p=req.body||{},numero=String(p.numero_ss||'').trim();
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ if(p.confirmacao!==`BAIXAR ${numero}`)return res.status(400).json({error:'Confirmação obrigatória'});
+ const inteiro=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
+ if(![p.executor,p.equipe,p.macro,p.micro].every(inteiro))return res.status(400).json({error:'Códigos inválidos'});
+ if(!['S','N'].includes(p.ultima_ss)||!String(p.descricao||'').trim()||String(p.descricao).length>1000)return res.status(400).json({error:'Dados de execução incompletos'});
+ if(!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.inicio)||!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.fim))return res.status(400).json({error:'Datas inválidas'});
+ const payload={numero_ss:numero,executor:Number(p.executor),equipe:Number(p.equipe),macro:Number(p.macro),micro:Number(p.micro),ultima_ss:p.ultima_ss,inicio:p.inicio,fim:p.fim,descricao:p.descricao.trim(),causa:p.causa?Number(p.causa):null};
+ try{
+  const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'baixar_ss_real',status:'pendente',payload})});
+  return res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+ }catch(e){console.error('Gravação SISCOM:',e.message);return res.status(409).json({error:'Envio não iniciado ou já registrado. Consulte a tentativa existente; nenhuma nova baixa foi enviada.',consulta_tentativa:'/api/siscom-gateway/tentativa-baixa/'+encodeURIComponent(numero)});}
+});
+app.post('/api/siscom-gateway/consultar-eventos-ss', async (req,res) => {
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ const numero = String(req.body?.numero_ss || '').trim();
+ if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)) return res.status(400).json({error:'Formato inválido de SS'});
+ try {
+  const jobs = await gatewayRest('siscom_gateway_jobs', {
+   method:'POST',headers:{Prefer:'return=representation'},
+   body:JSON.stringify({operation:'consultar_eventos_ss',payload:{numero_ss:numero}})
+  });
+  res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+ } catch(e) { console.error('Gateway eventos:',e.message);res.status(502).json({error:'Falha ao criar consulta de eventos'}); }
+});
+// Consultas oficiais somente leitura para o formulário de baixa.
+// A execução depende de suporte correspondente no worker VPN.
+for (const [route, operation, field] of [
+ ['equipes','listar_equipes','cd_executor'],
+ ['micros','listar_micros','cd_macro'],
+ ['causas','listar_causas','cd_micro']
+]) {
+ app.post('/api/siscom-gateway/'+route, async (req,res) => {
+  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+  const code=String(req.body?.[field]??'').trim();
+  if (!/^\d{1,8}$/.test(code)) return res.status(400).json({error:'Código inválido'});
+  try {
+   const jobs=await gatewayRest('siscom_gateway_jobs',{
+    method:'POST',headers:{Prefer:'return=representation'},
+    body:JSON.stringify({operation,payload:{[field]:Number(code)}})
+   });
+   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+  } catch(e) {console.error('Gateway catálogo:',e.message);res.status(502).json({error:'Falha ao iniciar consulta'});}
+ });
+}
 app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
@@ -457,6 +547,24 @@ app.post('/api/itens/lote',async(req,res)=>{
  res.json({ok:resultados.length===preparados.length&&resultados.every(i=>i.ok),resultados,gravados:resultados.filter(i=>i.ok).length,total:preparados.length,message:'Confira os itens gravados e os pendentes.'});
 });
 app.delete('/api/itens/:id',async(req,res)=>{try{const item_id=String(req.params.id||'').trim();if(!item_id)return res.status(400).json({ok:false,error:'Item inválido.'});const result=await programacaoFetch('',{excluir_item:'1',item_id});res.json({ok:result?.success!==false,message:result?.message||'Item excluído.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+// Sincronizar status local SOMENTE após job de baixa oficialmente confirmado.
+app.post('/api/siscom-gateway/sincronizar-baixa',async(req,res)=>{
+ if(!gatewayCanWrite(req))return res.status(401).json({ok:false,error:'Não autorizado'});
+ const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim();
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou job inválido'});
+ try{
+  const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
+  const j=jobs[0];
+  if(!j||j.operation!=='baixar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.status_baixa!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Baixa não confirmada oficialmente neste job'});
+  const match=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1 ORDER BY t.tsk_id DESC LIMIT 25`,values:[numero],query_timeout:7000});
+  if(!match.rows.length)return res.status(404).json({ok:false,error:'SS não localizada no uMov; baixa SISCOM confirmada, sincronização pendente'});
+  const valor=xmlEscape(identificadorSituacao('Baixada'));const resultados=[];
+  for(const r of match.rows){try{await postUmovXml('schedule',r.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);resultados.push({tarefa:r.tsk_id,ok:true})}catch(e){resultados.push({tarefa:r.tsk_id,ok:false,error:e.message})}}
+  if(resultados.some(x=>x.ok))for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
+  const falhas=resultados.filter(x=>!x.ok);
+  return res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'Baixa confirmada, mas atualização do uMov incompleta':null});
+ }catch(e){console.error('Sincronização de baixa:',e.message);return res.status(502).json({ok:false,error:'Baixa confirmada, mas falha ao sincronizar status local'});}
+});
 app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
