@@ -171,6 +171,28 @@ for (const [route, operation, field] of [
   } catch(e) {console.error('Gateway catálogo:',e.message);res.status(502).json({error:'Falha ao iniciar consulta'});}
  });
 }
+// Consultas e criação de complementar. Não usa token no navegador nem no payload.
+for(const [route,operation] of [['complementar-areas','listar_areas_complementar'],['complementar-servicos','listar_servicos_complementar'],['complementar-consultar','consultar_complementares_ss'],['complementar-criar','criar_ss_complementar']]){
+ app.post('/api/siscom-gateway/'+route,async(req,res)=>{
+  const escrita=operation==='criar_ss_complementar';
+  if(!(escrita?gatewayCanWrite(req):gatewayAuthorized(req)))return res.status(401).json({error:'Não autorizado'});
+  const p=req.body||{},numero=String(p.numero_ss||'').trim();
+  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+  const payload={numero_ss:numero};
+  if(operation==='listar_servicos_complementar'||escrita){
+   if(!Number.isSafeInteger(Number(p.area))||Number(p.area)<1)return res.status(400).json({error:'Área inválida'});
+   payload.area=Number(p.area);
+  }
+  if(escrita){
+   if(!Number.isSafeInteger(Number(p.macro))||Number(p.macro)<1||!String(p.descricao||'').trim()||String(p.descricao).length>1000||p.confirmacao!=='COMPLEMENTAR '+numero)return res.status(400).json({error:'Dados ou confirmação inválidos'});
+   payload.macro=Number(p.macro);payload.descricao=String(p.descricao).trim();
+  }
+  try{
+   const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation,status:'pendente',payload})});
+   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+  }catch(e){console.error('Gateway complementar:',e.message);res.status(escrita?409:502).json({error:escrita?'Criação não iniciada ou já registrada. Consulte o SISCOM e o histórico de jobs antes de reenviar.':'Falha ao consultar SISCOM'});}
+ });
+}
 app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
