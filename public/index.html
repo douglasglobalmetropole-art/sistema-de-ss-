@@ -1210,7 +1210,13 @@ async function tramJob(operation,params={}){
  throw Error('Tempo de consulta excedido. Verifique o worker SISCOM.');
 }
 function tramArray(v){return Array.isArray(v)?v:Array.isArray(v?.content)?v.content:Array.isArray(v?.data)?v.data:[]}
-function tramOption(v){const id=v.cdContrato??v.id??v.codigo;const label=v.descricao??v.dcContrato??v.nome??v.numeroContrato??id;return {id,label}}
+function tramOption(v){
+ const id=v.id??v.cdContrato??v.codigo;
+ const contrato=String(v.dcContrato??v.descricao??v.nome??v.numeroContrato??'').trim().split(/\s+/)[0];
+ const divisao=String(v.tpProcesso??v.nmFiscalizacao??'').trim();
+ const label=contrato&&divisao?contrato+'/'+divisao:(contrato||divisao||String(id));
+ return {id,label};
+}
 async function tramInit(){if(tramReady)return;tramReady=true;try{tramNotice('Consultando contratos autorizados...');const d=tramArray(await tramJob('tram_contratos'));const c=tramEl('tramContrato');c.innerHTML='<option value="">Selecione um contrato</option>'+d.map(x=>{const o=tramOption(x);return '<option value="'+tramEsc(o.id)+'">'+tramEsc(o.label)+'</option>'}).join('');tramNotice(d.length+' contrato(s) disponibilizado(s) pelo SISCOM.');}catch(e){tramReady=false;tramNotice(e.message)}}
 async function tramMacros(){const id=tramEl('tramContrato').value;tramEl('tramMacro').innerHTML='<option value="">Todas</option>';if(!id)return;try{const a=tramArray(await tramJob('tram_macros',{contrato:Number(id)}));tramEl('tramMacro').innerHTML='<option value="">Todas</option>'+a.map(x=>'<option value="'+tramEsc(x.codigoMacro??x.cdMacro??x.id)+'">'+tramEsc(x.descricaoMacro??x.descricao??x.nome??'Macro')+'</option>').join('')}catch(e){tramNotice(e.message)}}
 function tramDate(v){if(!v)return '';const [y,m,d]=v.split('-');return d+'/'+m+'/'+y}
