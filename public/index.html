@@ -949,33 +949,29 @@ load();
 })();
 </script>
 <script>
-// Sessão administrativa temporária: o segredo nunca fica no HTML nem no localStorage.
-// Ao receber 401 do gateway, solicita a senha UMA VEZ e repete apenas a consulta.
-// Nunca repete automaticamente o POST de baixa, para evitar encerramento duplicado.
+// Operacoes SISCOM: autenticacao pela sessao individual, sem senha administrativa.
+// Requisicoes que retornam 401 nao sao reenviadas automaticamente (evita escrita duplicada).
 (()=>{
  const originalFetch=window.fetch.bind(window);
- let loginPromise=null;
- async function login(){
-  if(loginPromise)return loginPromise;
-  loginPromise=(async()=>{
-   const password=window.prompt('Acesso SISCOM: informe a senha administrativa (uma vez por sessão):');
-   if(!password)throw Error('Autenticação cancelada');
-   const r=await originalFetch('/api/siscom-admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password}),credentials:'same-origin'});
-   if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(d.error||'Falha ao autenticar');}
-  })();
-  try{return await loginPromise}finally{loginPromise=null}
- }
+ let opening=false;
  window.fetch=async(input,init)=>{
   const url=typeof input==='string'?input:input instanceof Request?input.url:String(input);
   if(!url.includes('/api/siscom-gateway/'))return originalFetch(input,init);
   const response=await originalFetch(input,init);
   if(response.status!==401)return response;
-  await login();
-  // Não reenvia operações de baixa, mesmo após 401.
-  if(/\/baixar-ss(?:\?|$)|\/sincronizar-baixa(?:\?|$)/.test(url)){
-    throw Error('Acesso autorizado. Confira a situação da SS e confirme novamente, se necessário. Nenhuma baixa foi reenviada.');
-  }
-  return originalFetch(input,init);
+  try{
+   const state=await originalFetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'});
+   const data=state.ok?await state.json():null;
+   if(!data?.authenticated && !opening){
+    opening=true;
+    const btn=document.getElementById('siscomLoginTop');
+    const modal=document.getElementById('siscomLoginModal');
+    if(btn && modal && !modal.classList.contains('open'))btn.click();
+    opening=false;
+   }
+  }catch(e){opening=false;}
+  // Preserva o 401 original. Nenhuma consulta ou operacao de escrita e repetida.
+  return response;
  };
 })();
 </script>
