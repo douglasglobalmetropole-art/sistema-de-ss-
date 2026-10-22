@@ -93,6 +93,26 @@ app.post('/api/siscom-gateway/consultar-eventos-ss', async (req,res) => {
   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
  } catch(e) { console.error('Gateway eventos:',e.message);res.status(502).json({error:'Falha ao criar consulta de eventos'}); }
 });
+// Consultas oficiais somente leitura para o formulário de baixa.
+// A execução depende de suporte correspondente no worker VPN.
+for (const [route, operation, field] of [
+ ['equipes','listar_equipes','cd_executor'],
+ ['micros','listar_micros','cd_macro'],
+ ['causas','listar_causas','cd_micro']
+]) {
+ app.post('/api/siscom-gateway/'+route, async (req,res) => {
+  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+  const code=String(req.body?.[field]??'').trim();
+  if (!/^\d{1,8}$/.test(code)) return res.status(400).json({error:'Código inválido'});
+  try {
+   const jobs=await gatewayRest('siscom_gateway_jobs',{
+    method:'POST',headers:{Prefer:'return=representation'},
+    body:JSON.stringify({operation,payload:{[field]:Number(code)}})
+   });
+   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
+  } catch(e) {console.error('Gateway catálogo:',e.message);res.status(502).json({error:'Falha ao iniciar consulta'});}
+ });
+}
 app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
