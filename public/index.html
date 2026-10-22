@@ -73,7 +73,31 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
 #siscomBaixaModal .sbFooter .btn{height:35px}
 @media(max-width:1050px){#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:760px){#siscomBaixaModal .sbColumns{grid-template-columns:1fr}#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(2,minmax(0,1fr))}#siscomBaixaModal .sbShell{height:98vh}#siscomBaixaModal .sbFooter{flex-wrap:wrap}#siscomBaixaModal .sbFooter .btn{flex:1}}
-</style></head><body><main>
+</style><style>
+.siscomTopAuth{background:#083d73;color:#fff;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.siscomTopBrand{font-size:15px;font-weight:800}.siscomTopBrand span{font-weight:400;font-size:11px;color:#c8deef;margin-left:8px}
+.siscomTopButtons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.siscomTopButtons #siscomIdentityLabel{font-size:12px;font-weight:700;margin-right:8px}
+.siscomTopButtons .btn{height:34px;padding:0 12px}.siscomLoginDialog{max-width:440px;width:min(94vw,440px)!important;padding:24px}
+.siscomLoginDialog h3{font-size:20px;margin:0 0 12px}.siscomLoginDialog p{font-size:12px;line-height:1.6;color:#47627c}
+.siscomLoginDialog label{display:block;font-weight:bold;margin-top:14px}.siscomLoginDialog input{width:100%;height:41px;padding:9px;border:1px solid #b3ccdf;border-radius:6px;margin-top:6px}
+#siscomLoginFeedback{min-height:18px;margin-top:13px;color:#9b2c23;font-size:12px}
+.siscomLoginDialog .modalBtns{margin-top:16px;display:flex;justify-content:flex-end;gap:8px}
+</style>
+</head><body><main>
+<div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
+ <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
+ <div class="siscomTopButtons"><span id="siscomIdentityLabel">SISCOM: não conectado</span><button type="button" class="btn primary" id="siscomLoginTop">🔐 Login SISCOM</button><button type="button" class="btn" id="siscomConsultaTop" disabled>Consultar SS</button><button type="button" class="btn" id="siscomLogoutTop" hidden>Sair</button></div>
+</div>
+<div class="modalBg" id="siscomLoginModal" role="dialog" aria-modal="true" aria-labelledby="siscomLoginTitle">
+ <div class="modalBox siscomLoginDialog"><h3 id="siscomLoginTitle">Login individual SISCOM</h3>
+ <p>Utilize seu usuário e senha do SISCOM. A senha é criptografada antes de seguir para o worker Windows. Nenhuma SS será alterada pelo login.</p>
+ <form id="siscomLoginForm" autocomplete="on"><label for="siscomLoginUser">Usuário SISCOM</label><input id="siscomLoginUser" name="username" autocomplete="username" required maxlength="80" placeholder="usuario.cgm"/>
+ <label for="siscomLoginPassword">Senha SISCOM</label><input id="siscomLoginPassword" type="password" name="password" autocomplete="current-password" required maxlength="256"/>
+ <div id="siscomLoginFeedback" aria-live="polite"></div>
+ <div class="modalBtns"><button type="button" class="btn" id="siscomLoginCancel">Cancelar</button><button type="submit" class="btn primary" id="siscomLoginSubmit">Entrar no SISCOM</button></div></form>
+ </div>
+</div>
+
 <section class="toolbar"><button class="tab active" data-screen="recepcao">▣   RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled="" title="Notas em preparação ainda não estão disponíveis">⚙   PREPARAÇÃO</button><button class="tab" data-screen="campo">▤   NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁   NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas">✓   NOTAS ENCERRADAS</button><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button class="multiBtn" id="macroBtn" type="button">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button class="multiBtn" id="cityBtn" type="button">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"/></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"/></div><button class="btn primary" id="filterBtn">▽   Filtrar</button><button class="btn" id="clearBtn">×   Limpar</button><button class="btn" id="refreshBtn" title="Consultar novamente o banco sem perder os filtros" type="button"><span class="spin">⟳</span>   Atualizar</button><div class="ssQuickSearch" id="buscaDiretaBox" title="Busca de SS em todas as datas, diretamente no PostgreSQL"><input aria-label="Pesquisar SS no banco" autocomplete="off" id="buscaDiretaSS" placeholder="Pesquisar SS..." type="search"/><button aria-label="Pesquisar SS" id="buscaDiretaBtn" title="Pesquisar SS" type="button">⌕</button><button aria-label="Limpar pesquisa de SS" id="buscaDiretaLimpar" title="Limpar pesquisa" type="button">×</button></div></section>
 <section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div aria-live="polite" id="buscaDiretaStatus" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
 <section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"/></th><th data-key="ss">SS<span class="sort">↕</span></th><th data-key="equipe_executou" id="receptionTeamHeader">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th data-key="criado_em" id="lastHeader">DATA DE ABERTURA<span class="sort">↕</span></th><th data-key="equipe_executou" hidden="" id="teamHeader">EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th data-key="status_integracao" hidden="" id="integrationHeader">STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"/></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."/></td><td><input data-col="logradouro"/></td><td><input data-col="bairro"/></td><td><input data-col="cidade"/></td><td><input data-col="setor"/></td><td><input data-col="servico"/></td><td><input data-col="tags"/></td><td><input data-col="criado_em" id="lastFilter"/></td><td hidden="" id="teamFilterCell"><input data-col="equipe_executou" id="teamFilter"/></td><td hidden="" id="integrationFilterCell"><input data-col="status_integracao" id="integrationFilter"/></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected="">25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
@@ -953,6 +977,70 @@ load();
   }
   return originalFetch(input,init);
  };
+})();
+</script>
+<script>
+// SISCOM individual - mesma sessão HTTPOnly usada em todas as abas.
+(function(){
+ const $=id=>document.getElementById(id);
+ const btn=$('siscomLoginTop'),modal=$('siscomLoginModal'),form=$('siscomLoginForm'),
+  feedback=$('siscomLoginFeedback'),label=$('siscomIdentityLabel'),consult=$('siscomConsultaTop'),logout=$('siscomLogoutTop');
+ let active=false;
+ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ function paint(data){
+  active=!!data?.authenticated;
+  label.textContent=active?'SISCOM: '+(data.user?.nome||'Conectado'):'SISCOM: não conectado';
+  btn.hidden=active;logout.hidden=!active;consult.disabled=!active;
+  document.body.dataset.siscomAuthenticated=active?'true':'false';
+ }
+ async function refresh(){try{const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'});const x=await r.json();paint(x)}catch{paint(null)}}
+ btn.addEventListener('click',()=>{feedback.textContent='';modal.classList.add('open');$('siscomLoginPassword').value='';$('siscomLoginUser').focus()});
+ $('siscomLoginCancel').addEventListener('click',()=>modal.classList.remove('open'));
+ form.addEventListener('submit',async ev=>{
+  ev.preventDefault();const submit=$('siscomLoginSubmit');submit.disabled=true;
+  const login=$('siscomLoginUser').value.trim(),password=$('siscomLoginPassword').value;
+  feedback.style.color='#24527a';feedback.textContent='Autenticando pelo worker Windows...';
+  try{
+   const r=await fetch('/api/siscom-individual/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({login,password}),cache:'no-store'});
+   $('siscomLoginPassword').value='';
+   const j=await r.json();if(!r.ok)throw Error(j.error||'Não foi possível autenticar');
+   let done=false;
+   for(let i=0;i<65;i++){
+    await wait(1400);
+    const rr=await fetch('/api/siscom-individual/login-status',{cache:'no-store',credentials:'same-origin'});
+    const x=await rr.json();if(rr.status===202)continue;
+    if(!rr.ok)throw Error(x.error||'Erro de autenticação');
+    done=true;paint({authenticated:true,user:x.user});modal.classList.remove('open');break;
+   }
+   if(!done)throw Error('Tempo excedido. Confira o worker Windows conectado à VPN.');
+  }catch(e){feedback.style.color='#a52828';feedback.textContent=e.message}
+  finally{submit.disabled=false;$('siscomLoginPassword').value=''}
+ });
+ logout.addEventListener('click',async()=>{
+  logout.disabled=true;
+  try{await fetch('/api/siscom-individual/logout',{method:'POST',credentials:'same-origin'});}finally{logout.disabled=false;paint(null)}
+ });
+ consult.addEventListener('click',async()=>{
+  const current=window.__detailSS?.ss||'';
+  const numero=prompt('Número da SS a consultar no SISCOM (somente leitura):',current);
+  if(numero===null)return;
+  const ss=numero.trim();if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){alert('Formato de SS inválido');return}
+  consult.disabled=true;
+  try{
+   const start=await fetch('/api/siscom-gateway/consultar-ss',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:ss}),credentials:'same-origin'});
+   const startJ=await start.json();if(!start.ok)throw Error(startJ.error||'Falha ao consultar');
+   let done=false;
+   for(let i=0;i<50;i++){
+    await wait(1250);
+    const r=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(startJ.id),{cache:'no-store',credentials:'same-origin'});
+    const x=await r.json();if(!r.ok)throw Error(x.error||'Falha ao consultar tarefa');
+    if(x.status==='erro')throw Error(x.error_message||'SISCOM recusou consulta');
+    if(x.status==='concluido'){done=true;alert('Consulta SISCOM autorizada para '+ss+'.\n\n'+JSON.stringify(x.result||{},null,2).slice(0,1200));break}
+   }
+   if(!done)throw Error('Tempo de consulta excedido');
+  }catch(e){alert('Consulta SISCOM: '+e.message)}finally{consult.disabled=!active}
+ });
+ refresh();
 })();
 </script>
 </body></html>
