@@ -659,7 +659,7 @@ load();
    const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{headers:{Authorization:'Bearer '+token},cache:'no-store'});
    const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
    const state=String(x.status).toLowerCase();
-   if(['concluido','concluído','completed','done','success'].includes(state))return x.result;
+   if(['concluido','concluído','completed','done','success'].includes(state))return route==='baixar-ss'?{...x.result,__job_id:j.id}:x.result;
    if(['erro','error','failed','errored'].includes(state))throw Error(x.error_message||'Falha no worker');
   }
   throw Error('Tempo excedido. Confira o worker VPN.');
@@ -776,7 +776,18 @@ load();
    ' | Última SS '+($('sbUltima').value||'não informado')+' | Pronta para confirmação.');
   if(!window.confirm('ATENÇÃO: Encerrar definitivamente a SS '+current+' no SISCOM? Esta operação não deve ser repetida.'))return;
   const btn=$('sbPrevia');btn.disabled=true;status('Enviando baixa real. Não feche nem reenvie...');
-  try{const r=await job('baixar-ss',{numero_ss:current,confirmacao:'BAIXAR '+current,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},generation);status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+' — '+(r.mensagem||''));if(r.status_baixa==='CONFIRMADA')alert('SS encerrada e confirmada no SISCOM: '+current);else alert('Resultado não confirmado. NÃO tente novamente antes de conferir o SISCOM.');}catch(e){status('Resultado do envio não confirmado: '+e.message+' — NÃO reenviar antes de consultar o SISCOM.');}
+  try{const r=await job('baixar-ss',{numero_ss:current,confirmacao:'BAIXAR '+current,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},generation);status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+' — '+(r.mensagem||''));if(r.status_baixa==='CONFIRMADA'){
+    status('Baixa confirmada no SISCOM. Atualizando status no uMov...');
+    try{
+     const sync=await fetch('/api/siscom-gateway/sincronizar-baixa',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({numero_ss:current,job_id:r.__job_id}),cache:'no-store'});
+     const sj=await sync.json();if(!sync.ok||!sj.ok)throw Error(sj.error||'Sincronização não confirmada');
+     status('SS '+current+' encerrada no SISCOM e marcada como Baixada no uMov.');
+     if(typeof raw!=='undefined'){raw=raw.filter(x=>String(x.ss)!==current);selected={};apply();}
+     $('siscomBaixaModal').classList.remove('open');
+     alert('SS '+current+' encerrada e movida para Notas Encerradas.');
+     if(typeof load==='function')load();
+    }catch(syncErr){status('SS encerrada no SISCOM, porém sincronização local pendente: '+syncErr.message+'. NÃO reenviar baixa.');alert('Baixa oficial confirmada, mas não foi possível mover a SS automaticamente. NÃO envie novamente.');}
+   }else alert('Resultado não confirmado. NÃO tente novamente antes de conferir o SISCOM.');}catch(e){status('Resultado do envio não confirmado: '+e.message+' — NÃO reenviar antes de consultar o SISCOM.');}
  };
 })();
 </script>

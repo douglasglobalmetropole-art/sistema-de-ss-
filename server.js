@@ -526,6 +526,24 @@ app.post('/api/itens/lote',async(req,res)=>{
  res.json({ok:resultados.length===preparados.length&&resultados.every(i=>i.ok),resultados,gravados:resultados.filter(i=>i.ok).length,total:preparados.length,message:'Confira os itens gravados e os pendentes.'});
 });
 app.delete('/api/itens/:id',async(req,res)=>{try{const item_id=String(req.params.id||'').trim();if(!item_id)return res.status(400).json({ok:false,error:'Item inválido.'});const result=await programacaoFetch('',{excluir_item:'1',item_id});res.json({ok:result?.success!==false,message:result?.message||'Item excluído.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+// Sincronizar status local SOMENTE após job de baixa oficialmente confirmado.
+app.post('/api/siscom-gateway/sincronizar-baixa',async(req,res)=>{
+ if(!gatewayAuthorized(req))return res.status(401).json({ok:false,error:'Não autorizado'});
+ const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim();
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou job inválido'});
+ try{
+  const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
+  const j=jobs[0];
+  if(!j||j.operation!=='baixar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.status_baixa!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Baixa não confirmada oficialmente neste job'});
+  const match=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1 ORDER BY t.tsk_id DESC LIMIT 25`,values:[numero],query_timeout:7000});
+  if(!match.rows.length)return res.status(404).json({ok:false,error:'SS não localizada no uMov; baixa SISCOM confirmada, sincronização pendente'});
+  const valor=xmlEscape(identificadorSituacao('Baixada'));const resultados=[];
+  for(const r of match.rows){try{await postUmovXml('schedule',r.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);resultados.push({tarefa:r.tsk_id,ok:true})}catch(e){resultados.push({tarefa:r.tsk_id,ok:false,error:e.message})}}
+  if(resultados.some(x=>x.ok))for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
+  const falhas=resultados.filter(x=>!x.ok);
+  return res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'Baixa confirmada, mas atualização do uMov incompleta':null});
+ }catch(e){console.error('Sincronização de baixa:',e.message);return res.status(502).json({ok:false,error:'Baixa confirmada, mas falha ao sincronizar status local'});}
+});
 app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
