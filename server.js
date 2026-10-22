@@ -40,10 +40,18 @@ app.post('/api/auth/logout',(req,res)=>{cookie(res,OIDC_COOKIE,'',0);res.json({o
 // SISCOM Gateway: healthcheck de integração. Não encaminha requisições arbitrárias à VPN.
 // Protegido por token exclusivo de servidor, mesmo quando o SSO opcional está desativado.
 function gatewayAuthorized(req) {
- const token = process.env.SISCOM_GATEWAY_API_TOKEN || '';
- const provided = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
- if (token.length < 32 || provided.length !== token.length) return false;
- return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(token));
+ // O segredo do gateway fica SOMENTE no servidor, nunca no navegador.
+ // Sem SSO configurado, falha fechado (não expõe a VPN publicamente).
+ if (!ready()) return false;
+ const sessao = verified(cookies(req)[OIDC_COOKIE]);
+ return !!(sessao && sessao.sub);
+}
+function gatewayCanWrite(req) {
+ if (!gatewayAuthorized(req)) return false;
+ const sessao = verified(cookies(req)[OIDC_COOKIE]);
+ const allow = String(process.env.SISCOM_BAIXA_ALLOWED_USERS || '')
+   .split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+ return allow.length > 0 && allow.includes(String(sessao.name||'').toLowerCase());
 }
 async function gatewayRest(route, options = {}) {
  const url = process.env.SUPABASE_URL;
@@ -103,7 +111,7 @@ app.get('/api/siscom-gateway/tentativa-baixa/:numero',async(req,res)=>{
 });
 // Encerramento controlado: somente com confirmação explícita e chave única por SS.
 app.post('/api/siscom-gateway/baixar-ss',async(req,res)=>{
- if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
+ if(!gatewayCanWrite(req))return res.status(401).json({error:'Não autorizado'});
  const p=req.body||{},numero=String(p.numero_ss||'').trim();
  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
  if(p.confirmacao!==`BAIXAR ${numero}`)return res.status(400).json({error:'Confirmação obrigatória'});
@@ -541,7 +549,7 @@ app.post('/api/itens/lote',async(req,res)=>{
 app.delete('/api/itens/:id',async(req,res)=>{try{const item_id=String(req.params.id||'').trim();if(!item_id)return res.status(400).json({ok:false,error:'Item inválido.'});const result=await programacaoFetch('',{excluir_item:'1',item_id});res.json({ok:result?.success!==false,message:result?.message||'Item excluído.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
 // Sincronizar status local SOMENTE após job de baixa oficialmente confirmado.
 app.post('/api/siscom-gateway/sincronizar-baixa',async(req,res)=>{
- if(!gatewayAuthorized(req))return res.status(401).json({ok:false,error:'Não autorizado'});
+ if(!gatewayCanWrite(req))return res.status(401).json({ok:false,error:'Não autorizado'});
  const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim();
  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou job inválido'});
  try{
