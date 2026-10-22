@@ -39,19 +39,33 @@ app.post('/api/auth/logout',(req,res)=>{cookie(res,OIDC_COOKIE,'',0);res.json({o
 
 // SISCOM Gateway: healthcheck de integração. Não encaminha requisições arbitrárias à VPN.
 // Protegido por token exclusivo de servidor, mesmo quando o SSO opcional está desativado.
+// Login administrativo TEMPORÁRIO: senha digitada UMA VEZ por sessão.
+// Não é login SISCOM nem identifica individualmente o programador.
+const GATEWAY_COOKIE='ss_gateway_admin';
+function adminReady(){return (process.env.SISCOM_ADMIN_PASSWORD||'').length>=16 && OIDC_SECRET.length>=32;}
+function adminSession(req){const x=adminReady()?verified(cookies(req)[GATEWAY_COOKIE]):null;return !!(x&&x.role==='siscom_admin');}
+app.post('/api/siscom-admin/login',(req,res)=>{
+ if(!adminReady())return res.status(503).json({error:'Configure SISCOM_ADMIN_PASSWORD (16+ caracteres) e SESSION_SECRET (32+ caracteres) no Vercel.'});
+ const supplied=String(req.body?.password||'');const expected=process.env.SISCOM_ADMIN_PASSWORD;
+ const a=crypto.createHash('sha256').update(supplied).digest();
+ const b=crypto.createHash('sha256').update(expected).digest();
+ if(!crypto.timingSafeEqual(a,b))return res.status(401).json({error:'Senha administrativa incorreta'});
+ cookie(res,GATEWAY_COOKIE,signed({role:'siscom_admin',exp:Date.now()+4*3600000}),4*3600);
+ res.set('Cache-Control','no-store').json({ok:true});
+});
+app.post('/api/siscom-admin/logout',(req,res)=>{cookie(res,GATEWAY_COOKIE,'',0);res.json({ok:true})});
 function gatewayAuthorized(req) {
- // O segredo do gateway fica SOMENTE no servidor, nunca no navegador.
- // Sem SSO configurado, falha fechado (não expõe a VPN publicamente).
- if (!ready()) return false;
- const sessao = verified(cookies(req)[OIDC_COOKIE]);
- return !!(sessao && sessao.sub);
+ if(adminSession(req))return true;
+ if(!ready())return false;
+ const sessao=verified(cookies(req)[OIDC_COOKIE]);
+ return !!(sessao&&sessao.sub);
 }
 function gatewayCanWrite(req) {
- if (!gatewayAuthorized(req)) return false;
- const sessao = verified(cookies(req)[OIDC_COOKIE]);
- const allow = String(process.env.SISCOM_BAIXA_ALLOWED_USERS || '')
-   .split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
- return allow.length > 0 && allow.includes(String(sessao.name||'').toLowerCase());
+ if(adminSession(req))return true; // conta administrativa compartilhada: apenas testes autorizados
+ if(!gatewayAuthorized(req))return false;
+ const sessao=verified(cookies(req)[OIDC_COOKIE]);
+ const allow=String(process.env.SISCOM_BAIXA_ALLOWED_USERS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+ return allow.length>0&&allow.includes(String(sessao.name||'').toLowerCase());
 }
 async function gatewayRest(route, options = {}) {
  const url = process.env.SUPABASE_URL;
