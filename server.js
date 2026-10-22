@@ -89,7 +89,7 @@ function sealedCredentials(login,senha){
 app.get('/api/siscom-individual/me',(req,res)=>{
  res.set('Cache-Control','no-store');
  const user=siscomIndividual(req);
- res.json({configured:!!siscomIndividualReady(),authenticated:!!user,user:user?{idUsuario:user.uid,nome:user.name,login:user.login}:null,writeEnabled:!!(user&&individualWriteAllowed(user))});
+ res.json({configured:!!siscomIndividualReady(),authenticated:!!user,user:user?{idUsuario:user.uid,nome:user.name,login:user.login}:null,writeEnabled:!!(user&&individualWriteAllowed(user)),rejeicaoEnabled:!!(user&&individualWriteAllowed(user)&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true')});
 });
 function individualWriteAllowed(user){
  if(process.env.SISCOM_INDIVIDUAL_WRITE_ENABLED!=='true')return false;
@@ -310,6 +310,72 @@ for(const [route,operation] of [['complementar-areas','listar_areas_complementar
   }catch(e){console.error('Gateway complementar:',e.message);res.status(escrita?409:502).json({error:escrita?'Criação não iniciada ou já registrada. Consulte o SISCOM e o histórico de jobs antes de reenviar.':'Falha ao consultar SISCOM'});}
  });
 }
+// === REJEIÇÃO OFICIAL SISCOM (somente sessão individual, nunca senha administrativa) ===
+const SS_REJEICAO_FORMATO=/^\d{2}\/\d{2}-\d{6}-\d{2}$/;
+const REJEICAO_OPS=['validar_ss_rejeicao','rejeitar_ss_real'];
+function rejectionEnabled(req){
+ const user=siscomIndividual(req);
+ return !!(user&&individualWriteAllowed(user)&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true');
+}
+app.post('/api/siscom-gateway/rejeicao-validar',async(req,res)=>{
+ const user=siscomIndividual(req);
+ if(!user)return res.status(401).json({error:'Entre com seu usuário SISCOM para validar a rejeição'});
+ const numero=String(req.body?.numero_ss||'').trim();
+ if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'Número da SS inválido'});
+ try{res.status(202).json(await siscomCreateJob('validar_ss_rejeicao',signedTask('validar_ss_rejeicao',{numero_ss:numero},user.sid)));}
+ catch(e){console.error('Validação rejeição:',e.message);res.status(502).json({error:'Não foi possível iniciar a validação no SISCOM'});}
+});
+app.post('/api/siscom-gateway/rejeicao-confirmar',async(req,res)=>{
+ const user=siscomIndividual(req);
+ if(!user)return res.status(401).json({error:'Login SISCOM individual obrigatório'});
+ if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem não autorizada'});
+ if(!rejectionEnabled(req))return res.status(403).json({error:'Rejeição oficial ainda não habilitada para este usuário. Configure permissões de escrita e SISCOM_REJEICAO_WRITE_ENABLED.'});
+ const p=req.body||{},numero=String(p.numero_ss||'').trim();
+ if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'SS inválida'});
+ if(p.confirmacao!=='REJEITAR '+numero)return res.status(400).json({error:'Confirmação explícita obrigatória'});
+ if(p.motivo!=='NAO_EXECUCAO')return res.status(400).json({error:'Somente Não Execução está validado para envio. Duplicidade ainda não habilitada.'});
+ const equipe=Number(p.equipe),inicio=String(p.inicio||''),fim=String(p.fim||''),observacao=String(p.observacao||'').trim();
+ if(!Number.isSafeInteger(equipe)||equipe<1||equipe>99999999)return res.status(400).json({error:'Equipe inválida'});
+ if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(inicio)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(fim)||!Number.isFinite(Date.parse(inicio))||!Number.isFinite(Date.parse(fim))||Date.parse(fim)<Date.parse(inicio))return res.status(400).json({error:'Datas de início e fim inválidas'});
+ if(!observacao||observacao.length>1000)return res.status(400).json({error:'Observação obrigatória (até 1000 caracteres)'});
+ const payload={numero_ss:numero,motivo:'NAO_EXECUCAO',equipe,inicio,fim,observacao};
+ try{res.status(202).json(await siscomCreateJob('rejeitar_ss_real',signedTask('rejeitar_ss_real',payload,user.sid)));}
+ catch(e){console.error('Fila de rejeição:',e.message);res.status(409).json({error:'Rejeição não iniciada ou já registrada para esta SS. Verifique o histórico; não reenvie sem conferir.'});}
+});
+app.get('/api/siscom-gateway/rejeicao-tentativa/:numero',async(req,res)=>{
+ const user=siscomIndividual(req);
+ if(!user)return res.status(401).json({error:'Login individual obrigatório'});
+ const numero=String(req.params.numero||'').trim();
+ if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'SS inválida'});
+ try{
+  const qs=new URLSearchParams({select:'id,operation,status,result,error_message,created_at,finished_at,payload',operation:'eq.rejeitar_ss_real','payload->>numero_ss':'eq.'+numero,order:'created_at.desc',limit:'1'});
+  const jobs=await gatewayRest('siscom_gateway_jobs?'+qs);
+  if(!jobs.length||jobs[0].payload?.__siscom_identity?.sid!==user.sid)return res.status(404).json({error:'Nenhuma tentativa disponível nesta sessão'});
+  const {payload,...data}=jobs[0];res.set('Cache-Control','no-store').json(data);
+ }catch(e){console.error('Tentativa de rejeição:',e.message);res.status(502).json({error:'Falha ao consultar tentativa'});}
+});
+// Sincroniza uMov apenas quando o worker comprovou evento oficial novo (código 4).
+app.post('/api/siscom-gateway/sincronizar-rejeicao',async(req,res)=>{
+ const user=siscomIndividual(req);
+ if(!user)return res.status(401).json({ok:false,error:'Login individual obrigatório'});
+ if(!siscomSameOrigin(req))return res.status(403).json({ok:false,error:'Origem não autorizada'});
+ if(!rejectionEnabled(req))return res.status(403).json({ok:false,error:'Sincronização de rejeição não autorizada'});
+ const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim();
+ if(!SS_REJEICAO_FORMATO.test(numero)||!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou tarefa inválida'});
+ try{
+  const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
+  const j=jobs[0];
+  if(!j||j.operation!=='rejeitar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==user.sid||j.result?.status_rejeicao!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Rejeição ainda não confirmada oficialmente neste job'});
+  const q=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1 ORDER BY t.tsk_id DESC LIMIT 25`,values:[numero],query_timeout:7000});
+  if(!q.rows.length)return res.status(404).json({ok:false,error:'Rejeição SISCOM confirmada, mas SS não encontrada no uMov'});
+  const valor=xmlEscape(identificadorSituacao('Rejeitada')),resultados=[];
+  for(const row of q.rows){try{await postUmovXml('schedule',row.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);resultados.push({tarefa:row.tsk_id,ok:true})}catch(e){resultados.push({tarefa:row.tsk_id,ok:false,error:String(e.message).slice(0,180)})}}
+  if(resultados.some(x=>x.ok))for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
+  const falhas=resultados.filter(x=>!x.ok);
+  res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'SISCOM confirmou; sincronização uMov incompleta':null});
+ }catch(e){console.error('Sincronização rejeição:',e.message);res.status(502).json({ok:false,error:'Rejeição SISCOM confirmada; falha ao sincronizar o uMov'});}
+});
+// === FIM REJEIÇÃO OFICIAL ===
 app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
@@ -726,6 +792,7 @@ app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
  if(!integrationStatuses.has(status))return res.status(400).json({ok:false,error:'Status de integração inválido.'});
+ if(status==='Rejeitada')return res.status(403).json({ok:false,error:'Rejeição deve ser confirmada oficialmente no SISCOM antes da sincronização local.'});
  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
  const resultados=[];
  for(const tarefa of tarefas){

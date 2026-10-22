@@ -559,7 +559,7 @@ load();
     finally{buttons.forEach(button=>button.disabled=false)}
   }
   $('downloadBtn').onclick=()=>window.openSiscomBaixa?.(); // Baixa oficial somente após validação; não altera status local
-  $('rejectBtn').onclick=()=>changeIntegrationStatus('Rejeitada','Rejeição');
+  $('rejectBtn').onclick=()=>window.openSiscomRejeicao?.(); // Rejeição oficial SISCOM; nunca altera status local antes da confirmação
   $('duplicateBtn').onclick=()=>changeIntegrationStatus('Duplicada','Duplicação');
   $('removeTeamBtn').onclick=async()=>{
     if(currentScreen!=='recepcao')return;
@@ -1037,6 +1037,138 @@ load();
   }catch(e){alert('Consulta SISCOM: '+e.message)}finally{consult.disabled=!active}
  });
  refresh();
+})();
+</script>
+<style>
+#siscomRejeicaoModal{position:fixed;inset:0;background:#0b24468a;z-index:99999;display:none;align-items:center;justify-content:center;padding:12px}
+#siscomRejeicaoModal.open{display:flex}
+#siscomRejeicaoModal .rejBox{background:#fff;border-radius:10px;width:min(850px,98vw);max-height:92vh;overflow:auto;padding:20px;color:#163c64;box-shadow:0 10px 50px #0018}
+#siscomRejeicaoModal .rejGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#siscomRejeicaoModal label{display:block;font-weight:700;margin:8px 0 4px}
+#siscomRejeicaoModal input,#siscomRejeicaoModal textarea{width:100%;padding:9px;border:1px solid #b8cadc;border-radius:5px;font:inherit}
+#siscomRejeicaoModal button{padding:10px 14px;margin:8px 6px 0 0;border:1px solid #9fb8d3;border-radius:5px;background:#edf5fc;cursor:pointer}
+#siscomRejeicaoModal button:disabled{opacity:.55;cursor:not-allowed}
+#siscomRejeicaoModal .rejPrimary{background:#0879f7;color:#fff;border-color:#0879f7}
+#siscomRejeicaoModal .rejWarn{background:#fff4d8;padding:12px;border-radius:6px;margin:12px 0;line-height:1.5}
+#siscomRejeicaoModal #rejStatus{white-space:pre-wrap;padding:10px;border-radius:5px;background:#edf5fc;min-height:36px}
+@media(max-width:650px){#siscomRejeicaoModal .rejGrid{grid-template-columns:1fr}}
+</style>
+<div id="siscomRejeicaoModal" role="dialog" aria-modal="true" aria-labelledby="rejTitle"><div class="rejBox">
+ <button type="button" id="rejFechar" style="float:right">Fechar ×</button><h2 id="rejTitle">Rejeitar SS no SISCOM</h2>
+ <p class="rejWarn"><b>Ação oficial e irreversível.</b> Primeiro valide a SS; depois confira o motivo, equipe, horários e observação. O sistema não repete o envio automaticamente.</p>
+ <div class="rejGrid"><div><label for="rejNumero">Código SS</label><input id="rejNumero" placeholder="08/26-106136-02" autocomplete="off"></div><div><label>Sessão SISCOM</label><div id="rejLogin" style="padding:10px;background:#edf5fc">Verificando...</div></div></div>
+ <button type="button" id="rejConsultar">Pesquisar e validar SS</button><button type="button" id="rejTentativa">Consultar tentativa anterior</button><button type="button" id="rejSincronizar" hidden>Sincronizar confirmação com uMov</button>
+ <div id="rejResumo" style="margin-top:8px;padding:10px;background:#edf5fc">Nenhuma SS validada.</div>
+ <h3>Formulário de rejeição</h3>
+ <label>Motivo</label>
+ <div style="display:flex;gap:20px;flex-wrap:wrap;margin:8px 0"><label><input type="radio" name="rejMotivo" value="NAO_EXECUCAO" checked style="width:auto"> Não Execução</label><label title="Aguardando payload oficial de duplicidade"><input type="radio" name="rejMotivo" value="DUPLICIDADE" disabled style="width:auto"> Duplicidade (aguardando integração)</label></div>
+ <div class="rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="datetime-local"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="datetime-local"></div></div>
+ <label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe">
+ <label for="rejObservacao">Observação obrigatória</label><textarea id="rejObservacao" rows="4" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea>
+ <div class="rejWarn" id="rejPermissao">Verificando autorização de escrita...</div>
+ <button type="button" class="rejPrimary" id="rejConfirmar" disabled>Confirmar e rejeitar oficialmente</button>
+ <div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
+</div></div>
+<script>
+// Rejeição oficial SISCOM: sem gravação local até evento oficial 4 confirmado.
+(()=>{
+ const $=id=>document.getElementById(id),modal=$('siscomRejeicaoModal');
+ let validada=null,permissao=false,ocupado=false,ultimoConfirmado=null;
+ const setStatus=s=>{$('rejStatus').textContent=s};
+ const ssValida=s=>/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(s);
+ const wait=ms=>new Promise(r=>setTimeout(r,ms));
+ function atualizarBotao(){ $('rejConfirmar').disabled=ocupado||!permissao||!validada||validada.numero_ss!==$('rejNumero').value.trim(); }
+ async function api(url,payload){
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(payload),cache:'no-store'});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Falha ao comunicar com o gateway');return j;
+ }
+ async function acompanhar(id){
+  for(let i=0;i<65;i++){
+   await wait(1200);
+   const r=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
+   const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Erro ao acompanhar tarefa');
+   if(j.status==='erro')throw Error(j.error_message||'Operação rejeitada pelo worker');
+   if(j.status==='concluido')return j.result||{};
+  }
+  throw Error('Tempo excedido. Consulte o histórico antes de tentar novamente.');
+ }
+ function selectedSS(){
+  const items=Object.values(selected||{});
+  if(items.length>1){alert('Selecione somente uma SS para rejeitar.');return null;}
+  return items[0]?.ss||window.__detailSS?.ss||'';
+ }
+ window.openSiscomRejeicao=async()=>{
+  const ss=selectedSS();if(ss===null)return;
+  $('rejNumero').value=ss;$('rejResumo').textContent='Nenhuma SS validada.';validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;ocupado=false;permissao=false;atualizarBotao();
+  modal.classList.add('open');setStatus('Aguardando validação oficial.');
+  try{
+   const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'}),me=await r.json();
+   $('rejLogin').textContent=me.authenticated?'Conectado: '+(me.user?.nome||'Usuário SISCOM'):'Não conectado';
+   permissao=!!me.rejeicaoEnabled;
+   $('rejPermissao').textContent=permissao?'Rejeição oficial habilitada para esta conta.':'Envio desabilitado. Login individual e autorização de escrita são obrigatórios; consultas continuam disponíveis.';
+   if(!me.authenticated){modal.classList.remove('open');$('siscomLoginTop')?.click();}
+   atualizarBotao();
+  }catch(e){$('rejLogin').textContent='Falha ao verificar sessão: '+e.message;}
+ };
+ $('rejFechar').onclick=()=>{if(ocupado)return alert('Aguarde a tarefa terminar ou consulte o histórico antes de fechar.');modal.classList.remove('open')};
+ modal.addEventListener('click',e=>{if(e.target===modal&&!ocupado)modal.classList.remove('open')});
+ $('rejNumero').addEventListener('input',()=>{validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;$('rejResumo').textContent='Validação pendente.';atualizarBotao()});
+ $('rejConsultar').onclick=async()=>{
+  const numero=$('rejNumero').value.trim();if(!ssValida(numero))return setStatus('Informe uma SS no formato 08/26-106136-02.');
+  $('rejConsultar').disabled=true;validada=null;atualizarBotao();setStatus('Consultando e validando SS no SISCOM...');
+  try{
+   const job=await api('/api/siscom-gateway/rejeicao-validar',{numero_ss:numero});
+   const r=await acompanhar(job.id);
+   if(r.numero_ss!==numero||!r.validada)throw Error('SISCOM não validou esta SS');
+   validada=r;
+   $('rejResumo').textContent='SS: '+r.numero_ss+' | Unidade: '+(r.unidade||r.executor)+' | Macro: '+r.macro+' — '+(r.descricao_macro||'');
+   setStatus('SS validada. Confira a equipe, datas e observação antes de confirmar.');
+  }catch(e){setStatus('Validação não concluída: '+e.message)}finally{$('rejConsultar').disabled=false;atualizarBotao()}
+ };
+ async function sincronizarConfirmada(){
+  if(!ultimoConfirmado)return setStatus('Nenhuma rejeição confirmada para sincronizar.');
+  $('rejSincronizar').disabled=true;
+  try{
+   const sync=await api('/api/siscom-gateway/sincronizar-rejeicao',{numero_ss:ultimoConfirmado.numero,job_id:ultimoConfirmado.id});
+   setStatus(sync.ok?'Rejeição CONFIRMADA no SISCOM e status atualizado no uMov. Atualize a listagem.':'Rejeição confirmada no SISCOM, mas sincronização local pendente.');
+  }catch(e){setStatus('Rejeição CONFIRMADA no SISCOM; sincronização uMov pendente: '+e.message+'. NÃO reenviar rejeição.');}
+  finally{$('rejSincronizar').disabled=false}
+ }
+ $('rejSincronizar').onclick=sincronizarConfirmada;
+ $('rejTentativa').onclick=async()=>{
+  const numero=$('rejNumero').value.trim();if(!ssValida(numero))return setStatus('Informe a SS para consultar a tentativa.');
+  $('rejTentativa').disabled=true;
+  try{
+   const r=await fetch('/api/siscom-gateway/rejeicao-tentativa/'+encodeURIComponent(numero),{credentials:'same-origin',cache:'no-store'});
+   const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Falha na consulta');
+   setStatus('Tentativa '+j.id+' | '+j.status+' | '+(j.result?.status_rejeicao||j.error_message||'Sem resultado oficial')+'. '+(j.result?.mensagem||''));
+   if(j.status==='concluido'&&j.result?.status_rejeicao==='CONFIRMADA'){ultimoConfirmado={id:j.id,numero};$('rejSincronizar').hidden=false;}
+  }catch(e){setStatus('Tentativa: '+e.message)}finally{$('rejTentativa').disabled=false}
+ };
+ $('rejConfirmar').onclick=async()=>{
+  const numero=$('rejNumero').value.trim();if(!validada||validada.numero_ss!==numero||!permissao)return setStatus('Valide a SS e verifique a permissão.');
+  const equipe=Number($('rejEquipe').value),ini=$('rejInicio').value,fim=$('rejFim').value,observacao=$('rejObservacao').value.trim();
+  if(!Number.isSafeInteger(equipe)||equipe<1)return setStatus('Informe o código da equipe.');
+  if(!ini||!fim||!Number.isFinite(new Date(ini).getTime())||!Number.isFinite(new Date(fim).getTime())||new Date(fim)<new Date(ini))return setStatus('Informe datas válidas e cronológicas.');
+  if(!observacao||observacao.length>1000)return setStatus('Informe a observação (até 1000 caracteres).');
+  if(!confirm('ATENÇÃO: rejeitar oficialmente a SS '+numero+' no SISCOM como NÃO EXECUÇÃO? Esta operação não será reenviada automaticamente.'))return;
+  const digitado=prompt('Para confirmar, digite exatamente: REJEITAR '+numero);
+  if(digitado!=='REJEITAR '+numero)return setStatus('Confirmação cancelada. Nenhuma rejeição enviada.');
+  ocupado=true;atualizarBotao();$('rejConsultar').disabled=true;setStatus('Enviando UMA ÚNICA vez para o SISCOM...');
+  try{
+   const job=await api('/api/siscom-gateway/rejeicao-confirmar',{numero_ss:numero,motivo:'NAO_EXECUCAO',equipe,inicio:new Date(ini).toISOString(),fim:new Date(fim).toISOString(),observacao,confirmacao:digitado});
+   setStatus('Tarefa '+job.id+' registrada. Aguardando confirmação oficial...');
+   const r=await acompanhar(job.id);
+   if(r.status_rejeicao!=='CONFIRMADA'){
+    setStatus('RESULTADO INCERTO: '+(r.mensagem||'Não houve confirmação oficial')+' NÃO reenvie. Tarefa: '+job.id);
+    return;
+   }
+   setStatus('Rejeição confirmada no SISCOM. Sincronizando status com o uMov...');
+   ultimoConfirmado={id:job.id,numero};$('rejSincronizar').hidden=false;
+   await sincronizarConfirmada();
+  }catch(e){setStatus('Não foi possível confirmar o resultado: '+e.message+'. Se o envio foi iniciado, NÃO tente novamente sem verificar a tentativa oficial.');}
+  finally{ocupado=false;$('rejConsultar').disabled=false;atualizarBotao()}
+ };
 })();
 </script>
 </body></html>
