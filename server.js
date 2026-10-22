@@ -376,6 +376,21 @@ app.post('/api/siscom-gateway/sincronizar-rejeicao',async(req,res)=>{
  }catch(e){console.error('Sincronização rejeição:',e.message);res.status(502).json({ok:false,error:'Rejeição SISCOM confirmada; falha ao sincronizar o uMov'});}
 });
 // === FIM REJEIÇÃO OFICIAL ===
+
+// Tramitação SISCOM: apenas leitura, sempre com sessão individual assinada.
+const TRAM_OPS=new Set(['tram_contratos','tram_fases','tram_macros','tram_responsaveis','tram_pesquisar','tram_detalhes','tram_ni','tram_itens','tram_anexos','tram_historico','tram_ultima_acao','tram_perfil']);
+app.post('/api/siscom-gateway/tramitacao',async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ const user=siscomIndividual(req);
+ if(!user)return res.status(401).json({error:'Faça login individual no SISCOM para consultar a tramitação.'});
+ const operation=String(req.body?.operation||'');
+ if(!TRAM_OPS.has(operation))return res.status(400).json({error:'Operação inválida'});
+ const p=req.body?.params||{};
+ if(!p||typeof p!=='object'||Array.isArray(p))return res.status(400).json({error:'Parâmetros inválidos'});
+ try{const job=await siscomCreateJob(operation,signedTask(operation,{params:p},user.sid));res.status(202).json(job)}
+ catch(e){console.error('Tramitação fila:',e.message);res.status(502).json({error:'Falha ao consultar fila SISCOM'});}
+});
+
 app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
