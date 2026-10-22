@@ -1212,7 +1212,7 @@ async function tramJob(operation,params={}){
 // Normaliza formatos paginados sem assumir que o retorno da API é sempre um array.
 function tramPayload(v){
  for(let i=0;i<5&&v&&typeof v==='object'&&!Array.isArray(v);i++){
-  if(Array.isArray(v.content)||Array.isArray(v.items)||Array.isArray(v.rows)||Array.isArray(v.registros))break;
+  if(Array.isArray(v.dados)||Array.isArray(v.content)||Array.isArray(v.items)||Array.isArray(v.rows)||Array.isArray(v.registros))break;
   if(v.data&&typeof v.data==='object')v=v.data;
   else if(v.result&&typeof v.result==='object')v=v.result;
   else if(v.response&&typeof v.response==='object')v=v.response;
@@ -1220,9 +1220,9 @@ function tramPayload(v){
  }
  return v;
 }
-function tramArray(v){v=tramPayload(v);return Array.isArray(v)?v:(v?.content??v?.items??v?.rows??v?.registros??v?.lista??[])}
+function tramArray(v){v=tramPayload(v);return Array.isArray(v)?v:(v?.dados??v?.content??v?.items??v?.rows??v?.registros??v?.lista??[])}
 function tramTotalElements(v){
- v=tramPayload(v);const n=v?.totalElements??v?.totalRegistros??v?.total??v?.totalItems??v?.page?.totalElements;
+ v=tramPayload(v);const n=v?.totalRegistro??v?.totalElements??v?.totalRegistros??v?.total??v?.totalItems??v?.page?.totalElements;
  return n==null?tramArray(v).length:Number(n);
 }
 /* TRAM_DIVISOES_SISCOM_V2_2318 */
@@ -1235,7 +1235,39 @@ function tramOption(v){
  return {id,label};
 }
 async function tramInit(){if(tramReady)return;tramReady=true;try{tramNotice('Consultando contratos autorizados...');const d=tramArray(await tramJob('tram_contratos'));const c=tramEl('tramContrato');c.innerHTML='<option value="">Selecione uma divisão / contrato</option>'+d.map(x=>{const o=tramOption(x);return '<option value="'+tramEsc(o.id)+'">'+tramEsc(o.label)+'</option>'}).join('');tramNotice(d.length+' contrato(s) disponibilizado(s) pelo SISCOM.');}catch(e){tramReady=false;tramNotice(e.message)}}
-async function tramMacros(){const id=tramEl('tramContrato').value;tramEl('tramMacro').innerHTML='<option value="">Todas</option>';if(!id)return;try{const a=tramArray(await tramJob('tram_macros',{contrato:Number(id)}));tramEl('tramMacro').innerHTML='<option value="">Todas</option>'+a.map(x=>'<option value="'+tramEsc(x.codigoMacro??x.cdMacro??x.id)+'">'+tramEsc(x.descricaoMacro??x.descricao??x.nome??'Macro')+'</option>').join('')}catch(e){tramNotice(e.message)}}
+async function tramMacros(){
+ const id=tramEl('tramContrato').value,select=tramEl('tramMacro');
+ select.innerHTML='<option value="">Todas</option>';
+ if(!id)return;
+ try{
+  const macros=tramArray(await tramJob('tram_macros',{contrato:Number(id)}));
+  const seen=new Set();
+  const options=macros.filter(x=>{
+   const codigo=x.cdServico??x.codigoMacro??x.cdMacro??x.id;
+   if(codigo==null||String(codigo)==='0'||seen.has(String(codigo)))return false;
+   seen.add(String(codigo));return true;
+  }).map(x=>{
+   const codigo=x.cdServico??x.codigoMacro??x.cdMacro??x.id;
+   const descricao=String(x.dcServico??x.descricaoMacro??x.descricao??x.nome??'').trim();
+   return '<option value="'+tramEsc(codigo)+'">'+tramEsc(String(codigo)+(descricao?' — '+descricao:''))+'</option>';
+  });
+  select.innerHTML='<option value="">Todas</option>'+options.join('');
+ }catch(e){tramNotice('Erro ao carregar macros: '+e.message)}
+}
+function tramSS(x){
+ const existente=x.ssFormatada||x.numeroSS||x.ss;
+ if(existente)return String(existente);
+ const ref=String(x.refAtendimento??'');
+ const cod=x.cdAtendimento??x.codAtendimento;
+ const seq=x.seqSS??x.ssSequencial;
+ if(!/^\\d{6}$/.test(ref)||cod==null||seq==null)return '';
+ return ref.slice(4,6)+'/'+ref.slice(2,4)+'-'+String(cod).padStart(6,'0')+'-'+String(seq).padStart(2,'0');
+}
+function tramDisplayDate(v){
+ if(!v)return '—';
+ const m=String(v).match(/^(\\d{4})-(\\d{2})-(\\d{2})/);
+ return m?m[3]+'/'+m[2]+'/'+m[1]:String(v);
+}
 function tramDate(v){if(!v)return '';const [y,m,d]=v.split('-');return d+'/'+m+'/'+y}
 // Status: concluídas 4/5; pendentes 0; andamento 1/2/3/7; sem medir usa checkbox SISCOM.
 const tramFases=status=>status==='concluidas'?[4,5]:status==='pendentes'?[0]:status==='andamento'?[1,2,3,7]:[-1];
@@ -1279,21 +1311,21 @@ async function tramSearch(){
   tramRecords=all;tramTotal=total;
   const macro=tramEl('tramMacro').value;
   // Macro: mantida como filtro visual na página até confirmar parâmetro oficial da API.
-  const visiveis=macro?all.filter(x=>String(x.codigoMacro??x.cdMacro??x.macro?.id??'')===macro):all;
+  const visiveis=macro?all.filter(x=>String(x.cdServicoSolicitado??x.codigoMacro??x.cdMacro??x.macro?.id??'')===macro):all;
   tramEl('tramRows').innerHTML=visiveis.map(x=>{
    const i=all.indexOf(x);
-   const cols=[x.ssFormatada??x.numeroSS??x.ss,x.descricaoServicoSolicitado??x.servicoSolicitado??x.descricaoMacro,x.descricaoServicoExecutado??x.servicoExecutado,x.contrato??x.descricaoContrato??contrato,x.valorTotal??x.valor,x.dataExecucao??x.dataExecucaoInicial,x.localidade??x.municipio,x.descricaoFaseMedicao??x.faseMedicao];
+   const cols=[tramSS(x)||'—',x.descServicoSolicitado??x.descricaoServicoSolicitado??x.servicoSolicitado??x.descricaoMacro??'—',x.descServicoExecutado??x.descricaoServicoExecutado??x.servicoExecutado??'—',x.tpProcesso??x.contrato??x.descricaoContrato??contrato,x.valorTotal??x.valor??'—',tramDisplayDate(x.dataExecucao??x.dataExecucaoInicial),x.localidade??x.municipio??'—',x.faseMedicao??x.descricaoFaseMedicao??'—'];
    return '<tr>'+cols.map(c=>'<td title="'+tramEsc(typeof c==='object'?JSON.stringify(c):c)+'">'+tramEsc(typeof c==='object'?JSON.stringify(c):c)+'</td>').join('')+'<td><button type="button" data-tram-detail="'+i+'">Ver</button></td></tr>';
   }).join('');
-  tramEl('tramCount').textContent='Página '+(tramPage+1)+' • '+visiveis.length+' exibido(s) • '+total+' no SISCOM';
+  tramEl('tramCount').textContent='Página '+(tramPage+1)+' de '+Math.max(1,Math.ceil(total/size))+' • '+visiveis.length+' exibido(s) • '+total+' no SISCOM';
   tramNotice(total?'Consulta oficial concluída.': 'O SISCOM não retornou SS para os filtros selecionados.');
-  if(macro)tramNotice('Consulta concluída. Atenção: macro filtrada somente na página atual; total corresponde à consulta SISCOM sem macro.');
+  if(macro)tramNotice('Macro aplicada somente aos registros desta página. O total e a navegação continuam considerando todas as macros; filtro global depende do parâmetro oficial SISCOM.');
   tramEl('tramPrev').disabled=tramPage===0;
   tramEl('tramNext').disabled=(tramPage+1)*size>=total;
   tramEl('tramRows').querySelectorAll('[data-tram-detail]').forEach(b=>b.onclick=()=>tramDetail(Number(b.dataset.tramDetail)));
  }catch(e){tramNotice('Falha na consulta: '+e.message)}
  finally{tramBusy=false;tramEl('tramPesquisar').disabled=false}
 }
-async function tramDetail(i){const x=tramRecords[i];tramEl('tramDetail').hidden=false;tramEl('tramDetail').textContent='Consultando medição...';try{const ss=x.ssFormatada??x.numeroSS??x.ss;if(!ss)throw Error('Resposta sem número de SS');const d=await tramJob('tram_detalhes',{ss});tramEl('tramDetail').textContent=JSON.stringify(d,null,2)}catch(e){tramEl('tramDetail').textContent=e.message}}
-tramEl('tramContrato').addEventListener('change',tramMacros);tramEl('tramPesquisar').addEventListener('click',()=>{tramPage=0;tramSearch()});tramEl('tramPrev').addEventListener('click',()=>{if(tramPage>0){tramPage--;tramSearch()}});tramEl('tramNext').addEventListener('click',()=>{tramPage++;tramSearch()});
+async function tramDetail(i){const x=tramRecords[i];tramEl('tramDetail').hidden=false;tramEl('tramDetail').textContent='Consultando medição...';try{const ss=tramSS(x);if(!ss)throw Error('Resposta sem número de SS');const d=await tramJob('tram_detalhes',{ss});tramEl('tramDetail').textContent=JSON.stringify(d,null,2)}catch(e){tramEl('tramDetail').textContent=e.message}}
+tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramCount').textContent='Selecione os filtros e pesquise.';tramMacros()});tramEl('tramPesquisar').addEventListener('click',()=>{tramPage=0;tramSearch()});tramEl('tramPrev').addEventListener('click',()=>{if(tramPage>0){tramPage--;tramSearch()}});tramEl('tramNext').addEventListener('click',()=>{tramPage++;tramSearch()});
 </script></body></html>
