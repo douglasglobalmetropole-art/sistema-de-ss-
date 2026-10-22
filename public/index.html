@@ -101,8 +101,13 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
       <div><label>Serviço macro *</label><select id="sbCompServico"><option value="">Selecione uma área</option></select></div>
       <div class="full"><label>Descrição da complementar *</label><textarea id="sbCompDescricao" maxlength="1000" rows="3" placeholder="Descreva o serviço complementar..."></textarea></div>
      </div>
-     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="sbCompAtualizar" type="button">↻ Consultar áreas e complementares</button><button class="btn primary" id="sbCompCriar" type="button">+ Confirmar e gerar complementar</button></div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="sbCompAtualizar" type="button">↻ Atualizar áreas e complementares</button><button class="btn primary" id="sbCompCriar" type="button">+ Confirmar e gerar complementar</button></div>
      <p id="sbCompStatus" class="sbStatus" aria-live="polite"></p>
+    </section>
+    <section style="margin-top:12px;padding:12px;border:1px solid #c6d6e6;border-radius:8px;background:#fff">
+     <h4>Histórico oficial de eventos do SISCOM</h4>
+     <p id="sbHistoricoStatus" class="sbStatus" aria-live="polite">Aguardando consulta...</p>
+     <div id="sbHistoricoLista" style="max-height:190px;overflow:auto;font-size:12px"></div>
     </section>
     <p id="sbStatus" aria-live="polite" class="sbStatus"></p>
    </section>
@@ -118,6 +123,7 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
     </div>
     <h4 class="sbInnerTitle">▤ Retorno preenchido pela equipe</h4>
     <div class="sbSummaryDates">
+     <div><b>Equipe responsável</b><div class="sbRead" id="sbResumoEquipe">Não informado</div></div>
      <div><b>Quando (executado) — início</b><div class="sbRead" id="sbResumoInicio">Não informado</div></div>
      <div><b>Quando (executado) — fim</b><div class="sbRead" id="sbResumoFim">Não informado</div></div>
     </div>
@@ -657,6 +663,27 @@ load();
  const $=id=>document.getElementById(id);let equipes=[],micros=[],causas=[],current='',generation=0;
  const status=t=>{$('sbStatus').textContent=t;};
  const unwrap=v=>Array.isArray(v)?v:(v&&typeof v==='object'?['data','items','rows','resultado','equipes','servicos','causas','body','result'].map(k=>v[k]).find(Array.isArray)||[]:[]);
+ let baixaBloqueada=false;
+ const historicoStatus=t=>{$('sbHistoricoStatus').textContent=t;};
+ async function carregarHistorico(g){
+  historicoStatus('Consultando eventos oficiais...');$('sbHistoricoLista').replaceChildren();
+  try{
+   const r=await job('consultar-eventos-ss',{numero_ss:current},g);if(g!==generation)return;
+   const eventos=Array.isArray(r?.eventos)?r.eventos:[];
+   const ordenados=[...eventos].sort((a,b)=>String(a.data_hora||'').localeCompare(String(b.data_hora||'')));
+   const ultimo=ordenados.at(-1);
+   const encerrada=ultimo&&(Number(ultimo.codigo)===9||/^encerrada$/i.test(String(ultimo.descricao||'').trim()));
+   baixaBloqueada=Boolean(encerrada);
+   $('sbPrevia').disabled=baixaBloqueada;
+   historicoStatus(baixaBloqueada?'SS ENCERRADA oficialmente no último evento. Nova baixa bloqueada.':
+    'Eventos encontrados: '+eventos.length+'. Situação atual deve ser conferida antes da baixa.');
+   for(const e of ordenados){const linha=document.createElement('div');linha.style.cssText='padding:6px 0;border-bottom:1px solid #e4ebf2';
+    const titulo=document.createElement('strong');titulo.textContent=(e.codigo??'—')+' — '+(e.descricao||'Evento');
+    const detalhe=document.createElement('div');detalhe.textContent=[e.data_hora,e.usuario,e.unidade].filter(Boolean).join(' · ');
+    linha.append(titulo,detalhe);$('sbHistoricoLista').append(linha);
+   }
+  }catch(e){if(g===generation){historicoStatus('Histórico indisponível: '+e.message+'. Baixa bloqueada até verificação.');baixaBloqueada=true;$('sbPrevia').disabled=true;}}
+ }
  const requiredCause=m=>m?.obgCausaProbl===true||['S','SIM','TRUE','1','Y'].includes(String(m?.obgCausaProbl??'').toUpperCase());
  function options(id,rows,placeholder,value,label){const el=$(id);el.replaceChildren(new Option(placeholder,''));rows.forEach(x=>el.add(new Option(label(x),String(value(x)))));}
  async function job(route,payload,g){
@@ -677,14 +704,17 @@ load();
  }
  function renderEquipes(){
   const q=$('sbEquipeBusca').value.trim(),chosen=$('sbEquipes').value;
-  options('sbEquipes',equipes.filter(e=>String(e.cdEquipe).includes(q)),'Selecione a equipe',e=>e.cdEquipe,e=>String(e.cdEquipe));
+  options('sbEquipes',equipes.filter(e=>String(e.cdEquipe).includes(q)),'Selecione a equipe',e=>e.cdEquipe,e=>String(e.cdEquipe)+(e.nomeEquipe?" — "+e.nomeEquipe:""));
   if(equipes.some(e=>String(e.cdEquipe)===q))$('sbEquipes').value=q;
   else if([...$('sbEquipes').options].some(o=>o.value===chosen))$('sbEquipes').value=chosen;
  }
  async function loadEquipes(executor,g){
   const rows=unwrap(await job('equipes',{cd_executor:executor},g));
   equipes=[...new Map(rows.filter(x=>x.cdEquipe!=null).map(x=>[String(x.cdEquipe),x])).values()].sort((a,b)=>Number(a.cdEquipe)-Number(b.cdEquipe));
-  renderEquipes();if(!equipes.length)throw Error('GET de equipes retornou lista vazia');
+  renderEquipes();
+  const selecionada=equipes.find(e=>String(e.cdEquipe)===$('sbEquipeBusca').value);
+  if(selecionada)sbResumoSet('sbResumoEquipe',selecionada.cdEquipe+(selecionada.nomeEquipe?' — '+selecionada.nomeEquipe:''));
+  if(!equipes.length)throw Error('GET de equipes retornou lista vazia');
  }
  async function loadMicros(macro,g){
   micros=unwrap(await job('micros',{cd_macro:macro},g));
@@ -693,7 +723,9 @@ load();
  }
  async function loadAll(){
   const g=++generation;
-  
+  baixaBloqueada=true;$('sbPrevia').disabled=true;
+  carregarHistorico(g);
+  compConsultar();
   status('Consultando SS oficial...');
   try{
    const data=await job('consultar-ss-baixa',{numero_ss:current},g);if(g!==generation)return;
@@ -725,6 +757,7 @@ load();
  }
  function sbResumoPreencher(x){
   sbResumoSet('sbResumoSS',x.ss);sbResumoSet('sbOfficialSS',x.ss);sbResumoSet('sbResumoEndereco',[x.logradouro,x.numero].filter(Boolean).join(', '));sbResumoSet('sbResumoBairro',x.bairro);sbResumoSet('sbResumoSetor',x.setor);sbResumoSet('sbResumoTipo',x.servico);sbResumoSet('sbResumoMacro',x.macro);sbResumoSet('sbOfficialStatus',x.situacao_campo||x.status_integracao);sbResumoSet('sbOfficialData',x.criado_em);sbResumoSet('sbOfficialMacro',x.macro);
+  sbResumoSet('sbResumoEquipe',x.nome_equipe||x.equipe_nome||x.equipe||x.nomeEquipe||'Não informado');
   sbResumoSet('sbResumoInicio',x.inicio_atividade);
   sbResumoSet('sbResumoFim',x.fim_atividade||x.data_finalizacao);
   sbResumoSet('sbResumoExecucao',x.servico_executado);
@@ -736,6 +769,7 @@ load();
    .then(r=>{if(!r.ok)throw Error('Falha ao consultar retorno');return r.json();})
    .then(retorno=>{
     if(!retorno.ok||$('sbSS').value!==ss||!$('siscomBaixaModal').classList.contains('open'))return;
+    if(retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe)sbResumoSet('sbResumoEquipe',retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe);
     if(retorno.inicio_atividade)sbResumoSet('sbResumoInicio',retorno.inicio_atividade);
     if(retorno.fim_atividade)sbResumoSet('sbResumoFim',retorno.fim_atividade);
     if(retorno.servico_executado)sbResumoSet('sbResumoExecucao',retorno.servico_executado);
@@ -753,7 +787,7 @@ load();
   options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
   $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
   $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbObservacoes').value='';sbAtualizarDuracao();
-  compAreas=[];compServicos=[];compExistentes=[];$('sbCompDescricao').value='';compStatus('Clique em consultar áreas e complementares.');
+  compAreas=[];compServicos=[];compExistentes=[];$('sbCompDescricao').value='';compStatus('Consulta automática iniciada...');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
   status('Consultando SISCOM automaticamente...');
   $('siscomBaixaModal').classList.add('open');loadAll();
  };
@@ -798,7 +832,7 @@ load();
   finally{btn.disabled=false;}
  };
  $('sbRecarregar').onclick=loadAll;$('sbEquipeBusca').oninput=renderEquipes;
- $('sbEquipes').onchange=()=>{$('sbEquipeBusca').value=$('sbEquipes').value;};
+ $('sbEquipes').onchange=()=>{$('sbEquipeBusca').value=$('sbEquipes').value;const e=equipes.find(x=>String(x.cdEquipe)===$('sbEquipes').value);if(e)sbResumoSet('sbResumoEquipe',e.cdEquipe+(e.nomeEquipe?' — '+e.nomeEquipe:''));};
  $('sbMicro').onchange=async()=>{
   const g=++generation,code=$('sbMicro').value;$('sbCausaBox').hidden=true;
   options('sbCausa',[],'Não aplicável',c=>c.id,c=>c.descricao);
@@ -820,6 +854,7 @@ load();
   }catch(e){status('Não foi possível consultar a tentativa anterior: '+e.message+'. NÃO reenviar.');return null;}
  }
  $('sbPrevia').onclick=async()=>{
+  if(baixaBloqueada)return status('Baixa bloqueada: histórico oficial não validado ou SS encerrada.');
   const code=$('sbEquipes').value,micro=$('sbMicro').value,desc=$('sbDescricao').value.trim();
   if(!code||!equipes.some(x=>String(x.cdEquipe)===code))return status('Selecione uma equipe validada pelo GET.');
   if(!micro||!micros.some(x=>String(x.cdServico)===micro))return status('Selecione um serviço executado validado pelo GET.');
