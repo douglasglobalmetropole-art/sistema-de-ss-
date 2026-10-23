@@ -283,6 +283,36 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 <input id="sbSS" type="hidden"/>
 </div>
 </div>
+
+<style>
+#siscomAnexoModal{z-index:650;padding:12px;overflow:auto}
+#siscomAnexoModal .anexoDialog{width:min(700px,96vw);max-height:94vh;overflow:auto;padding:0;border:1px solid #c9dcec;border-radius:10px;box-shadow:0 18px 55px #001e3b55}
+#siscomAnexoModal .anexoHead{background:linear-gradient(90deg,#07518c,#0879cb);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+#siscomAnexoModal .anexoHead h3{margin:0;font-size:17px}
+#siscomAnexoModal .anexoBody{padding:16px 20px;display:grid;gap:12px}
+#siscomAnexoModal .anexoGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#siscomAnexoModal .anexoInfo{padding:10px;background:#edf4fb;border:1px solid #d1e1ee;border-radius:5px;overflow-wrap:anywhere}
+#siscomAnexoModal label{font-weight:700;display:block;margin-bottom:5px}
+#siscomAnexoModal textarea{width:100%;min-height:72px;border:1px solid #bdd1e2;border-radius:5px;padding:9px;color:#143c63;resize:vertical}
+#siscomAnexoModal .anexoActions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding:12px 20px;border-top:1px solid #d4e3ee}
+#siscomAnexoModal .anexoNotice{padding:10px;background:#fff6df;border:1px solid #f2dba6;border-radius:6px;color:#785319;line-height:1.5}
+#siscomAnexoModal .anexoNotice.ok{background:#eaf7ef;border-color:#b5d9c1;color:#236341}
+@media(max-width:600px){#siscomAnexoModal .anexoGrid{grid-template-columns:1fr}}
+</style>
+<div class="modalBg" id="siscomAnexoModal" role="dialog" aria-modal="true" aria-labelledby="anexoModalTitle">
+<div class="modalBox anexoDialog">
+ <div class="anexoHead"><h3 id="anexoModalTitle">▣ Anexar relatório no SISCOM</h3><button type="button" class="btn" id="anexoCloseTop" aria-label="Fechar janela">×</button></div>
+ <div class="anexoBody">
+  <div class="anexoGrid"><div><label>SS selecionada</label><div class="anexoInfo" id="anexoSS">—</div></div><div><label>Tarefa uMov</label><div class="anexoInfo" id="anexoTarefa">—</div></div></div>
+  <div><label>Arquivo original</label><div class="anexoInfo" id="anexoArquivo">—</div></div>
+  <div><button type="button" class="btn" id="anexoVisualizar">▤ Visualizar PDF do relatório</button></div>
+  <div><label for="anexoDescricao">Descrição do arquivo *</label><textarea id="anexoDescricao" maxlength="250" placeholder="Descrição do anexo"></textarea></div>
+  <div><label><input type="checkbox" disabled id="anexoRestrito"> Acesso restrito</label><small>Opção indisponível até confirmar o campo correspondente na API oficial. Nenhuma restrição será presumida.</small></div>
+  <div id="anexoPermissao" class="anexoNotice" role="status" aria-live="polite">Verificando a sessão e a habilitação...</div>
+  <div id="anexoAndamento" role="status" aria-live="polite"></div>
+ </div>
+ <div class="anexoActions"><button type="button" class="btn" id="anexoCancelar">Cancelar</button><button type="button" class="btn primary" id="anexoConfirmar" disabled>✓ Confirmar anexo no SISCOM</button></div>
+</div></div>
 <div class="modalBg" id="teamModal"><div class="modalBox"><h3>Enviar SS para Equipe</h3><div>Digite o <b>número</b> ou o <b>nome</b> da equipe/técnico:</div><input autocomplete="off" id="sendTeamSearch" placeholder="Ex.: 270 ou THIAGO"/><div class="modalList" id="sendTeamList"></div><div id="sendTeamSelected" style="margin-top:8px;font-weight:bold"></div><div class="modalBtns"><button class="btn" id="cancelTeam">Cancelar</button><button class="btn primary" id="confirmTeam">Enviar para equipe</button></div></div></div>
 <script>
 // Notificação global, disponível desde o início da aplicação.
@@ -928,34 +958,70 @@ load();
   }catch(e){compStatus('Resultado não confirmado: '+e.message+'. NÃO reenvie antes de conferir a complementar no SISCOM.');}
   finally{btn.disabled=false;}
  };
+ // A janela abre mesmo sem habilitação: nunca iniciar o POST antes de confirmação explícita.
+ let anexoAtual=null,anexoEmEnvio=false;
+ const anexoSet=(id,texto)=>{$(id).textContent=texto;};
+ const anexoFechar=()=>{if(anexoEmEnvio)return;$('siscomAnexoModal').classList.remove('open');anexoAtual=null;};
+ $('anexoCancelar').onclick=anexoFechar;$('anexoCloseTop').onclick=anexoFechar;
  $('sbAnexarSiscom').onclick=async()=>{
   const x=window.__siscomBaixaSelecionada;
-  if(!x||String(x.ss)!==current||!Number.isSafeInteger(Number(x.tarefa)))return $('sbAnexoStatus').textContent='Selecione uma SS válida.';
-  const btn=$('sbAnexarSiscom'),ss=current;
+  if(!x||String(x.ss)!==current||!Number.isSafeInteger(Number(x.tarefa))){$('sbAnexoStatus').textContent='Selecione uma SS válida.';return;}
+  anexoAtual={ss:current,tarefa:Number(x.tarefa),link:String(x.link||'')};
+  anexoSet('anexoSS',anexoAtual.ss);anexoSet('anexoTarefa',String(anexoAtual.tarefa));
+  anexoSet('anexoArquivo','Relatorio_Original_SS_'+anexoAtual.ss.replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf');
+  $('anexoDescricao').value='Relatório original uMov da SS '+anexoAtual.ss;
+  anexoSet('anexoAndamento','');anexoSet('anexoPermissao','Verificando autorização de envio...');
+  $('anexoPermissao').classList.remove('ok');$('anexoConfirmar').disabled=true;
+  $('siscomAnexoModal').classList.add('open');
   try{
    const pr=await fetch('/api/siscom-gateway/anexo-permissao',{credentials:'same-origin',cache:'no-store'});
-   const perm=await pr.json();if(!perm.authenticated)throw Error('Entre com seu usuário individual SISCOM.');if(!perm.enabled)throw Error('Envio de anexos ainda não habilitado para seu usuário.');
-   if(!x.link)throw Error('Relatório original uMov indisponível para esta tarefa.');
-   if(!confirm('Anexar o PDF original da tarefa '+x.tarefa+' à SS '+ss+' no SISCOM?\n\nO anexo será gravado na SS. Esta ação é independente da baixa.'))return;
-   btn.disabled=true;$('sbAnexoStatus').textContent='Gerando PDF original do uMov com as fotos. Aguarde...';
-   const r=await fetch('/api/siscom-gateway/anexar-relatorio',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({numero_ss:ss,tarefa:Number(x.tarefa),confirmacao:'ANEXAR '+ss})});
+   if(!pr.ok)throw Error('Não foi possível consultar a autorização de anexos.');
+   const perm=await pr.json();
+   if(!perm.authenticated)throw Error('Entre com seu usuário individual SISCOM para anexar.');
+   if(!perm.writeAllowed)throw Error('Seu usuário não está autorizado para operações de escrita no GLOBAL SS.');
+   if(!perm.configured)throw Error('A integração de anexos está desabilitada no servidor. É necessária configuração autorizada no Vercel e no worker.');
+   if(!anexoAtual.link)throw Error('Relatório uMov indisponível para esta tarefa.');
+   if(perm.enabled){anexoSet('anexoPermissao','Sessão e configuração do servidor autorizadas. O worker também verificará as permissões antes de enviar.');$('anexoPermissao').classList.add('ok');$('anexoConfirmar').disabled=false;}
+   else throw Error('Anexação ainda não habilitada. Confirme as permissões antes de ativar o envio.');
+  }catch(e){anexoSet('anexoPermissao',e.message);$('sbAnexoStatus').textContent='Anexo ainda não disponível: '+e.message;}
+ };
+ $('anexoVisualizar').onclick=async()=>{
+  if(!anexoAtual?.link)return anexoSet('anexoAndamento','Relatório uMov indisponível para visualização.');
+  const aba=window.open('','_blank');if(!aba)return anexoSet('anexoAndamento','Permita pop-ups para visualizar o PDF.');
+  aba.document.title='Preparando PDF uMov';aba.document.body.textContent='Gerando PDF do relatório original uMov...';
+  try{
+   const r=await fetch('/api/relatorio-original-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:anexoAtual.link,ss:anexoAtual.ss})});
+   if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Falha ao gerar PDF.');}
+   const blob=await r.blob();if(!blob.type.includes('pdf'))throw Error('Resposta não é PDF.');
+   const url=URL.createObjectURL(blob);aba.location.href=url;setTimeout(()=>URL.revokeObjectURL(url),120000);
+  }catch(e){aba.document.body.textContent='Não foi possível visualizar: '+e.message;}
+ };
+ $('anexoConfirmar').onclick=async()=>{
+  const x=anexoAtual;if(!x||anexoEmEnvio)return;
+  const descricao=$('anexoDescricao').value.trim();
+  if(!descricao||descricao.length>250)return anexoSet('anexoAndamento','Informe uma descrição de até 250 caracteres.');
+  if(!window.confirm('CONFIRMAR ANEXO NO SISCOM?\n\nSS: '+x.ss+'\nTarefa: '+x.tarefa+'\nDescrição: '+descricao+'\n\nNão repita se o resultado ficar incerto.'))return;
+  anexoEmEnvio=true;$('anexoConfirmar').disabled=true;$('anexoCancelar').disabled=true;$('anexoCloseTop').disabled=true;
+  const status=(msg)=>{anexoSet('anexoAndamento',msg);$('sbAnexoStatus').textContent=msg;};
+  try{
+   status('Gerando PDF original com fotos e preparando envio seguro...');
+   const r=await fetch('/api/siscom-gateway/anexar-relatorio',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({numero_ss:x.ss,tarefa:x.tarefa,descricao,confirmacao:'ANEXAR '+x.ss})});
    const j=await r.json();if(!r.ok)throw Error(j.error||'Falha ao preparar anexo');
-   $('sbAnexoStatus').textContent='PDF preparado. Aguardando confirmação oficial SISCOM...';
+   status('PDF preparado. Aguardando confirmação oficial do SISCOM...');
    for(let i=0;i<75;i++){
     await new Promise(resolve=>setTimeout(resolve,1300));
     const qr=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{credentials:'same-origin',cache:'no-store'});
     const q=await qr.json();if(!qr.ok)throw Error(q.error||'Falha ao consultar o envio');
-    if(q.status==='erro')throw Error(q.error_message||'Worker recusou envio');
+    if(q.status==='erro')throw Error(q.error_message||'Worker recusou o envio');
     if(q.status==='concluido'){
-     const d=q.result||{};$('sbAnexoStatus').textContent='SISCOM: '+(d.status_anexo||'INCERTO')+' — '+(d.mensagem||'');
-     if(d.status_anexo==='CONFIRMADO'||d.status_anexo==='JA_EXISTE')alert('SS '+ss+': '+d.mensagem);
-     else alert('Resultado incerto. Confira a aba Anexos do SISCOM antes de reenviar.');
+     const d=q.result||{};status('SISCOM: '+(d.status_anexo||'INCERTO')+' — '+(d.mensagem||''));
+     if(!['CONFIRMADO','JA_EXISTE'].includes(d.status_anexo))status('Resultado incerto. Confira a aba Anexos do SISCOM antes de reenviar.');
      return;
     }
    }
-   throw Error('Tempo excedido. Verifique os anexos no SISCOM antes de reenviar.');
-  }catch(e){$('sbAnexoStatus').textContent='Anexo não confirmado: '+e.message+' Não reenvie sem consultar o SISCOM.';}
-  finally{btn.disabled=false;}
+   throw Error('Tempo excedido. Verifique a aba Anexos do SISCOM antes de reenviar.');
+  }catch(e){status('Anexo não confirmado: '+e.message+' Não reenvie sem consultar o SISCOM.');}
+  finally{anexoEmEnvio=false;$('anexoCancelar').disabled=false;$('anexoCloseTop').disabled=false;/* Reenvio exige reabrir e validar novamente */}
  };
  $('sbRecarregar').onclick=loadAll;$('sbEquipeBusca').oninput=renderEquipes;
  $('sbEquipes').onchange=()=>{$('sbEquipeBusca').value=$('sbEquipes').value;const e=equipes.find(x=>String(x.cdEquipe)===$('sbEquipes').value);if(e)sbResumoSet('sbResumoEquipe',e.cdEquipe+(e.nomeEquipe?' — '+e.nomeEquipe:''));};

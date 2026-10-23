@@ -397,7 +397,7 @@ async function anexoStorageRemove(nome){
 }
 app.get('/api/siscom-gateway/anexo-permissao',(req,res)=>{
  const user=siscomIndividual(req);
- res.set('Cache-Control','no-store').json({authenticated:!!user,enabled:!!(user&&individualWriteAllowed(user)&&process.env.SISCOM_ANEXO_WRITE_ENABLED==='true')});
+ res.set('Cache-Control','no-store').json({authenticated:!!user,writeAllowed:!!(user&&individualWriteAllowed(user)),configured:process.env.SISCOM_ANEXO_WRITE_ENABLED==='true',enabled:!!(user&&individualWriteAllowed(user)&&process.env.SISCOM_ANEXO_WRITE_ENABLED==='true')});
 });
 app.post('/api/siscom-gateway/anexar-relatorio',async(req,res)=>{
  res.set('Cache-Control','no-store');
@@ -405,8 +405,8 @@ app.post('/api/siscom-gateway/anexar-relatorio',async(req,res)=>{
  if(!user)return res.status(401).json({error:'Faça login individual no SISCOM.'});
  if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem não autorizada'});
  if(!individualWriteAllowed(user)||process.env.SISCOM_ANEXO_WRITE_ENABLED!=='true')return res.status(403).json({error:'Envio de anexos desabilitado. Habilite SISCOM_ANEXO_WRITE_ENABLED após validar o fluxo.'});
- const ss=String(req.body?.numero_ss||'').trim(),tarefa=Number(req.body?.tarefa),confirmacao=String(req.body?.confirmacao||'');
- if(!ANEXO_SS_RE.test(ss)||!Number.isSafeInteger(tarefa)||tarefa<1||confirmacao!=='ANEXAR '+ss)return res.status(400).json({error:'SS, tarefa ou confirmação inválida'});
+ const ss=String(req.body?.numero_ss||'').trim(),tarefa=Number(req.body?.tarefa),confirmacao=String(req.body?.confirmacao||''),descricao=String(req.body?.descricao||'').trim();
+ if(!ANEXO_SS_RE.test(ss)||!Number.isSafeInteger(tarefa)||tarefa<1||confirmacao!=='ANEXAR '+ss||!descricao||descricao.length>250)return res.status(400).json({error:'SS, tarefa, descrição ou confirmação inválida'});
  let objeto='';
  try{
   // Nunca confiar no link do cliente: verificar tarefa e SS diretamente no banco uMov.
@@ -420,7 +420,7 @@ app.post('/api/siscom-gateway/anexar-relatorio',async(req,res)=>{
   objeto=crypto.randomUUID()+'.pdf';
   await anexoStorageUpload(objeto,pdf);
   const operacao='anexar_relatorio_ss';
-  const payload=signedTask(operacao,{numero_ss:ss,tarefa,arquivo:objeto,sha256:crypto.createHash('sha256').update(pdf).digest('hex'),bytes:pdf.length,nomeArquivo:'Relatorio_Original_SS_'+ss.replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf'},user.sid);
+  const payload=signedTask(operacao,{numero_ss:ss,tarefa,arquivo:objeto,sha256:crypto.createHash('sha256').update(pdf).digest('hex'),bytes:pdf.length,descricao,nomeArquivo:'Relatorio_Original_SS_'+ss.replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf'},user.sid);
   const job=await siscomCreateJob(operacao,payload);
   return res.status(202).json(job);
  }catch(e){if(objeto)await anexoStorageRemove(objeto);console.error('Anexo SISCOM:',e.message);return res.status(502).json({error:String(e.message||'Falha ao preparar PDF').slice(0,200)})}
