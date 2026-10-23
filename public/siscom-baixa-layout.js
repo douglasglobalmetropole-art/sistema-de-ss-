@@ -93,7 +93,7 @@
   // Reutiliza a operação tram_anexos com origem=dados: nenhuma mudança no CHECK da fila Supabase.
   let anexoConsultaId=0,anexoConsultadoSS='',anexoOcupado=false,anexoUltimaConsulta=0,anexoResultadoIncertoSS='';
   const anexoSS=()=>{const campo=String(id('sbSS')?.value||'').trim();const resumo=String(id('sbResumoSS')?.textContent||'').trim();return /^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(campo)?campo:resumo;};
-  const anexoErro=mensagem=>{anexoBtn.disabled=true;anexoInfo.className='sbV4AnexoInfo error';anexoInfo.textContent='Consulta oficial não confirmada: '+mensagem+' Não reenvie sem verificar os anexos no SISCOM.';};
+  const anexoErro=mensagem=>{anexoBtn.disabled=true;anexoInfo.className='sbV4AnexoInfo error';anexoInfo.textContent='Consulta oficial não confirmada: '+mensagem+' Não reenvie sem verificar os anexos no SISCOM.';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consulta de anexos não confirmada para '+anexoSS()+'.';};
   const anexoCelula=(tr,valor)=>{const td=node('td');td.textContent=String(valor??'—');tr.append(td);};
   const anexoData=valor=>{if(!valor)return '—';const d=new Date(valor);return Number.isNaN(d.getTime())?String(valor).slice(0,24):d.toLocaleString('pt-BR');};
   const anexoTabela=(items,total)=>{
@@ -113,7 +113,7 @@
    const ss=anexoSS(),token=++anexoConsultaId;
    anexoConsultadoSS='';anexoBtn.disabled=true;
    if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){anexoInfo.textContent='Selecione uma SS válida antes de consultar anexos.';anexoList.replaceChildren();return;}
-   anexoInfo.className='sbV4AnexoInfo';anexoInfo.textContent='Consultando anexos da SS '+ss+' no SISCOM...';anexoRefresh.disabled=true;
+   anexoInfo.className='sbV4AnexoInfo';anexoInfo.textContent='Consultando anexos da SS '+ss+' no SISCOM...';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consultando anexos da SS '+ss+'...';anexoRefresh.disabled=true;
    try{
     const start=await fetch(apiPrefix+'/siscom-gateway/tramitacao',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:'tram_anexos',params:{ss,origem:'dados',page:0}}),cache:'no-store'});
     const startData=await start.json().catch(()=>({}));if(!start.ok||!startData.id)throw Error(startData.error||'Falha ao iniciar consulta (HTTP '+start.status+')');
