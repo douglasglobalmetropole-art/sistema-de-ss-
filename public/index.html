@@ -158,7 +158,7 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 <div id="tramAviso" class="tramitacaoAviso">Faça login individual no SISCOM para consultar.</div><div class="tramTableWrap"><table class="tramTable"><thead><tr><th>SS</th><th>Serviço solicitado</th><th>Serviço executado</th><th>Contrato</th><th>Valor</th><th>Data execução</th><th>Localidade</th><th>Fase da medição</th><th>Ações</th></tr></thead><tbody id="tramRows"></tbody></table></div><div class="tramPagination"><button id="tramPrev" type="button">◀ Anterior</button><label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap">Por página <select id="tramSize" aria-label="Registros por página" style="width:auto;min-width:62px;padding:3px 5px;font-size:11px"><option value="25">25</option><option value="50">50</option><option value="75">75</option><option value="100">100</option></select></label><span id="tramCount">0 registros</span><button id="tramNext" type="button">Próxima ▶</button></div><div id="tramDetail" hidden class="tramDetail"></div></section>
 <section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div aria-live="polite" id="buscaDiretaStatus" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
 <section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"/></th><th data-key="ss">SS<span class="sort">↕</span></th><th data-key="equipe_executou" id="receptionTeamHeader">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th data-key="criado_em" id="lastHeader">DATA DE ABERTURA<span class="sort">↕</span></th><th data-key="equipe_executou" hidden="" id="teamHeader">EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th data-key="status_integracao" hidden="" id="integrationHeader">STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"/></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."/></td><td><input data-col="logradouro"/></td><td><input data-col="bairro"/></td><td><input data-col="cidade"/></td><td><input data-col="setor"/></td><td><input data-col="servico"/></td><td><input data-col="tags"/></td><td><input data-col="criado_em" id="lastFilter"/></td><td hidden="" id="teamFilterCell"><input data-col="equipe_executou" id="teamFilter"/></td><td hidden="" id="integrationFilterCell"><input data-col="status_integracao" id="integrationFilter"/></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected="">25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
-<section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣   DETALHES DA SS   <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰   INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly=""></textarea><div class="executionGrid" hidden="" id="executionInfo"><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙   AÇÕES DA SS</h3><div class="actions"><button class="action" hidden="" id="viewSSBtn"><b>▤</b>Visualizar Arquivo</button><button class="action" hidden="" id="generatePdfBtn"><b>▣</b>Gerar PDF do Relatório</button><button class="action" hidden="" id="viewReportBtn"><b>▤</b>Visualizar Relatório</button><button class="action" hidden="" id="groupedBtn"><b>♟</b>Visualizar Agrupado</button><button class="action" hidden="" id="downloadBtn"><b>↓</b>Baixar</button><button class="action" hidden="" id="duplicateBtn"><b>▣+</b>Duplicar</button><button class="action" hidden="" id="rejectBtn"><b>×</b>Rejeitar</button><button class="action" hidden="" id="launchItemsBtn"><b>☷+</b>Lançar Itens</button><button class="action" hidden="" id="returnReceptionBtn"><b>↩</b>Retornar para Recepção</button><button class="action" hidden="" id="tagBtn"><b>◆</b>Adicionar Tag</button><button class="action" hidden="" id="sendTeamBtn"><b>➜</b>Enviar para Equipe</button><button class="action" hidden="" id="removeTeamBtn"><b>↩</b>Remover da Equipe</button></div></div></section><section aria-label="Auditoria oficial SISCOM" id="siscomPanel"><div class="siscomHeader"><h3>◷   SITUAÇÃO E HISTÓRICO OFICIAL SISCOM — <span id="siscomNumber"></span></h3><span class="siscomState" id="siscomState">Não verificado</span></div><div class="siscomRow"><input id="siscomGatewayToken" type="hidden"/><button id="siscomVerify" type="button">Verificar no SISCOM</button></div><div class="siscomMeta"><div class="siscomTile"><small>Status no sistema</small><strong id="siscomLocal">—</strong></div><div class="siscomTile"><small>Status SISCOM</small><strong id="siscomOfficial">Não verificado</strong></div><div class="siscomTile"><small>Responsável / evento final</small><strong id="siscomUser">—</strong></div><div class="siscomTile"><small>Data e hora do evento</small><strong id="siscomDate">—</strong></div></div><div id="siscomFeedback" role="status" style="margin-top:10px"></div><details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">Histórico de eventos do SISCOM (<span id="siscomCount">0</span>)</summary><ol class="siscomTimeline" id="siscomTimeline"></ol></details><div class="siscomHint">Consulta somente leitura. A consulta exige sessão autenticada; o status local não é alterado.</div></section></main>
+<section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣   DETALHES DA SS   <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰   INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly=""></textarea><div class="executionGrid" hidden="" id="executionInfo"><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙   AÇÕES DA SS</h3><div class="actions"><button class="action" hidden="" id="viewSSBtn"><b>▤</b>Visualizar Arquivo</button><button class="action" hidden="" id="generatePdfBtn"><b>▣</b>Gerar PDF do Relatório</button><button class="action" hidden="" id="viewReportBtn"><b>▤</b>Visualizar Relatório</button><button class="action" hidden="" id="viewPhotosBtn"><b>▧</b>Ver fotos</button><button class="action" hidden="" id="syncUmovBaixaBtn"><b>✓</b>Baixar no uMov</button><button class="action" hidden="" id="groupedBtn"><b>♟</b>Visualizar Agrupado</button><button class="action" hidden="" id="downloadBtn"><b>↓</b>Baixar</button><button class="action" hidden="" id="duplicateBtn"><b>▣+</b>Duplicar</button><button class="action" hidden="" id="rejectBtn"><b>×</b>Rejeitar</button><button class="action" hidden="" id="launchItemsBtn"><b>☷+</b>Lançar Itens</button><button class="action" hidden="" id="returnReceptionBtn"><b>↩</b>Retornar para Recepção</button><button class="action" hidden="" id="tagBtn"><b>◆</b>Adicionar Tag</button><button class="action" hidden="" id="sendTeamBtn"><b>➜</b>Enviar para Equipe</button><button class="action" hidden="" id="removeTeamBtn"><b>↩</b>Remover da Equipe</button></div></div></section><section aria-label="Auditoria oficial SISCOM" id="siscomPanel"><div class="siscomHeader"><h3>◷   SITUAÇÃO E HISTÓRICO OFICIAL SISCOM — <span id="siscomNumber"></span></h3><span class="siscomState" id="siscomState">Não verificado</span></div><div class="siscomRow"><input id="siscomGatewayToken" type="hidden"/><button id="siscomVerify" type="button">Verificar no SISCOM</button></div><div class="siscomMeta"><div class="siscomTile"><small>Status no sistema</small><strong id="siscomLocal">—</strong></div><div class="siscomTile"><small>Status SISCOM</small><strong id="siscomOfficial">Não verificado</strong></div><div class="siscomTile"><small>Responsável / evento final</small><strong id="siscomUser">—</strong></div><div class="siscomTile"><small>Data e hora do evento</small><strong id="siscomDate">—</strong></div></div><div id="siscomFeedback" role="status" style="margin-top:10px"></div><details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">Histórico de eventos do SISCOM (<span id="siscomCount">0</span>)</summary><ol class="siscomTimeline" id="siscomTimeline"></ol></details><div class="siscomHint">Consulta somente leitura. A consulta exige sessão autenticada; o status local não é alterado.</div></section></main>
 <div aria-labelledby="tagModalTitle" aria-modal="true" class="modalBg" id="tagModal" role="dialog"><div class="modalBox" style="width:460px;max-width:95vw"><h3 id="tagModalTitle">Gerenciar tag das SS</h3><p id="tagModalCount" style="margin:10px 0;color:#476481"></p><label for="tagModalInput" style="display:block;margin-bottom:6px;font-weight:700">Tag</label><input id="tagModalInput" maxlength="120" placeholder="Digite a tag que deseja adicionar" style="width:100%;padding:11px;border:1px solid #bed1e2;border-radius:6px"/><p style="color:#526b80;font-size:12px">Adicionar substitui a tag atual. Limpar remove a tag das SS selecionadas.</p><div aria-live="polite" id="tagModalError" style="color:#b42318;min-height:18px"></div><div class="modalBtns" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="tagModalCancel" type="button">Cancelar</button><button class="btn" id="tagModalClear" style="border-color:#c94c4c;color:#a92b2b" type="button">Limpar tag</button><button class="btn primary" id="tagModalSave" type="button">Adicionar tag</button></div></div></div>
 <style>
 #siscomBaixaModal .sbShell{width:min(1480px,98vw);max-height:96vh;background:#f4f8fc}
@@ -283,7 +283,7 @@ const isoDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0
 function setDefaultDateRange(){const fim=new Date(),inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);$('dateIni').value=isoDate(inicio);$('dateFim').value=isoDate(fim)}
 setDefaultDateRange();
 const val=(x,k)=>{const valor=String(x[k]??'').trim();return k==='status_integracao'&&valor.toLocaleLowerCase('pt-BR')==='baixada no siscom'?'Baixada':valor};
-const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','sendTeamBtn','tagBtn'],baixar:['viewSSBtn','generatePdfBtn','tagBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn'],encerradas:['viewReportBtn','groupedBtn'],tramitacao:['viewReportBtn','groupedBtn']};
+const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','sendTeamBtn','tagBtn'],baixar:['viewSSBtn','viewPhotosBtn','syncUmovBaixaBtn','generatePdfBtn','tagBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn'],encerradas:['viewReportBtn','viewPhotosBtn','syncUmovBaixaBtn','groupedBtn'],tramitacao:['viewReportBtn','viewPhotosBtn','syncUmovBaixaBtn','groupedBtn']};
 function configureActions(screen){const allowed=actionSets[screen]||[];document.querySelectorAll('.actions .action').forEach(button=>button.hidden=!allowed.includes(button.id))}
 function norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function screenMatch(x){
@@ -888,7 +888,7 @@ load();
  }
  function sbResumoPreencher(x){
   sbResumoSet('sbResumoSS',x.ss);sbResumoSet('sbOfficialSS',x.ss);sbResumoSet('sbResumoEndereco',[x.logradouro,x.numero].filter(Boolean).join(', '));sbResumoSet('sbResumoBairro',x.bairro);sbResumoSet('sbResumoSetor',x.setor);sbResumoSet('sbResumoTipo',x.servico);sbResumoSet('sbResumoMacro',x.macro);sbResumoSet('sbOfficialStatus',x.situacao_campo||x.status_integracao);sbResumoSet('sbOfficialData',x.criado_em);sbResumoSet('sbOfficialMacro',x.macro);
-  sbResumoSet('sbResumoEquipe',x.nome_equipe||x.equipe_nome||x.equipe||x.nomeEquipe||'Não informado');
+  sbResumoSet('sbResumoEquipe',x.equipe_executou||x.tecnico||x.nome_equipe||x.equipe_nome||x.equipe||x.nomeEquipe||'Não informado');
   sbResumoSet('sbResumoInicio',x.inicio_atividade);
   sbResumoSet('sbResumoFim',x.fim_atividade||x.data_finalizacao);
   sbResumoSet('sbResumoExecucao',x.servico_executado);
@@ -900,7 +900,7 @@ load();
    .then(r=>{if(!r.ok)throw Error('Falha ao consultar retorno');return r.json();})
    .then(retorno=>{
     if(!retorno.ok||$('sbSS').value!==ss||!$('siscomBaixaModal').classList.contains('open'))return;
-    if(retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe)sbResumoSet('sbResumoEquipe',retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe);
+    if(!String(x.equipe_executou||x.tecnico||'').trim()&&(retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe))sbResumoSet('sbResumoEquipe',retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe);
     if(retorno.inicio_atividade)sbResumoSet('sbResumoInicio',retorno.inicio_atividade);
     if(retorno.fim_atividade)sbResumoSet('sbResumoFim',retorno.fim_atividade);
     if(retorno.servico_executado)sbResumoSet('sbResumoExecucao',retorno.servico_executado);
@@ -1106,34 +1106,63 @@ load();
 })();
 </script>
 <style>
-#siscomRejeicaoModal{position:fixed;inset:0;background:#0b24468a;z-index:99999;display:none;align-items:center;justify-content:center;padding:12px}
+#siscomRejeicaoModal{position:fixed;inset:0;background:#102e5477;z-index:99999;display:none;align-items:center;justify-content:center;padding:7px}
 #siscomRejeicaoModal.open{display:flex}
-#siscomRejeicaoModal .rejBox{background:#fff;border-radius:10px;width:min(850px,98vw);max-height:92vh;overflow:auto;padding:20px;color:#163c64;box-shadow:0 10px 50px #0018}
-#siscomRejeicaoModal .rejGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-#siscomRejeicaoModal label{display:block;font-weight:700;margin:8px 0 4px}
-#siscomRejeicaoModal input,#siscomRejeicaoModal textarea{width:100%;padding:9px;border:1px solid #b8cadc;border-radius:5px;font:inherit}
-#siscomRejeicaoModal button{padding:10px 14px;margin:8px 6px 0 0;border:1px solid #9fb8d3;border-radius:5px;background:#edf5fc;cursor:pointer}
-#siscomRejeicaoModal button:disabled{opacity:.55;cursor:not-allowed}
-#siscomRejeicaoModal .rejPrimary{background:#0879f7;color:#fff;border-color:#0879f7}
-#siscomRejeicaoModal .rejWarn{background:#fff4d8;padding:12px;border-radius:6px;margin:12px 0;line-height:1.5}
-#siscomRejeicaoModal #rejStatus{white-space:pre-wrap;padding:10px;border-radius:5px;background:#edf5fc;min-height:36px}
-@media(max-width:650px){#siscomRejeicaoModal .rejGrid{grid-template-columns:1fr}}
+#siscomRejeicaoModal .rejBox{background:#f4f9fe;border-radius:10px;width:min(1550px,99vw);max-height:calc(100dvh - 14px);display:flex;flex-direction:column;overflow:hidden;padding:0;color:#143b69;box-shadow:0 12px 50px #0018;font-size:13px}
+#siscomRejeicaoModal .rejHeader{background:linear-gradient(100deg,#064c8b,#087acb);color:white;padding:13px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#siscomRejeicaoModal .rejHeader h2{color:white;margin:0;font-size:19px}
+#siscomRejeicaoModal .rejHeader button{background:transparent;border:0;color:white;font-size:27px;cursor:pointer}
+#siscomRejeicaoModal .rejScroll{padding:12px 14px;overflow:auto;flex:1;min-height:0}
+#siscomRejeicaoModal .rejSection{background:#fff;border:1px solid #d6e6f4;border-radius:7px;margin:0 0 12px;overflow:hidden}
+#siscomRejeicaoModal .rejTitle{background:linear-gradient(100deg,#09518f,#0b76bc);color:white;font-size:14px;font-weight:750;padding:9px 13px}
+#siscomRejeicaoModal .rejContent{padding:12px 14px}
+#siscomRejeicaoModal .rejSummary{display:grid;grid-template-columns:1.05fr 1.7fr 1.2fr .95fr 1.55fr 1.45fr;border:1px solid #d5e5f4;border-radius:7px;overflow:hidden}
+#siscomRejeicaoModal .rejSummary>div{min-width:0;padding:11px;border-right:1px solid #d5e5f4;overflow-wrap:anywhere;background:#f9fcff}
+#siscomRejeicaoModal .rejSummary>div:last-child{border-right:0}
+#siscomRejeicaoModal .rejSummary small{display:block;font-size:11px;color:#074b90;font-weight:800;margin-bottom:5px}
+#siscomRejeicaoModal .rejSummary strong{font-size:12px;color:#1a4276;font-weight:650}
+#siscomRejeicaoModal .rejSummary>div:first-child strong{font-size:17px;color:#0964c9}
+#siscomRejeicaoModal .rejGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px}
+#siscomRejeicaoModal label{display:block;font-weight:750;color:#084a8d;margin:0 0 5px}
+#siscomRejeicaoModal input:not([type=radio]),#siscomRejeicaoModal textarea{box-sizing:border-box;width:100%;min-height:40px;padding:10px;border:1px solid #b9d1eb;border-radius:6px;font:inherit;color:#23466b;background:white}
+#siscomRejeicaoModal textarea{min-height:80px;resize:vertical}
+#siscomRejeicaoModal input[type=radio]{width:18px;height:18px;accent-color:#0879f7;margin:0}
+#siscomRejeicaoModal .rejRadios{display:flex;gap:32px;flex-wrap:wrap}
+#siscomRejeicaoModal .rejRadios label{display:inline-flex;align-items:center;gap:9px;margin:0}
+#siscomRejeicaoModal .rejRadios label:has(input:disabled){opacity:.6}
+#siscomRejeicaoModal button:not(#rejFechar){padding:9px 14px;border:1px solid #abc8e6;border-radius:6px;background:white;color:#09528e;cursor:pointer;font:inherit;font-weight:700;margin:0}
+#siscomRejeicaoModal button:disabled{opacity:.5;cursor:not-allowed}
+#siscomRejeicaoModal button.rejPrimary{background:#0879f7;color:#fff;border-color:#0879f7}
+#siscomRejeicaoModal .rejButtons{display:flex;gap:9px;flex-wrap:wrap;margin:12px 0}
+#siscomRejeicaoModal #rejLogin,#siscomRejeicaoModal #rejResumo,#siscomRejeicaoModal #rejStatus{background:#edf5fc;border-radius:5px;padding:10px;overflow-wrap:anywhere;min-height:18px}
+#siscomRejeicaoModal #rejStatus{white-space:pre-wrap}
+#siscomRejeicaoModal .rejWarn{background:#fff4db;color:#70501d;border-radius:5px;padding:9px 12px;margin:0 0 12px;font-size:12px}
+#siscomRejeicaoModal #rejPermissao{background:#fff4db;color:#70501d;border-radius:5px;padding:10px;margin:0 0 10px}
+#siscomRejeicaoModal .rejFooter{display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:12px 16px;background:#fff;border-top:1px solid #d8e6f4;flex-shrink:0}
+#siscomRejeicaoModal .rejCounter{text-align:right;font-size:11px;color:#58708c}
+#siscomRejeicaoModal [hidden]{display:none!important}
+@media(max-width:1100px){#siscomRejeicaoModal .rejSummary{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){#siscomRejeicaoModal .rejSummary{grid-template-columns:repeat(2,minmax(0,1fr))}#siscomRejeicaoModal .rejGrid{grid-template-columns:1fr}#siscomRejeicaoModal .rejScroll{padding:8px}#siscomRejeicaoModal .rejFooter{flex-wrap:wrap}#siscomRejeicaoModal .rejFooter button{flex:1}}
 </style>
 <div id="siscomRejeicaoModal" role="dialog" aria-modal="true" aria-labelledby="rejTitle"><div class="rejBox">
- <button type="button" id="rejFechar" style="float:right">Fechar ×</button><h2 id="rejTitle">Rejeitar SS no SISCOM</h2>
- <p class="rejWarn"><b>Ação oficial e irreversível.</b> Primeiro valide a SS; depois confira o motivo, equipe, horários e observação. O sistema não repete o envio automaticamente.</p>
- <div class="rejGrid"><div><label for="rejNumero">Código SS</label><input id="rejNumero" placeholder="08/26-106136-02" autocomplete="off"></div><div><label>Sessão SISCOM</label><div id="rejLogin" style="padding:10px;background:#edf5fc">Verificando...</div></div></div>
- <button type="button" id="rejConsultar">Pesquisar e validar SS</button><button type="button" id="rejTentativa">Consultar tentativa anterior</button><button type="button" id="rejSincronizar" hidden>Sincronizar confirmação com uMov</button>
- <div id="rejResumo" style="margin-top:8px;padding:10px;background:#edf5fc">Nenhuma SS validada.</div>
- <h3>Formulário de rejeição</h3>
- <label>Motivo</label>
- <div style="display:flex;gap:20px;flex-wrap:wrap;margin:8px 0"><label><input type="radio" name="rejMotivo" value="NAO_EXECUCAO" checked style="width:auto"> Não Execução</label><label title="Aguardando payload oficial de duplicidade"><input type="radio" name="rejMotivo" value="DUPLICIDADE" disabled style="width:auto"> Duplicidade (aguardando integração)</label></div>
- <div class="rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="datetime-local"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="datetime-local"></div></div>
- <label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe">
- <label for="rejObservacao">Observação obrigatória</label><textarea id="rejObservacao" rows="4" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea>
- <div class="rejWarn" id="rejPermissao">Verificando autorização de escrita...</div>
- <button type="button" class="rejPrimary" id="rejConfirmar" disabled>Confirmar e rejeitar oficialmente</button>
- <div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
+ <div class="rejHeader"><h2 id="rejTitle">⊘ &nbsp;Rejeitar SS no SISCOM</h2><button type="button" id="rejFechar" aria-label="Fechar">×</button></div>
+ <div class="rejScroll">
+  <section class="rejSection"><div class="rejTitle">▾ &nbsp;Dados principais da SS</div><div class="rejContent"><div class="rejSummary">
+   <div><small>SS</small><strong id="rejResumoSS">—</strong></div><div><small>Endereço</small><strong id="rejResumoEndereco">Não informado</strong></div><div><small>Bairro</small><strong id="rejResumoBairro">Não informado</strong></div><div><small>Setor</small><strong id="rejResumoSetor">Não informado</strong></div><div><small>Macro (oficial)</small><strong id="rejResumoMacro">Não informado</strong></div><div><small>Tipo de solicitação</small><strong id="rejResumoTipo">Não informado</strong></div>
+  </div></div></section>
+  <p class="rejWarn"><b>Ação oficial e irreversível.</b> Primeiro valide a SS; depois confira motivo, equipe, horários e observação. O sistema não repete o envio automaticamente.</p>
+  <section class="rejSection"><div class="rejTitle">▣ &nbsp;Formulário de rejeição</div><div class="rejContent">
+   <div class="rejGrid"><div><label for="rejNumero">Código SS</label><input id="rejNumero" placeholder="08/26-106136-02" autocomplete="off"></div><div><label for="rejLogin">Sessão SISCOM</label><div id="rejLogin">Verificando...</div></div></div>
+   <div class="rejButtons"><button type="button" id="rejConsultar">⌕ &nbsp;Pesquisar e validar SS</button><button type="button" id="rejTentativa">◴ &nbsp;Consultar tentativa anterior</button><button type="button" id="rejSincronizar" hidden>Sincronizar confirmação com uMov</button></div>
+   <div id="rejResumo">Nenhuma SS validada.</div>
+  </div></section>
+  <section class="rejSection"><div class="rejTitle">▣ &nbsp;Motivo da rejeição</div><div class="rejContent rejRadios"><label><input type="radio" name="rejMotivo" value="NAO_EXECUCAO" checked> Não Execução</label><label title="Aguardando payload oficial de duplicidade"><input type="radio" name="rejMotivo" value="DUPLICIDADE" disabled> Duplicidade (aguardando integração)</label></div></section>
+  <section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="datetime-local"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="datetime-local"></div></div></section>
+  <section class="rejSection"><div class="rejTitle">♙ &nbsp;Equipe</div><div class="rejContent"><label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe"></div></section>
+  <section class="rejSection"><div class="rejTitle">▣ &nbsp;Observação obrigatória</div><div class="rejContent"><label for="rejObservacao">Motivo detalhado</label><textarea id="rejObservacao" rows="3" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea><div id="rejObsContador" class="rejCounter">0/1000</div></div></section>
+  <div id="rejPermissao">Verificando autorização de escrita...</div><div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
+ </div>
+ <div class="rejFooter"><button type="button" id="rejFecharRodape">Fechar</button><button type="button" class="rejPrimary" id="rejConfirmar" disabled>➤ &nbsp;Confirmar e rejeitar oficialmente</button></div>
 </div></div>
 <script>
 // Rejeição oficial SISCOM: sem gravação local até evento oficial 4 confirmado.
@@ -1165,7 +1194,16 @@ load();
  }
  window.openSiscomRejeicao=async()=>{
   const ss=selectedSS();if(ss===null)return;
-  $('rejNumero').value=ss;$('rejResumo').textContent='Nenhuma SS validada.';validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;ocupado=false;permissao=false;atualizarBotao();
+  $('rejNumero').value=ss;
+  const escolhido=Object.values(selected||{})[0]||window.__detailSS||{};
+  const mostrar=(id,v)=>$(id).textContent=(v!==undefined&&v!==null&&String(v).trim())?String(v):'Não informado';
+  mostrar('rejResumoSS',ss||'—');
+  mostrar('rejResumoEndereco',escolhido.endereco||escolhido.logradouro||escolhido.rua);
+  mostrar('rejResumoBairro',escolhido.bairro||escolhido.nome_bairro);
+  mostrar('rejResumoSetor',escolhido.setor||escolhido.nome_setor);
+  mostrar('rejResumoMacro',escolhido.macro_oficial||escolhido.macro||escolhido.descricao_macro);
+  mostrar('rejResumoTipo',escolhido.tipo_solicitacao||escolhido.servico_solicitado||escolhido.servico||escolhido.tipo_servico);
+  $('rejResumo').textContent='Nenhuma SS validada.';validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;ocupado=false;permissao=false;atualizarBotao();
   modal.classList.add('open');setStatus('Aguardando validação oficial.');
   try{
    const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'}),me=await r.json();
@@ -1176,9 +1214,11 @@ load();
    atualizarBotao();
   }catch(e){$('rejLogin').textContent='Falha ao verificar sessão: '+e.message;}
  };
+ $('rejFecharRodape').onclick=()=> $('rejFechar').click();
+ $('rejObservacao').addEventListener('input',()=>{$('rejObsContador').textContent=String($('rejObservacao').value.length)+'/1000'});
  $('rejFechar').onclick=()=>{if(ocupado)return alert('Aguarde a tarefa terminar ou consulte o histórico antes de fechar.');modal.classList.remove('open')};
  modal.addEventListener('click',e=>{if(e.target===modal&&!ocupado)modal.classList.remove('open')});
- $('rejNumero').addEventListener('input',()=>{validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;$('rejResumo').textContent='Validação pendente.';atualizarBotao()});
+ $('rejNumero').addEventListener('input',()=>{$('rejResumoSS').textContent=$('rejNumero').value.trim()||'—';['rejResumoEndereco','rejResumoBairro','rejResumoSetor','rejResumoMacro','rejResumoTipo'].forEach(id=>$(id).textContent='Aguardando validação');validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;$('rejResumo').textContent='Validação pendente.';atualizarBotao()});
  $('rejConsultar').onclick=async()=>{
   const numero=$('rejNumero').value.trim();if(!ssValida(numero))return setStatus('Informe uma SS no formato 08/26-106136-02.');
   $('rejConsultar').disabled=true;validada=null;atualizarBotao();setStatus('Consultando e validando SS no SISCOM...');
@@ -1187,6 +1227,7 @@ load();
    const r=await acompanhar(job.id);
    if(r.numero_ss!==numero||!r.validada)throw Error('SISCOM não validou esta SS');
    validada=r;
+   if(r.macro!==undefined&&r.macro!==null)$('rejResumoMacro').textContent=String(r.macro)+(r.descricao_macro?' — '+r.descricao_macro:'');
    $('rejResumo').textContent='SS: '+r.numero_ss+' | Unidade: '+(r.unidade||r.executor)+' | Macro: '+r.macro+' — '+(r.descricao_macro||'');
    setStatus('SS validada. Confira a equipe, datas e observação antes de confirmar.');
   }catch(e){setStatus('Validação não concluída: '+e.message)}finally{$('rejConsultar').disabled=false;atualizarBotao()}
@@ -1477,5 +1518,94 @@ tramEl('tramDetailOverlay').addEventListener('click',e=>{if(e.target===tramEl('t
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!tramEl('tramDetailOverlay').hidden)tramDetailClose()});
 tramEl('tramSize').addEventListener('change',()=>{tramPage=0;tramSearch()});
 tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramCount').textContent='Selecione os filtros e pesquise.';tramMacros()});tramEl('tramPesquisar').addEventListener('click',()=>{tramPage=0;tramSearch()});tramEl('tramLimpar').addEventListener('click',()=>{tramEl('tramStatus').value='todas';tramEl('tramMacro').value='';tramEl('tramInicio').value='';tramEl('tramFim').value='';tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramDetail').hidden=true;tramEl('tramCount').textContent='Filtros limpos. Clique em Pesquisar.';tramNotice('Filtros limpos. Datas em branco consultam todo o histórico do contrato.');});tramEl('tramPrev').addEventListener('click',()=>{if(tramPage>0){tramPage--;tramSearch()}});tramEl('tramNext').addEventListener('click',()=>{tramPage++;tramSearch()});
+</script>
+<style>
+#umovFotosModal{position:fixed;inset:0;z-index:110000;display:none;align-items:center;justify-content:center;padding:12px;background:rgba(8,24,44,.78)}
+#umovFotosModal.open{display:flex}
+#umovFotosModal .ufDialog{width:min(1180px,98vw);max-height:calc(100dvh - 24px);display:flex;flex-direction:column;overflow:hidden;background:#f6faff;border-radius:10px;box-shadow:0 18px 50px #00182b77}
+#umovFotosModal .ufHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 17px;background:linear-gradient(110deg,#084d8d,#0782d7);color:#fff}
+#umovFotosModal .ufHeader h3{font-size:17px;margin:0;color:#fff}
+#umovFotosModal .ufHeader button{border:0;background:transparent;color:#fff;font-size:25px;cursor:pointer}
+#umovFotosModal .ufBody{overflow:auto;padding:16px;min-height:130px}
+#umovFotosModal .ufGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+#umovFotosModal figure{margin:0;padding:8px;background:#fff;border:1px solid #cbddeb;border-radius:7px;min-width:0}
+#umovFotosModal figure img{display:block;width:100%;height:220px;object-fit:contain;background:#f0f4f8;cursor:zoom-in}
+#umovFotosModal figcaption{margin-top:6px;text-align:center;font-size:12px;color:#315d83}
+#umovFotosModal .ufFooter{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;border-top:1px solid #d5e4ef;background:#fff}
+#umovFotosModal .ufFooter button{padding:8px 15px;border:1px solid #a7c9e7;border-radius:5px;background:#fff;color:#14538d;cursor:pointer}
+#umovFotosModal .ufZoom{position:absolute;inset:0;background:#00101bef;display:none;align-items:center;justify-content:center;padding:38px 14px;z-index:1}
+#umovFotosModal .ufZoom.open{display:flex}
+#umovFotosModal .ufZoom img{max-width:95%;max-height:95%;object-fit:contain}
+#umovFotosModal .ufZoom button{position:absolute;top:10px;right:18px;border:0;background:transparent;color:#fff;font-size:32px;cursor:pointer}
+</style>
+<div id="umovFotosModal" role="dialog" aria-modal="true" aria-labelledby="umovFotosTitle">
+ <div class="ufDialog">
+  <div class="ufHeader"><h3 id="umovFotosTitle">▧ Fotos da SS</h3><button type="button" id="umovFotosClose" aria-label="Fechar fotos">×</button></div>
+  <div class="ufBody"><div id="umovFotosStatus" role="status">Aguardando consulta...</div><div id="umovFotosGrid" class="ufGrid"></div></div>
+  <div class="ufFooter"><span id="umovFotosCount">Fotos do relatório original uMov</span><button type="button" id="umovFotosCloseFooter">Fechar</button></div>
+ </div>
+ <div id="umovFotosZoom" class="ufZoom"><button type="button" id="umovFotosZoomClose" aria-label="Fechar ampliação">×</button><img id="umovFotosZoomImg" alt="Foto ampliada da SS"></div>
+</div>
+<script>
+// Fotos do relatório original uMov e sincronização após encerramento oficial.
+(function(){
+ const el=id=>document.getElementById(id);
+ const fotoModal=el('umovFotosModal'),status=el('umovFotosStatus'),grid=el('umovFotosGrid');
+ const current=()=>{const s=Object.values(window.selected||{});return s.length===1?s[0]:(window.__detailSS||null)};
+ function fecharFotos(){fotoModal.classList.remove('open');el('umovFotosZoom').classList.remove('open')}
+ el('umovFotosClose').onclick=el('umovFotosCloseFooter').onclick=fecharFotos;
+ el('umovFotosZoomClose').onclick=()=>el('umovFotosZoom').classList.remove('open');
+ fotoModal.addEventListener('click',e=>{if(e.target===fotoModal)fecharFotos()});
+ fotoModal.addEventListener('keydown',e=>{if(e.key==='Escape'){if(el('umovFotosZoom').classList.contains('open'))el('umovFotosZoom').classList.remove('open');else fecharFotos()}});
+ el('viewPhotosBtn').onclick=async()=>{
+  const x=current();if(!x?.tarefa)return window.notify?.('Selecione uma SS para ver as fotos.','error');
+  fotoModal.classList.add('open');el('umovFotosTitle').textContent='▧ Fotos da SS '+(x.ss||'');
+  grid.replaceChildren();status.textContent='Carregando somente as fotos do relatório original uMov...';el('umovFotosCount').textContent='Aguarde';
+  el('viewPhotosBtn').disabled=true;
+  try{
+   const r=await fetch('/api/relatorio-fotos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefa:x.tarefa,ss:x.ss}),cache:'no-store'});
+   const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Não foi possível carregar as fotos.');
+   const fotos=Array.isArray(j.fotos)?j.fotos:[];
+   status.textContent=fotos.length?'':'Nenhuma foto foi encontrada no relatório original desta SS.';
+   el('umovFotosCount').textContent=fotos.length+' foto(s) encontrada(s)'+(j.truncado?' • Exibindo as primeiras 40':'');
+   fotos.forEach((src,i)=>{
+    const figure=document.createElement('figure'),img=document.createElement('img'),caption=document.createElement('figcaption');
+    img.src=src;img.alt='Foto '+(i+1)+' da SS '+(x.ss||'');img.loading='lazy';
+    img.onclick=()=>{el('umovFotosZoomImg').src=src;el('umovFotosZoom').classList.add('open')};
+    caption.textContent='Foto '+(i+1);figure.append(img,caption);grid.append(figure);
+   });
+  }catch(e){status.textContent='Erro ao consultar fotos: '+e.message;el('umovFotosCount').textContent='Consulta não concluída'}
+  finally{el('viewPhotosBtn').disabled=false}
+ };
+ // Operação não envia baixa ao SISCOM; somente sincroniza o uMov após verificação oficial do evento 9.
+ el('syncUmovBaixaBtn').onclick=async()=>{
+  const x=current();if(!x?.tarefa||!x?.ss)return window.notify?.('Selecione uma SS válida.','error');
+  if(String(x.status_integracao||'').toLowerCase().startsWith('baixad'))return window.notify?.('Esta SS já está marcada como Baixada no uMov.','success');
+  if(!confirm('Confirmar a verificação da baixa oficial no SISCOM da SS '+x.ss+'? Somente após confirmação será atualizado o uMov.'))return;
+  const btn=el('syncUmovBaixaBtn');btn.disabled=true;
+  try{
+   // Worker consulta histórico oficial e retorna o job concluído; nunca executar baixa no SISCOM.
+   const start=await fetch('/api/siscom-gateway/consultar-eventos-ss',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:x.ss}),cache:'no-store'});
+   const first=await start.json();if(!start.ok||!first.id)throw Error(first.error||'Falha ao iniciar verificação oficial');
+   let job=null;
+   for(let i=0;i<45;i++){
+    await new Promise(resolve=>setTimeout(resolve,1200));
+    const response=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(first.id),{cache:'no-store'});
+    const state=await response.json();if(!response.ok)throw Error(state.error||'Falha ao verificar consulta');
+    if(state.status==='concluido'){job=state;break}
+    if(state.status==='erro')throw Error(state.error_message||'Worker não conseguiu consultar o SISCOM');
+   }
+   if(!job)throw Error('Tempo excedido aguardando o worker SISCOM.');
+   if(job.result?.status_verificado!=='encerrada'||!job.result?.encerramento_oficial)throw Error('O SISCOM não confirmou evento oficial de encerramento (código 9). O uMov não foi alterado.');
+   if(!confirm('Encerramento confirmado no SISCOM para '+x.ss+'. Marcar esta SS como Baixada no uMov?'))return;
+   const r=await fetch('/api/siscom-gateway/sincronizar-baixa-existente',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:x.ss,tarefa:x.tarefa,job_id:first.id}),cache:'no-store'});
+   const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'O uMov não confirmou a atualização');
+   // API uMov aceita solicitação; a confirmação final depende da sincronização de volta ao banco.
+   window.notify?.('Atualização enviada ao uMov. Aguarde a sincronização e recarregue para confirmar o status.','success');
+   if(typeof load==='function')await load();
+  }catch(e){window.notify?.('Não foi possível marcar Baixada: '+e.message,'error');alert('Sincronização não confirmada: '+e.message)}
+  finally{btn.disabled=false}
+ };
+})();
 </script>
 </body></html>

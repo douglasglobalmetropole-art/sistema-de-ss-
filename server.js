@@ -803,6 +803,71 @@ app.post('/api/siscom-gateway/sincronizar-baixa',async(req,res)=>{
   return res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'Baixa confirmada, mas atualização do uMov incompleta':null});
  }catch(e){console.error('Sincronização de baixa:',e.message);return res.status(502).json({ok:false,error:'Baixa confirmada, mas falha ao sincronizar status local'});}
 });
+// SS já encerrada oficialmente: permite apenas sincronizar o status de integração no uMov.
+// Verifica o job de consulta de eventos SISCOM no servidor, sem confiar no navegador.
+app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ const usuario=siscomIndividual(req);
+ if(!usuario||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'Faça login individual no SISCOM para verificar a baixa.'});
+ const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim(),tarefa=Number(req.body?.tarefa);
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId)||!Number.isSafeInteger(tarefa)||tarefa<=0)return res.status(400).json({ok:false,error:'Identificação da SS, tarefa ou consulta inválida.'});
+ try{
+  const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload,created_at&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
+  const j=jobs[0];
+  const eventos=j?.result?.eventos;
+  const fechado=j?.result?.status_verificado==='encerrada'&&j?.result?.encerramento_oficial&&Array.isArray(eventos)&&eventos.some(e=>Number(e.codigo)===9||/^encerrada$/i.test(String(e.descricao||'').trim()));
+  const criado=Date.parse(j?.created_at||'');
+  if(!j||j.operation!=='consultar_eventos_ss'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==usuario.sid||!Number.isFinite(criado)||Date.now()-criado>10*60*1000||!fechado)
+   return res.status(409).json({ok:false,error:'Encerramento não confirmado pelo histórico oficial do SISCOM nesta sessão. O uMov não foi alterado.'});
+  const q=await pool.query({text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
+  const row=q.rows[0];
+  if(!row||String(row.numero_ss||'').trim()!==numero)return res.status(409).json({ok:false,error:'A tarefa uMov não corresponde à SS validada.'});
+  if(/^baixad/i.test(String(row.e_situacao||'').trim()))return res.json({ok:true,ja_baixada:true,mensagem:'SS já está marcada como Baixada no uMov.'});
+  if(row.e_situacao&&String(row.e_situacao).trim()&&!/^baixad/i.test(String(row.e_situacao).trim()))return res.status(409).json({ok:false,error:'A SS possui outro status de integração ('+String(row.e_situacao).slice(0,50)+'). Revisão manual necessária.'});
+  const valor=xmlEscape(identificadorSituacao('Baixada'));
+  await postUmovXml('schedule',tarefa,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);
+  for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
+  return res.json({ok:true,solicitado:true,numero_ss:numero,tarefa,mensagem:'Alteração enviada à API uMov. Confirme após sincronização.'});
+ }catch(e){console.error('Sincronização de baixa existente:',e.message);return res.status(502).json({ok:false,error:'Falha ao atualizar o uMov. '+String(e.message||'').slice(0,160)})}
+});
+
+// Fotos: renderiza apenas imagens do relatório ORIGINAL do uMov, sem copiar o relatório inteiro.
+app.post('/api/relatorio-fotos',async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ if(!siscomIndividual(req)||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'Faça login individual no SISCOM para visualizar fotos.'});
+ const tarefa=Number(req.body?.tarefa),ss=String(req.body?.ss||'').trim();
+ if(!Number.isSafeInteger(tarefa)||tarefa<=0||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'Informe uma SS válida.'});
+ let browser;
+ try{
+  const q=await pool.query({text:`SELECT d.tss_id,d.tsk_accesstoken,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
+  const row=q.rows[0];
+  if(!row||String(row.numero_ss||'').trim()!==ss||Number(row.tss_id)!==50||!row.tsk_accesstoken||!/^[a-zA-Z0-9._~-]+$/.test(String(row.tsk_accesstoken)))return res.status(404).json({ok:false,error:'Relatório original uMov não encontrado para esta SS.'});
+  const link='https://consglobalmetropole.umov.me/CenterWeb/report/schedule/'+tarefa+'/'+row.tsk_accesstoken;
+  const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
+  browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
+  const page=await browser.newPage();
+  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
+  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
+  await page.evaluate(async()=>{await Promise.race([Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,13000))])});
+  const images=await page.$$('img');const fotos=[];let candidatas=0;
+  for(const img of images){
+   const info=await img.evaluate(el=>{const r=el.getBoundingClientRect();const style=getComputedStyle(el);return {nw:el.naturalWidth,nh:el.naturalHeight,w:r.width,h:r.height,visible:style.display!=='none'&&style.visibility!=='hidden',src:el.currentSrc||el.src||''}}).catch(()=>null);
+   if(!info||!info.visible||info.nw<180||info.nh<120||info.w<90||info.h<70)continue;
+   // Ignora logos e ícones; inclui fotografias do corpo do relatório.
+   if(/logo|icone|icon|brasao|banner|assinatura/i.test(info.src))continue;
+   candidatas++;
+   if(fotos.length>=40)continue;
+   try{
+    const buffer=await img.screenshot({type:'jpeg',quality:74,timeout:6000});
+    if(buffer.length>2500&&buffer.length<1800000)fotos.push('data:image/jpeg;base64,'+Buffer.from(buffer).toString('base64'));
+   }catch(e){console.warn('Foto uMov ignorada:',String(e.message).slice(0,100))}
+  }
+  return res.json({ok:true,fotos,truncado:candidatas>40,total:candidatas});
+ }catch(e){console.error('Fotos uMov:',e.message);return res.status(502).json({ok:false,error:'Não foi possível extrair as fotos do relatório original. Verifique se o relatório está acessível.'})}
+ finally{if(browser)await browser.close().catch(()=>{})}
+});
+
+
 app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
