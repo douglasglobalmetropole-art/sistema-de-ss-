@@ -730,7 +730,7 @@ load();
 (function(){
   document.querySelector('label[for="dInfoExecucao"]')?.remove();
   window.fill=function(x){
-    if(!x)return;
+    if(!x)return;window.__detailSS=x;
     document.body.classList.add('panel-open');$('lower').classList.add('open');
     $('titleSS').textContent=$('dss').textContent=val(x,'ss');
     [['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));
@@ -1584,16 +1584,28 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  if(!btn||!panel||!refresh)return;
  let activeRequest=0,checkedSS='';
  const text=(id,v)=>{byId(id).textContent=String(v??'—')};
- function selectedSS(){return window.__detailSS||null}
+ function selectedSS(){
+   // Fonte principal: as SS marcadas na tabela de Recepcao.
+   const marcadas=Object.values(selected||{}).filter(x=>x&&x.ss);
+   if(marcadas.length>1)throw Error('Marque somente uma SS para verificar no SISCOM.');
+   if(marcadas.length===1)return marcadas[0];
+   // Permite selecionar a SS clicando em sua linha, sem marcar o checkbox.
+   const atual=window.__detailSS;
+   if(atual&&atual.ss&&Array.isArray(view)&&view.some(x=>String(x.ss)===String(atual.ss)))return atual;
+   return null;
+ }
  function updateSelection(){
-   const ss=selectedSS()?.ss||'';
+   let escolha=null;
+   try{escolha=selectedSS()}catch(e){}
+   const ss=escolha?.ss||'';
    if(typeof currentScreen!=='undefined'&&currentScreen!=='recepcao'){panel.hidden=true;return}
    if(ss!==checkedSS){panel.hidden=true;checkedSS=ss;activeRequest++}
  }
  async function verify(){
    if(typeof currentScreen!=='undefined'&&currentScreen!=='recepcao')return;
-   const x=selectedSS();
-   if(!x?.ss)return alert('Selecione uma SS na Recepção antes de verificar.');
+   let x;
+   try{x=selectedSS()}catch(e){alert(e.message);return}
+   if(!x?.ss)return alert('Marque uma SS na tabela ou clique na linha desejada antes de verificar.');
    const ss=String(x.ss).trim();
    if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return alert('Número da SS inválido: '+ss);
    const generation=++activeRequest;checkedSS=ss;panel.hidden=false;
@@ -1636,6 +1648,22 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  const originalFill=window.fill;
  if(typeof originalFill==='function')window.fill=function(x){const result=originalFill.apply(this,arguments);updateSelection();return result};
  document.querySelectorAll('.tab[data-screen]').forEach(tab=>tab.addEventListener('click',()=>{activeRequest++;panel.hidden=true;checkedSS=''}));
+})();
+</script>
+<script id="globalSSReceptionRowSelectionFix">
+(function(){
+ const rows=document.getElementById('rows');
+ if(!rows)return;
+ rows.addEventListener('click',function(e){
+   if(typeof currentScreen==='undefined'||currentScreen!=='recepcao')return;
+   if(e.target.closest('input,button,a,label'))return;
+   const tr=e.target.closest('tr');if(!tr)return;
+   const index=Array.prototype.indexOf.call(rows.children,tr);
+   if(index<0||!Array.isArray(view)||!view[index])return;
+   const ss=view[index];
+   window.__detailSS=ss;
+   if(typeof fill==='function')fill(ss);
+ });
 })();
 </script>
 </body></html>
