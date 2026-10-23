@@ -59,7 +59,7 @@
   const anexoHead=node('div','sbV3SectionHead','Anexos da SS');
   const anexoDesc=node('p','sbV3Note','O relatório original do uMov pode ser anexado ao SISCOM. Consulte a aba Anexos oficial antes de repetir um envio.');
   const anexoToolbar=node('div','sbV3Toolbar sbV4AnexoToolbar');
-  const anexoBtn=node('button','btn primary','▣  Anexar relatório no SISCOM');anexoBtn.type='button';anexoBtn.disabled=true;
+  const anexoBtn=node('button','btn primary','▣  Anexar relatório no SISCOM');anexoBtn.type='button';anexoBtn.disabled=false;
   anexoBtn.addEventListener('click',()=>{if(!anexoBtn.disabled){const btn=id('sbAnexarSiscom');if(btn)btn.click();}});
   const anexoRefresh=node('button','btn','↻  Atualizar anexos do SISCOM');anexoRefresh.type='button';
   anexoToolbar.append(anexoBtn,anexoRefresh);
@@ -82,18 +82,31 @@
    for(const btn of nav.querySelectorAll('[data-sbtab]')){const active=btn.dataset.sbtab===key;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',String(active));}
    for(const panel of [columns,complement,material,anexos]){panel.hidden=panel.dataset.sbpanel!==key;}
    if(key==='materiais')loadMaterials().catch(e=>matMessage(e.message,true));
-   if(key==='anexos')consultarAnexos().catch(e=>anexoErro(e.message));
+   if(key==='anexos')modoManualAnexos();
   };
   nav.addEventListener('click',e=>{const btn=e.target.closest('[data-sbtab]');if(btn)activate(btn.dataset.sbtab);});
   const openOriginal=window.openSiscomBaixa;
-  if(typeof openOriginal==='function')window.openSiscomBaixa=function(...args){anexoConsultaId++;anexoConsultadoSS='';anexoBtn.disabled=true;anexoList.replaceChildren();anexoInfo.textContent='Abra esta aba para consultar os anexos desta SS.';activate('baixa');return openOriginal.apply(this,args);};
+  if(typeof openOriginal==='function')window.openSiscomBaixa=function(...args){anexoConsultaId++;anexoConsultadoSS='';anexoBtn.disabled=false;anexoList.replaceChildren();anexoInfo.textContent='Abra a aba Anexos para anexar; consulta automática suspensa.';activate('baixa');return openOriginal.apply(this,args);};
   activate('baixa');
   const apiPrefix=location.pathname.startsWith('/lote1')?'/lote1/api':'/api';
   // Leitura oficial dos anexos da SS (Dados), usando o worker VPN e a sessão SISCOM individual.
   // Reutiliza a operação tram_anexos com origem=dados: nenhuma mudança no CHECK da fila Supabase.
   let anexoConsultaId=0,anexoConsultadoSS='',anexoOcupado=false,anexoUltimaConsulta=0,anexoResultadoIncertoSS='';
   const anexoSS=()=>{const campo=String(id('sbSS')?.value||'').trim();const resumo=String(id('sbResumoSS')?.textContent||'').trim();return /^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(campo)?campo:resumo;};
-  const anexoErro=mensagem=>{anexoBtn.disabled=true;anexoInfo.className='sbV4AnexoInfo error';anexoInfo.textContent='Consulta oficial não confirmada: '+mensagem+' Não reenvie sem verificar os anexos no SISCOM.';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consulta de anexos não confirmada para '+anexoSS()+'.';};
+  // GLOBAL_SS_ANEXOS_MANUAL_V9 — consulta automatica suspensa temporariamente.
+  function modoManualAnexos(){
+   anexoConsultaId++;
+   const ss=anexoSS();
+   anexoRefresh.disabled=true;
+   anexoRefresh.title='Consulta oficial temporariamente indisponível';
+   anexoRefresh.textContent='↻  Atualizar anexos (temporariamente indisponível)';
+   anexoBtn.disabled=!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss);
+   anexoList.replaceChildren();
+   anexoInfo.className='sbV4AnexoInfo warning';
+   anexoInfo.textContent=anexoBtn.disabled?'Aguardando identificação da SS para anexar.':'Consulta automática de anexos suspensa. Antes de enviar, confira manualmente a aba Anexos da SS '+ss+' no SISCOM para evitar duplicidade. O envio continua exigindo confirmação.';
+   if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consulta automática suspensa; envio manual disponível para SS válida.';
+  }
+  const anexoErro=mensagem=>{anexoBtn.disabled=false;anexoInfo.className='sbV4AnexoInfo error';anexoInfo.textContent='Consulta oficial não confirmada: '+mensagem+' Não reenvie sem verificar os anexos no SISCOM.';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consulta de anexos não confirmada para '+anexoSS()+'.';};
   const anexoCelula=(tr,valor)=>{const td=node('td');td.textContent=String(valor??'—');tr.append(td);};
   const anexoData=valor=>{if(!valor)return '—';const d=new Date(valor);return Number.isNaN(d.getTime())?String(valor).slice(0,24):d.toLocaleString('pt-BR');};
   const anexoTabela=(items,total)=>{
@@ -111,7 +124,7 @@
   };
   async function consultarAnexos(){
    const ss=anexoSS(),token=++anexoConsultaId;
-   anexoConsultadoSS='';anexoBtn.disabled=true;
+   anexoConsultadoSS='';anexoBtn.disabled=false;
    if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){anexoInfo.textContent='Selecione uma SS válida antes de consultar anexos.';anexoList.replaceChildren();return;}
    anexoInfo.className='sbV4AnexoInfo';anexoInfo.textContent='Consultando anexos da SS '+ss+' no SISCOM...';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consultando anexos da SS '+ss+'...';anexoRefresh.disabled=true;
    try{
@@ -141,13 +154,13 @@
    }catch(e){if(token===anexoConsultaId&&ss===anexoSS())anexoErro(e.message);}
    finally{if(token===anexoConsultaId)anexoRefresh.disabled=false;}
   }
-  anexoRefresh.addEventListener('click',()=>consultarAnexos());
+  anexoRefresh.addEventListener('click',()=>modoManualAnexos());
   // Ao concluir um envio, consultar novamente o SISCOM para confirmar a presença real do arquivo.
   const andamento=id('anexoAndamento');
   if(andamento){let ultimo='';new MutationObserver(()=>{
    const texto=andamento.textContent.trim();if(texto===ultimo)return;ultimo=texto;
    if(/SISCOM:\s*(?:CONFIRMADO|JA_EXISTE|INCERTO)/i.test(texto)||/Resultado incerto|Anexo não confirmado|NÃO reenvie|Não reenvie/i.test(texto)){
-    const ss=anexoSS();if(ss&&ss===anexoConsultadoSS){if(/INCERTO|Resultado incerto|Anexo não confirmado|NÃO reenvie|Não reenvie/i.test(texto))anexoResultadoIncertoSS=ss;anexoBtn.disabled=true;consultarAnexos();}
+    const ss=anexoSS();if(ss&&ss===anexoConsultadoSS){if(/INCERTO|Resultado incerto|Anexo não confirmado|NÃO reenvie|Não reenvie/i.test(texto))anexoResultadoIncertoSS=ss;anexoBtn.disabled=false;consultarAnexos();}
    }
   }).observe(andamento,{childList:true,characterData:true,subtree:true});}
   let materials=[],loaded=false,currentSS='',draft=[],loading=false;
