@@ -381,6 +381,51 @@ for(const [route,operation] of [['complementar-areas','listar_areas_complementar
   }catch(e){console.error('Gateway complementar:',e.message);res.status(escrita?409:502).json({error:escrita?'Criação não iniciada ou já registrada. Consulte o SISCOM e o histórico de jobs antes de reenviar.':'Falha ao consultar SISCOM'});}
  });
 }
+// ANEXOS SS: transporte privado do PDF via Storage; a fila guarda apenas o caminho.
+const ANEXO_BUCKET='siscom-anexos-pendentes';
+const ANEXO_SS_RE=/^(\d{2}\/\d{2})-(\d{6})-(\d{2})$/;
+const ANEXO_MAX_BYTES=8*1024*1024;
+function anexoStorageBase(){return String(process.env.SUPABASE_URL||'').replace(/\/$/,'')+'/storage/v1/object/'+ANEXO_BUCKET+'/'}
+async function anexoStorageUpload(nome,bytes){
+ const key=process.env.SUPABASE_SECRET_KEY;
+ const r=await fetch(anexoStorageBase()+encodeURIComponent(nome),{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/pdf','x-upsert':'false'},body:bytes,signal:AbortSignal.timeout(20000)});
+ if(!r.ok)throw Error('Storage temporário indisponível (HTTP '+r.status+'). Verifique o bucket privado '+ANEXO_BUCKET);
+}
+async function anexoStorageRemove(nome){
+ const key=process.env.SUPABASE_SECRET_KEY;
+ await fetch(anexoStorageBase()+encodeURIComponent(nome),{method:'DELETE',headers:{apikey:key,Authorization:'Bearer '+key},signal:AbortSignal.timeout(10000)}).catch(()=>{});
+}
+app.get('/api/siscom-gateway/anexo-permissao',(req,res)=>{
+ const user=siscomIndividual(req);
+ res.set('Cache-Control','no-store').json({authenticated:!!user,enabled:!!(user&&individualWriteAllowed(user)&&process.env.SISCOM_ANEXO_WRITE_ENABLED==='true')});
+});
+app.post('/api/siscom-gateway/anexar-relatorio',async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ const user=siscomIndividual(req);
+ if(!user)return res.status(401).json({error:'Faça login individual no SISCOM.'});
+ if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem não autorizada'});
+ if(!individualWriteAllowed(user)||process.env.SISCOM_ANEXO_WRITE_ENABLED!=='true')return res.status(403).json({error:'Envio de anexos desabilitado. Habilite SISCOM_ANEXO_WRITE_ENABLED após validar o fluxo.'});
+ const ss=String(req.body?.numero_ss||'').trim(),tarefa=Number(req.body?.tarefa),confirmacao=String(req.body?.confirmacao||'');
+ if(!ANEXO_SS_RE.test(ss)||!Number.isSafeInteger(tarefa)||tarefa<1||confirmacao!=='ANEXAR '+ss)return res.status(400).json({error:'SS, tarefa ou confirmação inválida'});
+ let objeto='';
+ try{
+  // Nunca confiar no link do cliente: verificar tarefa e SS diretamente no banco uMov.
+  const q=await pool.query({text:`SELECT d.tss_id,d.tsk_accesstoken,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:8000});
+  const x=q.rows[0];
+  if(!x||String(x.numero_ss||'').trim()!==ss||Number(x.tss_id)!==50||!x.tsk_accesstoken||!/^[a-zA-Z0-9._~-]+$/.test(String(x.tsk_accesstoken)))return res.status(404).json({error:'Não foi possível comprovar o vínculo da tarefa uMov com a SS.'});
+  const host=hostRelatorioUmov();if(!host)throw Error('Host do relatório uMov não configurado');
+  const link='https://'+host+'/CenterWeb/report/schedule/'+tarefa+'/'+x.tsk_accesstoken;
+  const pdf=await gerarPdfOriginalUmov(link);
+  if(pdf.length<100||pdf.length>ANEXO_MAX_BYTES||pdf.subarray(0,5).toString()!=='%PDF-')return res.status(413).json({error:'PDF inválido ou maior que 8 MB; envio não iniciado.'});
+  objeto=crypto.randomUUID()+'.pdf';
+  await anexoStorageUpload(objeto,pdf);
+  const operacao='anexar_relatorio_ss';
+  const payload=signedTask(operacao,{numero_ss:ss,tarefa,arquivo:objeto,sha256:crypto.createHash('sha256').update(pdf).digest('hex'),bytes:pdf.length,nomeArquivo:'Relatorio_Original_SS_'+ss.replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf'},user.sid);
+  const job=await siscomCreateJob(operacao,payload);
+  return res.status(202).json(job);
+ }catch(e){if(objeto)await anexoStorageRemove(objeto);console.error('Anexo SISCOM:',e.message);return res.status(502).json({error:String(e.message||'Falha ao preparar PDF').slice(0,200)})}
+});
+
 // === REJEIÇÃO OFICIAL SISCOM (somente sessão individual, nunca senha administrativa) ===
 const SS_REJEICAO_FORMATO=/^\d{2}\/\d{2}-\d{6}-\d{2}$/;
 const REJEICAO_OPS=['validar_ss_rejeicao','rejeitar_ss_real'];
@@ -771,6 +816,21 @@ function relatorioPdf(dados){
  trailer+=`trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;
  buffers.push(Buffer.from(trailer));return Buffer.concat(buffers);
 }
+async function gerarPdfOriginalUmov(link){
+ let browser;
+ try{
+  const url=new URL(link);
+  if(url.protocol!=='https:'||url.hostname!==hostRelatorioUmov()||!/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash)throw Error('URL do relatório uMov inválida');
+  const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
+  browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
+  const page=await browser.newPage();await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
+  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
+  await page.evaluate(async()=>{await Promise.race([Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,14000))])});
+  await page.emulateMediaType('print');
+  return Buffer.from(await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}}));
+ }finally{if(browser)await browser.close().catch(()=>{})}
+}
+
 // Converte a própria página original do relatório uMov, inclusive imagens, em PDF.
 // Não usa os campos resumidos da SS: renderiza o HTML original no Chromium.
 app.post('/api/relatorio-original-pdf',async(req,res)=>{
