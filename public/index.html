@@ -22,6 +22,24 @@
 body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:disabled{opacity:.48;cursor:not-allowed;background:#edf2f6;color:#6f8499}.pagination{display:flex;align-items:center;gap:4px;margin-left:12px}.pageBtn{height:29px;min-width:30px;padding:0 8px;border:1px solid #c8d9e8;border-radius:4px;background:#fff;color:#0b5d9f;font-weight:700;cursor:pointer}.pageBtn.active{background:#0879f7;color:#fff;border-color:#0879f7}.pageBtn:disabled{opacity:.45;cursor:not-allowed}@media(max-width:1000px){.pager{flex-wrap:wrap;gap:8px}.listControls{margin-left:0}.pagination{margin-left:0}}
 #buscaDiretaBox,#buscaDiretaPainel{display:none!important}
 #refreshBtn{margin-left:auto;white-space:nowrap;background:#f0f7ff;color:#07599a;border-color:#8bb9e2;font-weight:bold}#refreshBtn:disabled{opacity:.6;cursor:wait}#refreshBtn .spin{display:inline-block}#refreshBtn:disabled .spin{animation:refreshSpin .9s linear infinite}@keyframes refreshSpin{to{transform:rotate(360deg)}}
+
+/* Tramitação: filtros oficiais substituem os filtros globais na barra superior. */
+body.tram-mode .toolbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:7px}
+body.tram-mode .toolbar > #macroMulti,
+body.tram-mode .toolbar > #cityMulti,
+body.tram-mode .toolbar > .f:not(.multi),
+body.tram-mode .toolbar > #filterBtn,
+body.tram-mode .toolbar > #clearBtn,
+body.tram-mode .toolbar > #refreshBtn,
+body.tram-mode .toolbar > #buscaDiretaBox{display:none!important}
+body:not(.tram-mode) .toolbar > .tramFilters{display:none!important}
+body.tram-mode .toolbar > .tramFilters{display:flex!important;order:10;flex:1 1 100%;width:100%;margin:5px 0 0;padding:8px 0 0;border-top:1px solid #e2eaf2;gap:8px;align-items:flex-end}
+body.tram-mode .toolbar > .tramFilters label{min-width:140px;flex:1 1 150px;font-size:11px}
+body.tram-mode .toolbar > .tramFilters select,
+body.tram-mode .toolbar > .tramFilters input{width:100%;height:32px;font-size:12px}
+body.tram-mode .toolbar > .tramFilters #tramPesquisar,
+body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
+@media(max-width:900px){body.tram-mode .toolbar > .tramFilters label{flex:1 1 190px}}
 </style><style>
 .ssQuickSearch{display:flex;align-items:center;flex:0 0 230px;min-width:190px;height:35px;border:1px solid #cbd9e6;border-radius:5px;background:#fff;overflow:hidden;align-self:end}.ssQuickSearch input{width:100%;min-width:0;height:33px;border:0;outline:0;padding:0 8px;color:#123e6e;font-size:12px}.ssQuickSearch button{flex:0 0 29px;height:33px;border:0;background:#fff;color:#07599a;font-size:20px;cursor:pointer}.ssQuickSearch button:hover{background:#edf5fc}#buscaDiretaPainel{position:relative;z-index:2}#buscaDiretaPainel table{min-width:760px}@media(max-width:1100px){.toolbar{flex-wrap:wrap}.ssQuickSearch{flex-basis:220px}}
 </style><style>
@@ -98,7 +116,28 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
 #siscomLoginFeedback{min-height:18px;margin-top:13px;color:#9b2c23;font-size:12px}
 .siscomLoginDialog .modalBtns{margin-top:16px;display:flex;justify-content:flex-end;gap:8px}
 </style>
-<style>body.tram-mode .box,body.tram-mode .lower,body.tram-mode .hint{display:none!important}body.tram-mode #tramitacaoIntro{display:block!important}.tramFilters{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0;align-items:end}.tramFilters label{display:grid;gap:5px;font-weight:700;min-width:155px;flex:1}.tramFilters select,.tramFilters input{height:34px;border:1px solid #cbd9e6;border-radius:4px;padding:5px;color:#123e6e;background:white}.tramTableWrap{overflow:auto;max-height:55vh;border:1px solid #d6e3ed}.tramTable{min-width:1250px;font-size:11px}.tramTable td{padding:6px 8px}.tramTable th{font-size:10px;padding:8px}.tramPagination{display:flex;align-items:center;gap:12px;margin-top:10px}.tramPagination button,.tramDetail button{padding:7px;border:1px solid #cbd9e6;background:white;color:#07599a;border-radius:4px;cursor:pointer}.tramDetail{margin-top:12px;border:1px solid #cbd9e6;padding:12px;white-space:pre-wrap;max-height:380px;overflow:auto}</style></head><body><main>
+<style>body.tram-mode .box,body.tram-mode .lower,body.tram-mode .hint{display:none!important}body.tram-mode #tramitacaoIntro{display:block!important}.tramFilters{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0;align-items:end}.tramFilters label{display:grid;gap:5px;font-weight:700;min-width:155px;flex:1}.tramFilters select,.tramFilters input{height:34px;border:1px solid #cbd9e6;border-radius:4px;padding:5px;color:#123e6e;background:white}.tramTableWrap{overflow:auto;max-height:55vh;border:1px solid #d6e3ed}.tramTable{min-width:1250px;font-size:11px}.tramTable td{padding:6px 8px}.tramTable th{font-size:10px;padding:8px}.tramPagination{display:flex;align-items:center;gap:12px;margin-top:10px}.tramPagination button,.tramDetail button{padding:7px;border:1px solid #cbd9e6;background:white;color:#07599a;border-radius:4px;cursor:pointer}.tramDetail{margin-top:12px;border:1px solid #cbd9e6;padding:12px;white-space:pre-wrap;max-height:380px;overflow:auto}</style>
+<style id="tramDetalheStyle">
+/* Painel de medição em consulta, inspirado no SISCOM. */
+.tramDetailOverlay[hidden]{display:none!important}
+.tramDetailOverlay{position:fixed;inset:0;z-index:10030;background:rgba(8,31,54,.58);display:flex;align-items:center;justify-content:center;padding:12px}
+.tramDetailWindow{width:min(1540px,98vw);max-height:96vh;overflow:auto;background:#f5f9fc;border-radius:9px;box-shadow:0 14px 55px #09243a66;font-size:12px;color:#12334d}
+.tramDetailTop{background:linear-gradient(90deg,#095a9b,#0879c9);color:white;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 19px;position:sticky;top:0;z-index:2}
+.tramDetailTop h2{font-size:18px;margin:0;color:#fff}.tramDetailBody{padding:15px}.tramDetailSummary{display:flex;align-items:center;gap:15px;flex-wrap:wrap;background:white;border:1px solid #d4e3ef;border-radius:7px;padding:13px 17px;margin-bottom:13px}
+.tramDetailSummary strong{font-size:24px;color:#094f88}.tramDetailActions{display:flex;gap:7px;margin-left:auto;flex-wrap:wrap}
+.tramDetailActions button,.tramDetailTop button,.tramDetailPager button{border:1px solid #bfd2e1;border-radius:5px;padding:7px 12px;background:#fff;color:#0b4c7e;font-weight:600;cursor:pointer}
+.tramDetailActions button:disabled,.tramDetailPager button:disabled{opacity:.5;cursor:default}.tramDetailTop button{color:white;background:transparent;border-color:#a6c9e1}
+.tramPhase{display:inline-flex;align-items:center;padding:7px 11px;background:#e7f5eb;color:#16623b;border-radius:5px;font-weight:700}
+.tramPhase[data-phase="5"]{background:#ffeded;color:#a32828}.tramPhase[data-phase="0"],.tramPhase[data-phase="1"],.tramPhase[data-phase="2"],.tramPhase[data-phase="3"],.tramPhase[data-phase="7"]{background:#e9f3ff;color:#15548d}
+.tramDetailSection{border:1px solid #cbdce9;border-radius:6px;background:#fff;margin:0 0 13px;overflow:hidden}.tramDetailSection h3{margin:0;background:#d5eaf7;color:#083d6a;font-size:13px;padding:11px 13px}.tramDetailSectionBody{padding:13px}
+.tramDetailGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 24px}.tramDetailField{min-width:0;overflow-wrap:anywhere}.tramDetailField b{color:#48677e;margin-right:6px}.tramDetailField.tramWide{grid-column:1/-1}
+.tramDetailTableWrap{overflow-x:auto}.tramDetailTable{width:100%;border-collapse:collapse;min-width:650px;font-size:11px}.tramDetailTable th{background:#08639f;color:#fff;text-align:left;padding:9px;border:1px solid #2876aa}.tramDetailTable td{padding:9px;border:1px solid #d7e2ec;vertical-align:top;white-space:normal;overflow-wrap:anywhere}.tramDetailTable tbody tr:nth-child(even){background:#f5f9fc}
+.tramDetailPager{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px;font-size:11px}.tramDetailPager button{padding:5px 9px}
+.tramDetailMsg{color:#516f85;padding:9px 12px}.tramDetailMsg.error{color:#9c3030}.tramDetailLoading{padding:14px;color:#37678d}
+@media(max-width:800px){.tramDetailGrid{grid-template-columns:1fr}.tramDetailSummary strong{font-size:18px}.tramDetailActions{margin-left:0}.tramDetailWindow{max-height:100vh}}
+@media print{body>*:not(#tramDetailOverlay){display:none!important}.tramDetailOverlay{position:static;padding:0;background:white}.tramDetailWindow{width:100%;max-height:none;overflow:visible;box-shadow:none}.tramDetailTop{position:static;print-color-adjust:exact}.tramDetailActions,.tramDetailTop button,.tramDetailPager button{display:none!important}.tramDetailSection{break-inside:avoid}}
+</style>
+</head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
  <div class="siscomTopButtons"><span id="siscomIdentityLabel">SISCOM: não conectado</span><button type="button" class="btn primary" id="siscomLoginTop">🔐 Login SISCOM</button><button type="button" class="btn" id="siscomConsultaTop" disabled>Consultar SS</button><button type="button" class="btn" id="siscomLogoutTop" hidden>Sair</button></div>
@@ -113,9 +152,9 @@ body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:di
  </div>
 </div>
 
-<section class="toolbar"><button class="tab active" data-screen="recepcao">▣   RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled="" title="Notas em preparação ainda não estão disponíveis">⚙   PREPARAÇÃO</button><button class="tab" data-screen="campo">▤   NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁   NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas" title="Mantém as situações integradas (incluindo rejeitadas e duplicadas), até a definição de classificação específica">✓   NOTAS BAIXADAS</button><button class="tab" data-screen="tramitacao">⇄   TRAMITAÇÃO</button><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button class="multiBtn" id="macroBtn" type="button">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button class="multiBtn" id="cityBtn" type="button">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"/></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"/></div><button class="btn primary" id="filterBtn">▽   Filtrar</button><button class="btn" id="clearBtn">×   Limpar</button><button class="btn" id="refreshBtn" title="Consultar novamente o banco sem perder os filtros" type="button"><span class="spin">⟳</span>   Atualizar</button><div class="ssQuickSearch" id="buscaDiretaBox" title="Busca de SS em todas as datas, diretamente no PostgreSQL"><input aria-label="Pesquisar SS no banco" autocomplete="off" id="buscaDiretaSS" placeholder="Pesquisar SS..." type="search"/><button aria-label="Pesquisar SS" id="buscaDiretaBtn" title="Pesquisar SS" type="button">⌕</button><button aria-label="Limpar pesquisa de SS" id="buscaDiretaLimpar" title="Limpar pesquisa" type="button">×</button></div></section>
+<section class="toolbar"><button class="tab active" data-screen="recepcao">▣   RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled="" title="Notas em preparação ainda não estão disponíveis">⚙   PREPARAÇÃO</button><button class="tab" data-screen="campo">▤   NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁   NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas" title="Mantém as situações integradas (incluindo rejeitadas e duplicadas), até a definição de classificação específica">✓   NOTAS BAIXADAS</button><button class="tab" data-screen="tramitacao">⇄   TRAMITAÇÃO</button><div class="tramFilters"><label>Divisão / Contrato<select id="tramContrato"><option value="">Carregando...</option></select></label><label>Status<select id="tramStatus"><option value="todas">Todas</option><option value="concluidas">Concluídas</option><option value="sem">Sem medir</option><option value="pendentes">Pendentes</option><option value="andamento">Em andamento</option></select></label><label>Macro<select id="tramMacro"><option value="">Todas</option></select></label><label>Execução inicial<input type="date" id="tramInicio"></label><label>Execução final<input type="date" id="tramFim"></label><button type="button" class="btn primary" id="tramPesquisar">Pesquisar</button><button type="button" class="btn" id="tramLimpar">× Limpar</button></div><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button class="multiBtn" id="macroBtn" type="button">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button class="multiBtn" id="cityBtn" type="button">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"/></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"/></div><button class="btn primary" id="filterBtn">▽   Filtrar</button><button class="btn" id="clearBtn">×   Limpar</button><button class="btn" id="refreshBtn" title="Consultar novamente o banco sem perder os filtros" type="button"><span class="spin">⟳</span>   Atualizar</button><div class="ssQuickSearch" id="buscaDiretaBox" title="Busca de SS em todas as datas, diretamente no PostgreSQL"><input aria-label="Pesquisar SS no banco" autocomplete="off" id="buscaDiretaSS" placeholder="Pesquisar SS..." type="search"/><button aria-label="Pesquisar SS" id="buscaDiretaBtn" title="Pesquisar SS" type="button">⌕</button><button aria-label="Limpar pesquisa de SS" id="buscaDiretaLimpar" title="Limpar pesquisa" type="button">×</button></div></section>
 <section id="tramitacaoIntro" class="tramitacaoIntro" hidden><div class="tramitacaoHeading"><div><span class="tramitacaoEyebrow">SISCOM • MEDIÇÃO</span><h2>Tramitação</h2><p>Consulta oficial conforme os contratos autorizados para seu login individual.</p></div><div class="tramitacaoIndicador">SOMENTE CONSULTA</div></div>
-<div class="tramFilters"><label>Divisão / Contrato<select id="tramContrato"><option value="">Carregando...</option></select></label><label>Status<select id="tramStatus"><option value="todas">Todas</option><option value="concluidas">Concluídas</option><option value="sem">Sem medir</option><option value="pendentes">Pendentes</option><option value="andamento">Em andamento</option></select></label><label>Macro<select id="tramMacro"><option value="">Todas</option></select></label><label>Execução inicial<input type="date" id="tramInicio"></label><label>Execução final<input type="date" id="tramFim"></label><button type="button" class="btn primary" id="tramPesquisar">Pesquisar</button></div>
+
 <div id="tramAviso" class="tramitacaoAviso">Faça login individual no SISCOM para consultar.</div><div class="tramTableWrap"><table class="tramTable"><thead><tr><th>SS</th><th>Serviço solicitado</th><th>Serviço executado</th><th>Contrato</th><th>Valor</th><th>Data execução</th><th>Localidade</th><th>Fase da medição</th><th>Ações</th></tr></thead><tbody id="tramRows"></tbody></table></div><div class="tramPagination"><button id="tramPrev" type="button">◀ Anterior</button><label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap">Por página <select id="tramSize" aria-label="Registros por página" style="width:auto;min-width:62px;padding:3px 5px;font-size:11px"><option value="25">25</option><option value="50">50</option><option value="75">75</option><option value="100">100</option></select></label><span id="tramCount">0 registros</span><button id="tramNext" type="button">Próxima ▶</button></div><div id="tramDetail" hidden class="tramDetail"></div></section>
 <section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div aria-live="polite" id="buscaDiretaStatus" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
 <section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"/></th><th data-key="ss">SS<span class="sort">↕</span></th><th data-key="equipe_executou" id="receptionTeamHeader">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th data-key="criado_em" id="lastHeader">DATA DE ABERTURA<span class="sort">↕</span></th><th data-key="equipe_executou" hidden="" id="teamHeader">EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th data-key="status_integracao" hidden="" id="integrationHeader">STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"/></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."/></td><td><input data-col="logradouro"/></td><td><input data-col="bairro"/></td><td><input data-col="cidade"/></td><td><input data-col="setor"/></td><td><input data-col="servico"/></td><td><input data-col="tags"/></td><td><input data-col="criado_em" id="lastFilter"/></td><td hidden="" id="teamFilterCell"><input data-col="equipe_executou" id="teamFilter"/></td><td hidden="" id="integrationFilterCell"><input data-col="status_integracao" id="integrationFilter"/></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected="">25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
@@ -1198,6 +1237,19 @@ load();
  };
 })();
 </script>
+<div id="tramDetailOverlay" class="tramDetailOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="tramDetailTitle">
+ <div class="tramDetailWindow">
+  <div class="tramDetailTop"><h2 id="tramDetailTitle">Dados da Solicitação de Serviço — Tramitação</h2><button id="tramDetailTopClose" type="button" aria-label="Fechar detalhes">✕</button></div>
+  <div class="tramDetailBody">
+   <div class="tramDetailSummary"><div><small>Nº SS</small><div><strong id="tramDetailSS">—</strong></div></div><div id="tramDetailPhase" class="tramPhase">Consultando...</div><div class="tramDetailActions"><button id="tramDetailPrint" type="button">▣ Imprimir</button><button id="tramDetailRefresh" type="button">⟳ Atualizar</button><button id="tramDetailClose" type="button">✕ Fechar</button></div></div>
+   <section class="tramDetailSection"><h3>Dados de Medição</h3><div class="tramDetailSectionBody" id="tramDetailFields"><div class="tramDetailLoading">Consultando dados oficiais do SISCOM...</div></div></section>
+   <section class="tramDetailSection"><h3>Itens da Solicitação de Serviço</h3><div id="tramDetailItems" class="tramDetailTableWrap"><div class="tramDetailMsg">Aguardando medição...</div></div><div id="tramDetailItemsPager" class="tramDetailPager"></div></section>
+   <section class="tramDetailSection"><h3>Anexos</h3><div id="tramDetailAttachments" class="tramDetailTableWrap"><div class="tramDetailMsg">Consultando anexos...</div></div><div id="tramDetailAttachmentsPager" class="tramDetailPager"></div></section>
+   <section class="tramDetailSection"><h3>Histórico de Tramitações</h3><div id="tramDetailHistory" class="tramDetailTableWrap"><div class="tramDetailMsg">Aguardando medição...</div></div><div id="tramDetailHistoryPager" class="tramDetailPager"></div></section>
+   <div id="tramDetailFeedback" role="status" class="tramDetailMsg">Somente consulta — nenhuma alteração será enviada ao SISCOM.</div>
+  </div>
+ </div>
+</div>
 <script>
 // Tramitação oficial: sem escrita. Consulta individual por fila VPN.
 let tramPage=0,tramTotal=0,tramBusy=false,tramReady=false,tramRecords=[];
@@ -1327,18 +1379,103 @@ async function tramSearch(){
  }catch(e){tramNotice('Falha na consulta: '+e.message)}
  finally{tramBusy=false;tramEl('tramPesquisar').disabled=false}
 }
-async function tramDetail(i){
- const x=tramRecords[i],area=tramEl('tramDetail');
- area.hidden=false;
- if(!x){area.textContent='SS não encontrada na página atual.';return}
- const ss=tramSS(x);
- if(!ss){area.textContent='Não foi possível identificar a SS retornada pelo SISCOM.';return}
- area.textContent='Consultando detalhes da SS '+ss+'...';
- try{
-  const d=await tramJob('tram_detalhes',{ss});
-  area.innerHTML='<div style="font-weight:700;margin-bottom:6px">SS '+tramEsc(ss)+'</div><pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:480px;overflow:auto">'+tramEsc(JSON.stringify(d,null,2))+'</pre>';
- }catch(e){area.textContent='SS '+ss+' — Falha ao consultar detalhes: '+e.message}
+
+// Detalhes da medição: consultas somente leitura, sem ações de tramitação.
+let tramDetailSelected=null,tramDetailToken=0;
+const tramDetailPhases={0:'Avaliação pela Contratada',1:'Avaliação pelo Supervisor',2:'Avaliação pelo Analista',3:'Avaliação pelo Controle de Contratos',4:'Aprovada',5:'Cancelada',7:'Avaliação pelo Controlador'};
+function tramDetailVal(v){return v===undefined||v===null||v===''?'—':typeof v==='object'?JSON.stringify(v):String(v)}
+function tramDetailPick(obj,...keys){for(const key of keys){const val=key.split('.').reduce((o,k)=>o&&typeof o==='object'?o[k]:undefined,obj);if(val!==undefined&&val!==null&&val!=='')return val}return null}
+function tramDetailDate(v){if(!v)return '—';const m=String(v).match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/);return m?m[3]+'/'+m[2]+'/'+m[1]+(m[4]?' '+m[4]+':'+m[5]:''):String(v)}
+function tramDetailMoney(v){if(v==null||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):tramDetailVal(v)}
+function tramDetailOne(v){v=tramPayload(v);return Array.isArray(v)?v[0]||{}:(v&&typeof v==='object'?v:{})}
+function tramDetailField(label,value,wide=false){return '<div class="tramDetailField'+(wide?' tramWide':'')+'"><b>'+tramEsc(label)+':</b> '+tramEsc(tramDetailVal(value))+'</div>'}
+function tramDetailSectionError(id,msg){tramEl(id).innerHTML='<div class="tramDetailMsg error">'+tramEsc(msg)+'</div>'}
+function tramDetailTable(id,headers,rows,keys,formatters={}){
+ const body=tramEl(id);
+ if(!rows.length){body.innerHTML='<div class="tramDetailMsg">Nenhum registro retornado pelo SISCOM.</div>';return}
+ body.innerHTML='<table class="tramDetailTable"><thead><tr>'+headers.map(h=>'<th>'+tramEsc(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.map(x=>'<tr>'+keys.map((key,i)=>{
+  const val=tramDetailPick(x,...key.split('|'));
+  return '<td>'+tramEsc(formatters[i]?formatters[i](val):tramDetailVal(val))+'</td>';
+ }).join('')+'</tr>').join('')+'</tbody></table>';
 }
+function tramDetailMedicaoId(d,x){
+ const n=tramDetailPick(d,'idMedicaoSs','idMedicaoSS','medicaoSs.id','medicaoSS.id','medicao.id','idMedicao','cdMedicao','medicaoSsId','id');
+ const alt=tramDetailPick(x,'idMedicaoSs','idMedicaoSS','medicaoSs.id','idMedicao');
+ const value=Number(n??alt);
+ return Number.isSafeInteger(value)&&value>0?value:null;
+}
+function tramDetailRenderFields(d,x){
+ const get=(...keys)=>tramDetailPick(d,...keys)??tramDetailPick(x,...keys);
+ const phaseRaw=get('cdFaseMedicao','faseMedicaoId','faseMedicao.id','faseMedicao');
+ const phaseId=Number(typeof phaseRaw==='object'?phaseRaw?.id:phaseRaw);
+ const phase=tramDetailPhases[phaseId]||get('descricaoFaseMedicao','faseMedicao.descricao','faseMedicao')||'Não informada';
+ const phaseEl=tramEl('tramDetailPhase');phaseEl.textContent=Number.isInteger(phaseId)&&tramDetailPhases[phaseId]?phaseId+' - '+phase:String(phase);phaseEl.dataset.phase=String(phaseId);
+ const fields=[
+ ['Localidade',get('localidade','municipio','cidade')],['Endereço',get('endereco','logradouro','enderecoSS','rua')],['Data registro',tramDetailDate(get('dataRegistro','dtRegistro','dataAbertura'))],
+ ['Matrícula',get('matricula','nrMatricula')],['Cliente',get('cliente','nomeCliente','nmCliente')],['Execução inicial',tramDetailDate(get('dataExecucaoInicial','dtExecucaoInicial','inicioExecucao'))],
+ ['Serviço solicitado',get('descServicoSolicitado','descricaoServicoSolicitado','servicoSolicitado.descricao','servicoSolicitado')],['Serviço executado',get('descServicoExecutado','descricaoServicoExecutado','servicoExecutado.descricao','servicoExecutado')],['Execução final',tramDetailDate(get('dataExecucaoFinal','dtExecucaoFinal','fimExecucao'))],
+ ['Fase de medição',phase],['Nº medição',get('numeroMedicao','nrMedicao','medicao.numero','numero')],['Valor',tramDetailMoney(get('valorTotal','valorMedicao','valor'))],
+ ['Contrato',get('dcContrato','descricaoContrato','contrato.dcContrato','tpProcesso')],['HD retirado',get('hdRetirado')],['HD instalado',get('hdInstalado')],
+ ['Lacre',get('lacre','numeroLacre')],['Leitura',get('leitura')],['Recurso',get('recurso')],
+ ['Instruções para contratada',get('instrucoesContratada','instrucoesParaContratada','dsInstrucao','observacaoSolicitacao','observacao'),true],
+ ['Informações da execução',get('informacoesExecucao','descricaoExecucao','observacaoExecucao','dsExecucao'),true]
+ ];
+ tramEl('tramDetailFields').innerHTML='<div class="tramDetailGrid">'+fields.map(f=>tramDetailField(...f)).join('')+'</div>';
+}
+function tramDetailPager(id,op,params,token){
+ const tableId={tram_itens:'tramDetailItems',tram_anexos:'tramDetailAttachments',tram_historico:'tramDetailHistory'}[op];
+ const pager=tramEl(id);let page=0;const size=25;
+ const headers={tram_itens:['Nº NI','Descrição','UN','Qtde','Valor unitário','Valor total'],tram_anexos:['Data','Nome do arquivo','Descrição','Responsável'],tram_historico:['Data','Responsável','Perfil','Ação','Enviado para','Parecer']}[op];
+ const keys={tram_itens:['numeroNi|srvContratoNIDTO.numeroNi|ni.numeroNi','descricao|srvContratoNIDTO.descricao|descricaoNi|dsServico','unidade|un|sgUnidade','quantidade|qtde|qtQuantidade','valorUnitario|vlUnitario','valorTotal|vlTotal'],tram_anexos:['data|dataInclusao|dtInclusao|dataCadastro','nomeArquivo|nmArquivo|arquivo.nome','descricaoArquivo|descricao|dsArquivo','responsavel|nomeResponsavel|usuario.nome'],tram_historico:['dtTramitacao|dataTramitacao|data','responsavel|nomeResponsavel|usuario.nome|usuario','perfil|descricaoPerfil','acao|descricaoAcao','enviadoPara|destinatario|descricaoPerfilDestino','parecer|descricaoParecer|observacao']}[op];
+ const formats={tram_itens:{4:tramDetailMoney,5:tramDetailMoney},tram_anexos:{0:tramDetailDate},tram_historico:{0:tramDetailDate}};
+ async function load(next){
+  if(token!==tramDetailToken)return;
+  page=next;pager.textContent='Carregando página '+(page+1)+'...';
+  try{
+   const res=await tramJob(op,{...params,page});if(token!==tramDetailToken)return;
+   const list=tramArray(res);const total=tramTotalElements(res);const totalPages=Math.max(1,Math.ceil(total/size));
+   tramDetailTable(tableId,headers,list,keys,formats[op]||{});
+   pager.innerHTML='<span>Mostrando '+list.length+' de '+total+' registro(s) • página '+(page+1)+' de '+totalPages+'</span><span><button type="button" data-dir="prev" '+(page===0?'disabled':'')+'>◀ Anterior</button> <button type="button" data-dir="next" '+((page+1)>=totalPages?'disabled':'')+'>Próxima ▶</button></span>';
+   pager.querySelectorAll('[data-dir]').forEach(btn=>btn.onclick=()=>load(page+(btn.dataset.dir==='next'?1:-1)));
+  }catch(e){if(token!==tramDetailToken)return;tramDetailSectionError(tableId,'Não foi possível consultar: '+e.message);pager.innerHTML='';}
+ }
+ load(0);
+}
+function tramDetailClose(){tramDetailToken++;tramEl('tramDetailOverlay').hidden=true;document.body.style.overflow='';}
+async function tramDetail(i){
+ const x=tramRecords[i];if(!x)return tramNotice('SS não encontrada na página atual.');
+ const ss=tramSS(x);if(!ss)return tramNotice('Não foi possível identificar o número da SS.');
+ tramDetailSelected={x,ss};const token=++tramDetailToken;
+ tramEl('tramDetailOverlay').hidden=false;document.body.style.overflow='hidden';tramEl('tramDetailSS').textContent=ss;
+ tramEl('tramDetailPhase').textContent=tramDetailVal(x.faseMedicao??x.descricaoFaseMedicao??'Consultando...');
+ tramEl('tramDetailFields').innerHTML='<div class="tramDetailLoading">Consultando medição da SS '+tramEsc(ss)+'...</div>';
+ for(const id of ['tramDetailItems','tramDetailAttachments','tramDetailHistory'])tramEl(id).innerHTML='<div class="tramDetailMsg">Aguardando consulta...</div>';
+ for(const id of ['tramDetailItemsPager','tramDetailAttachmentsPager','tramDetailHistoryPager'])tramEl(id).innerHTML='';
+ tramEl('tramDetailFeedback').textContent='Consultando dados oficiais do SISCOM. Somente leitura.';
+ // Anexos independem do identificador da medição.
+ tramDetailPager('tramDetailAttachmentsPager','tram_anexos',{ss},token);
+ try{
+  const d=tramDetailOne(await tramJob('tram_detalhes',{ss}));if(token!==tramDetailToken)return;
+  tramDetailRenderFields(d,x);
+  const medicao=tramDetailMedicaoId(d,x);
+  if(medicao){
+   tramDetailPager('tramDetailItemsPager','tram_itens',{medicao},token);
+   tramDetailPager('tramDetailHistoryPager','tram_historico',{medicao},token);
+   tramEl('tramDetailFeedback').textContent='Medição '+medicao+' consultada. Informações somente leitura.';
+  }else{
+   tramDetailSectionError('tramDetailItems','O SISCOM não informou um identificador de medição para consultar os itens.');
+   tramDetailSectionError('tramDetailHistory','O SISCOM não informou um identificador de medição para consultar o histórico.');
+   tramEl('tramDetailFeedback').textContent='Detalhes carregados parcialmente: identificador da medição ausente.';
+  }
+ }catch(e){if(token!==tramDetailToken)return;tramDetailSectionError('tramDetailFields','Falha ao consultar dados da medição: '+e.message);tramDetailSectionError('tramDetailItems','Aguardando medição.');tramDetailSectionError('tramDetailHistory','Aguardando medição.');tramEl('tramDetailFeedback').textContent='Falha na consulta. Confira a sessão individual SISCOM.';}
+}
+tramEl('tramDetailTopClose').addEventListener('click',tramDetailClose);
+tramEl('tramDetailClose').addEventListener('click',tramDetailClose);
+tramEl('tramDetailRefresh').addEventListener('click',()=>{if(tramDetailSelected){const i=tramRecords.indexOf(tramDetailSelected.x);if(i>=0)tramDetail(i)}});
+tramEl('tramDetailPrint').addEventListener('click',()=>window.print());
+tramEl('tramDetailOverlay').addEventListener('click',e=>{if(e.target===tramEl('tramDetailOverlay'))tramDetailClose()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!tramEl('tramDetailOverlay').hidden)tramDetailClose()});
 tramEl('tramSize').addEventListener('change',()=>{tramPage=0;tramSearch()});
-tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramCount').textContent='Selecione os filtros e pesquise.';tramMacros()});tramEl('tramPesquisar').addEventListener('click',()=>{tramPage=0;tramSearch()});tramEl('tramPrev').addEventListener('click',()=>{if(tramPage>0){tramPage--;tramSearch()}});tramEl('tramNext').addEventListener('click',()=>{tramPage++;tramSearch()});
-</script></body></html>
+tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramCount').textContent='Selecione os filtros e pesquise.';tramMacros()});tramEl('tramPesquisar').addEventListener('click',()=>{tramPage=0;tramSearch()});tramEl('tramLimpar').addEventListener('click',()=>{tramEl('tramStatus').value='todas';tramEl('tramMacro').value='';tramEl('tramInicio').value='';tramEl('tramFim').value='';tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramDetail').hidden=true;tramEl('tramCount').textContent='Filtros limpos. Clique em Pesquisar.';tramNotice('Filtros limpos. Datas em branco consultam todo o histórico do contrato.');});tramEl('tramPrev').addEventListener('click',()=>{if(tramPage>0){tramPage--;tramSearch()}});tramEl('tramNext').addEventListener('click',()=>{tramPage++;tramSearch()});
+</script>
+</body></html>
