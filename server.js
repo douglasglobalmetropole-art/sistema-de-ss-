@@ -832,43 +832,69 @@ async function gerarPdfOriginalUmov(link){
 }
 
 // GLOBAL_SS_RELATORIO_AGRUPADO_V10_BEGIN
-// Somente leitura: localiza todas as sequencias da mesma SS no banco uMov.
-// A conversao dos PDFs originais usa a rota ja existente /api/relatorio-original-pdf.
+// V11: consulta localizada por SS; evita ordenar todas as tarefas do banco.
+// Operacao exclusivamente de leitura. Nenhum dado e gravado no SISCOM ou uMov.
 app.get('/api/relatorios-agrupados',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const ss=String(req.query.ss||'').trim();
  const m=/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/.exec(ss);
- if(!m)return res.status(400).json({ok:false,error:'Selecione uma SS valida, incluindo a sequencia.'});
+ if(!m)return res.status(400).json({ok:false,code:'SS_INVALIDA',error:'Selecione uma SS valida, incluindo a sequencia.'});
  const base=m[1];
  try{
-  // Pesquisa restrita ao numero-base, nao depende da pagina de resultados carregada.
-  // Retorna ate 100 sequencias; privilegia o ultimo relatorio original valido por sequencia.
+  // Materializar primeiro os locais evita varrer e ordenar tarefas de outras SS.
+  // LATERAL limita as tarefas pesquisadas por local, preservando a mais recente
+  // com relatorio valido; o limite protege a API contra consultas sem fim.
   const r=await pool.query({
-   text:`SELECT l.loc_integrationid AS ss, t.tsk_id AS tarefa, d.tss_id,
-           d.tsk_accesstoken
-         FROM u45468.local l
-         JOIN u45468.task t ON t.loc_id=l.loc_id
-         LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
-         WHERE l.loc_integrationid LIKE $1
-         ORDER BY t.tsk_id DESC LIMIT 1200`,
-   values:[base+'-%'],query_timeout:12000
+   text:`WITH locais AS MATERIALIZED (
+     SELECT loc_id,loc_integrationid FROM u45468.local
+     WHERE loc_integrationid LIKE $1
+     ORDER BY loc_integrationid,loc_id DESC LIMIT 201
+    )
+    SELECT l.loc_integrationid AS ss,t.tsk_id AS tarefa,
+           d.tss_id,d.tsk_accesstoken
+    FROM locais l
+    LEFT JOIN LATERAL (
+      SELECT tsk_id FROM u45468.task
+      WHERE loc_id=l.loc_id ORDER BY tsk_id DESC LIMIT 40
+    ) t ON TRUE
+    LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id AND d.tss_id=50
+    ORDER BY l.loc_integrationid,t.tsk_id DESC LIMIT 8040`,
+   values:[base+'-%'],query_timeout:9000
   });
   const porSS=new Map();
+  const prefix=base+'-';
+  const host=hostRelatorioUmov();
   for(const row of r.rows){
    const numero=String(row.ss||'').trim();
-   if(!new RegExp('^'+base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'-\\d{2}$').test(numero))continue;
+   if(!numero.startsWith(prefix)||!/^[0-9]{2}$/.test(numero.slice(prefix.length))||numero.length!==prefix.length+2)continue;
    if(!porSS.has(numero))porSS.set(numero,{ss:numero,disponivel:false,tarefa:null,link:null});
    const atual=porSS.get(numero);
    const token=String(row.tsk_accesstoken||'');
-   if(!atual.disponivel&&Number(row.tss_id)===50&&Number.isSafeInteger(Number(row.tarefa))&&Number(row.tarefa)>0&&/^[a-zA-Z0-9._~-]+$/.test(token)&&hostRelatorioUmov()){
+   if(!atual.disponivel&&Number(row.tss_id)===50&&Number.isSafeInteger(Number(row.tarefa))&&Number(row.tarefa)>0&&/^[a-zA-Z0-9._~-]+$/.test(token)&&host){
     atual.disponivel=true;atual.tarefa=Number(row.tarefa);
-    atual.link='https://'+hostRelatorioUmov()+'/CenterWeb/report/schedule/'+atual.tarefa+'/'+token;
+    atual.link='https://'+host+'/CenterWeb/report/schedule/'+atual.tarefa+'/'+token;
    }
   }
   const sequencias=[...porSS.values()].sort((a,b)=>Number(a.ss.slice(-2))-Number(b.ss.slice(-2)));
-  if(sequencias.length>100)return res.status(413).json({ok:false,error:'Mais de 100 sequencias. Solicite divisao do relatorio.'});
-  res.json({ok:true,base,consultada:ss,sequencias,total:sequencias.length,disponiveis:sequencias.filter(x=>x.disponivel).length});
- }catch(e){console.error('Consulta relatorio agrupado:',e.message);res.status(502).json({ok:false,error:'Nao foi possivel consultar todas as sequencias no banco uMov.'})}
+  if(sequencias.length>100||r.rows.length>=8040)return res.status(413).json({ok:false,code:'LIMITE_CONSULTA',error:'Consulta excedeu o limite de seguranca. Entre em contato para ajustar o agrupamento desta SS.'});
+  res.json({ok:true,base,consultada:ss,sequencias,total:sequencias.length,disponiveis:sequencias.filter(x=>x.disponivel).length,
+   aviso:!sequencias.length?'Nenhuma sequencia encontrada neste banco uMov. Confira se esta na pagina do lote correto.':!host?'Host dos relatorios uMov nao configurado para este lote.':null});
+ }catch(e){
+  const code=String(e.code||'');
+  console.error('Consulta agrupada uMov (codigo/etapa):',code||'SEM_CODIGO','consulta sequencias');
+  const erros={
+   '42501':['PERMISSAO_BANCO','Usuario do PostgreSQL sem permissao para consultar as tabelas uMov deste lote.'],
+   '42P01':['TABELA_AUSENTE','Tabela do uMov nao encontrada no schema configurado.'],
+   '42703':['COLUNA_AUSENTE','Estrutura do banco uMov diferente da esperada.'],
+   '57014':['TEMPO_ESGOTADO','A consulta demorou mais que o limite do banco.'],
+   'ECONNREFUSED':['BANCO_INACESSIVEL','Conexao ao banco uMov recusada.'],
+   'ETIMEDOUT':['BANCO_INACESSIVEL','Tempo de conexao ao banco uMov esgotado.'],
+   '28P01':['LOGIN_BANCO','Credenciais de acesso ao banco uMov rejeitadas.'],
+   '3D000':['BANCO_AUSENTE','Banco uMov configurado nao existe.']
+  };
+  const [tipo,mensagem]=erros[code]||['CONSULTA_FALHOU','Falha ao consultar as sequencias no banco uMov. Verifique os logs do servidor.'];
+  res.status(502).json({ok:false,code:tipo,etapa:'consulta_sequencias',error:mensagem});
+ }
 });
 // GLOBAL_SS_RELATORIO_AGRUPADO_V10_END
 

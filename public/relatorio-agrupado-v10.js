@@ -34,7 +34,7 @@
  const footer=el('div','ga-footer'),reload=el('button','ga-btn','Atualizar sequências'),view=el('button','ga-btn ga-primary','Gerar e visualizar PDF'),download=el('button','ga-btn ga-primary','Gerar e baixar PDF');
  for(const b of [reload,view,download])b.type='button';footer.append(reload,view,download);card.append(header,content,footer);root.append(card);document.body.append(root);
  const msg=(s,error=false)=>{status.textContent=s;status.classList.toggle('ga-error',error)};
- const busy=v=>{gerando=v;close.disabled=v;reload.disabled=v;view.disabled=v;download.disabled=v;list.querySelectorAll('input').forEach(x=>x.disabled=v||x.dataset.available!=='1')};
+ const busy=v=>{gerando=v;close.disabled=v;reload.disabled=v;view.disabled=v||!data||!data.disponiveis;download.disabled=v||!data||!data.disponiveis;list.querySelectorAll('input').forEach(x=>x.disabled=v||x.dataset.available!=='1')};
  const chosen=()=>[...list.querySelectorAll('input[data-available="1"]:checked')].map(x=>data.sequencias[Number(x.dataset.idx)]);
  const getSS=()=>{
   const detail=String(window.__detailSS?.ss||'').trim();
@@ -46,15 +46,16 @@
  async function load(ss){
   data=null;list.replaceChildren();stats.textContent='Consultando sequências da SS '+ss+' no banco uMov...';msg('');progress.hidden=true;
   const r=await fetch(api()+'/relatorios-agrupados?ss='+encodeURIComponent(ss),{credentials:'same-origin',cache:'no-store'});
-  const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw Error(j.error||'Falha ao localizar as sequências');
+  const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw Error((j.code?'['+j.code+'] ':'')+(j.error||'Falha ao localizar as sequências'));
   data=j;h.textContent='Relatórios agrupados — '+j.base;
   stats.textContent=`${j.total} sequência(s) encontrada(s) • ${j.disponiveis} com relatório original disponível`;
-  if(!j.sequencias.length){msg('Nenhuma sequência encontrada no banco.');return;}
+  if(!j.sequencias.length){msg(j.aviso||'Nenhuma sequência encontrada no banco.');return;}
+  if(j.aviso)msg(j.aviso,true);
   j.sequencias.forEach((x,i)=>{
    const row=el('label','ga-row'),check=el('input');check.type='checkbox';check.dataset.idx=String(i);check.dataset.available=x.disponivel?'1':'0';check.checked=!!x.disponivel;check.disabled=!x.disponivel;
    const num=el('strong','',x.ss),state=el('small','',x.disponivel?'PDF original disponível':'Sem relatório original disponível');state.style.color=x.disponivel?'#147c4a':'#b45309';row.append(check,num,state);list.append(row);
   });
-  msg('Marque as sequências desejadas. O sistema não incluirá relatórios ausentes nem duplicará a mesma sequência.');
+  if(!j.aviso)msg('Marque as sequências desejadas. O sistema não incluirá relatórios ausentes nem duplicará a mesma sequência.');
  }
  const closeModal=()=>{if(!gerando)root.hidden=true;};close.onclick=closeModal;
  root.addEventListener('click',e=>{if(e.target===root)closeModal()});
