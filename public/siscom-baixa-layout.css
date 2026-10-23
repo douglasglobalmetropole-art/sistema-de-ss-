@@ -1,0 +1,69 @@
+/* GLOBAL SS - Baixa SISCOM layout visual baseado na referência do usuário */
+#siscomBaixaModal{padding:4px!important}
+#siscomBaixaModal .sbShell{width:min(1540px,99vw)!important;max-width:99vw!important;height:min(1010px,99vh)!important;max-height:99vh!important;background:#f8fbff!important;display:flex!important;flex-direction:column!important;overflow:hidden!important;border-radius:12px!important}
+#siscomBaixaModal .sbHeader{background:linear-gradient(100deg,#09518e,#0a66a9)!important;padding:14px 25px!important;flex-shrink:0;min-height:56px}
+#siscomBaixaModal .sbHeader h3{font-size:22px!important;letter-spacing:.1px}
+#siscomBaixaModal .sbHeader .sbV3Warning{background:transparent!important;color:#d9e9f7!important;font-size:11px!important;font-weight:500!important;padding:4px!important}
+#siscomBaixaModal .sbV3Statusbar{padding:9px 22px 2px;display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-shrink:0;font-size:12px;color:#506e89}
+#siscomBaixaModal .sbV3Ok{border-radius:7px;background:#eaf1f8;padding:7px 12px;font-weight:700;color:#4c6c89}
+#siscomBaixaModal .sbV3Ok.ready{background:#d8f7e6;color:#08683d}
+#siscomBaixaModal .sbRibbon{padding:8px 22px 9px!important;background:#f8fbff!important;border:0!important}
+#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:1.15fr 1.25fr 1fr .8fr 1.2fr 1.5fr!important;margin:0!important;border:1px solid #d8e5f1!important;border-radius:9px!important}
+#siscomBaixaModal .sbRibbon .sbSummaryTop>div{padding:11px 13px!important}
+#siscomBaixaModal .sbRibbon .sbSummaryTop b{font-size:11px!important;color:#466c92!important}
+#siscomBaixaModal .sbRibbon .sbRead{font-size:12px!important;line-height:1.45!important}
+#siscomBaixaModal .sbRibbon #sbResumoSS{font-size:20px!important;font-weight:800!important;color:#0858b4!important}
+#siscomBaixaModal .sbV3Tabs{display:flex;gap:4px;padding:0 22px;border-bottom:1px solid #dce7f2;flex-shrink:0}
+#siscomBaixaModal .sbV3Tab{font:600 14px inherit;font-family:inherit;font-size:14px;color:#4c6785;cursor:pointer;border:1px solid #d5e2ee;border-bottom:0;border-radius:8px 8px 0 0;background:#f4f8fd;padding:14px 25px;min-width:175px}
+#siscomBaixaModal .sbV3Tab.active{color:white;background:linear-gradient(100deg,#0877df,#0a5ea8);border-color:#1379cf}
+#siscomBaixaModal .sbV3Panel{flex:1 1 auto;min-height:0;overflow:auto!important;margin:0 15px 0!important}
+#siscomBaixaModal .sbV3Panel[hidden]{display:none!important}
+#siscomBaixaModal .sbColumns{display:grid!important;grid-template-columns:1.02fr .98fr!important;gap:12px!important;padding:12px 7px!important;align-items:stretch!important}
+#siscomBaixaModal .sbPane{border:1px solid #d9e5f0!important;border-radius:9px!important;background:white!important;padding:12px!important;min-width:0!important}
+#siscomBaixaModal .sbFormPane .sbInnerTitle{background:linear-gradient(100deg,#155b95,#217db4)!important;color:#fff!important;font-size:15px!important;padding:13px 16px!important;margin:-12px -12px 12px!important;border-radius:7px 7px 0 0!important}
+#siscomBaixaModal .sbSummary .sbInnerTitle{background:#dfeefb!important;color:#095ba6!important;font-size:15px!important;padding:13px 16px!important;margin:-12px -12px 12px!important;border-radius:7px 7px 0 0!important}
+#siscomBaixaModal .executionGrid{gap:12px!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+#siscomBaixaModal .executionGrid>div{min-width:0}
+#siscomBaixaModal .executionGrid label{font-size:12px!important;color:#164879!important;font-weight:600!important}
+#siscomBaixaModal .executionGrid input,#siscomBaixaModal .executionGrid select{min-height:42px!important}
+#siscomBaixaModal #sbEquipeBusca{height:33px!important;min-height:33px!important}
+#siscomBaixaModal #sbDescricao,#siscomBaixaModal #sbObservacoes{min-height:95px!important;background:#fff!important}
+#siscomBaixaModal .sbSummaryDates{display:grid!important;grid-template-columns:1fr!important;gap:0!important;margin:0 0 4px!important}
+#siscomBaixaModal .sbSummaryDates>div,#siscomBaixaModal .sbSummaryField,#siscomBaixaModal .sbV3Duration{display:grid;grid-template-columns:43% 57%;align-items:start;border-bottom:1px solid #e0e9f2;padding:8px 6px;margin:0!important;gap:0}
+#siscomBaixaModal .sbSummaryDates b,#siscomBaixaModal .sbSummaryField b,#siscomBaixaModal .sbV3Duration b{font-size:12px!important;margin:0!important;color:#2c527c!important}
+#siscomBaixaModal .sbSummary .sbRead{background:transparent!important;border:0!important;min-height:0!important;max-height:none!important;padding:0!important;font-size:12px!important;line-height:1.45!important;overflow:visible!important}
+#siscomBaixaModal .sbSummary .sbSource{padding:7px 6px;color:#547d9d;font-size:11px}
+#siscomBaixaModal .sbHistoryPane{margin-top:12px!important;border:1px solid #d8e6f2!important;border-radius:8px!important}
+#siscomBaixaModal .sbHistoryPane h4{margin:0!important;padding:12px 15px!important;color:#0858a0!important;background:#e1effc!important;font-size:15px!important}
+#siscomBaixaModal .sbHistoryPane #sbHistoricoLista{max-height:260px!important;margin:0 10px 10px!important}
+#siscomBaixaModal .sbHistoryPane #sbHistoricoLista>div{position:relative;padding:9px 12px!important;border-left:2px solid #b4d8f4;border-bottom:1px solid #e4eef7!important;margin-left:8px}
+#siscomBaixaModal .sbHistoryPane #sbHistoricoLista>div:before{content:'';position:absolute;left:-6px;top:15px;background:#1182d2;width:10px;height:10px;border-radius:50%}
+#siscomBaixaModal .sbV3Official{margin:12px 0 0!important}
+#siscomBaixaModal .sbV3Official summary{font-size:12px!important}
+#siscomBaixaModal .sbFooter{flex-shrink:0!important;display:flex!important;gap:9px!important;padding:12px 22px!important;justify-content:flex-start!important;background:white!important;border-top:1px solid #d7e5f1!important}
+#siscomBaixaModal .sbFooter .btn{height:43px!important;font-weight:600;font-size:12px!important;white-space:nowrap}
+#siscomBaixaModal .sbFooter #sbPrevia{margin-left:auto!important;background:#16a16d!important;border-color:#16a16d!important;color:#fff!important;min-width:285px}
+#siscomBaixaModal .sbFooter .sbV3FooterAnexo,#siscomBaixaModal .sbFooter .sbV3FooterFechar{display:none!important}
+#siscomBaixaModal .sbV3Panel:not(.sbColumns){padding:15px 12px!important;background:white;border:1px solid #dce7f2;border-radius:0 0 9px 9px}
+#siscomBaixaModal .sbV3SectionHead{background:#dfeefa;color:#075b9e;font-size:16px;font-weight:800;border-radius:7px;padding:13px 16px;margin-bottom:10px}
+#siscomBaixaModal .sbV3Note{font-size:12px;color:#597a97;line-height:1.5;margin:6px 0 14px}
+#siscomBaixaModal .sbV3Toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+#siscomBaixaModal .sbV3Toolbar .btn{min-height:39px}
+#siscomBaixaModal .sbV3ItemsList{border:1px solid #dce8f1;border-radius:7px;min-height:90px;max-height:260px;overflow:auto}
+#siscomBaixaModal .sbV3Empty{padding:24px;text-align:center;color:#5c7791}
+#siscomBaixaModal .sbV3Table{width:100%;border-collapse:collapse;font-size:12px}
+#siscomBaixaModal .sbV3Table th{background:#eaf3fb;color:#205a89;text-align:left;padding:11px}
+#siscomBaixaModal .sbV3Table td{padding:10px;border-bottom:1px solid #e2eaf2}
+#siscomBaixaModal .sbV3Small{padding:5px 9px;font-size:11px}
+#siscomBaixaModal .sbV3Subheading{font-size:14px;color:#145e9c;margin:20px 0 10px}
+#siscomBaixaModal .sbV3MatGrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:12px}
+#siscomBaixaModal .sbV3Field{display:flex;flex-direction:column;gap:6px;color:#285d88;font-size:12px;font-weight:700}
+#siscomBaixaModal .sbV3Field input{min-width:0;padding:10px;border:1px solid #c7d9e9;border-radius:6px;background:white;color:#173e63;font:inherit}
+#siscomBaixaModal .sbV3MatActions{justify-content:flex-end}
+#siscomBaixaModal .sbV3MatStatus{font-size:12px;color:#256c51;min-height:22px}
+#siscomBaixaModal .sbV3MatStatus.error{color:#b54737}
+#siscomBaixaModal #sbCompSection{margin:0!important;padding:15px!important}
+#siscomBaixaModal #sbCompSection h4{margin:-15px -15px 12px!important;padding:14px 16px!important}
+#siscomBaixaModal #sbAnexoStatus{margin-top:16px}
+@media(max-width:1100px){#siscomBaixaModal .sbV3MatGrid{grid-template-columns:repeat(2,1fr)}#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(3,1fr)!important}#siscomBaixaModal .sbColumns{grid-template-columns:1fr!important}}
+@media(max-width:760px){#siscomBaixaModal .sbHeader h3{font-size:17px!important}#siscomBaixaModal .sbV3Tab{min-width:0;flex:1;padding:12px 7px;font-size:11px}#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(2,1fr)!important}#siscomBaixaModal .sbV3MatGrid{grid-template-columns:1fr}#siscomBaixaModal .sbFooter{flex-wrap:wrap}#siscomBaixaModal .sbFooter #sbPrevia{width:100%;margin-left:0!important;min-width:0}}
