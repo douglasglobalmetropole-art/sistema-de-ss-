@@ -67,3 +67,14 @@
 #siscomBaixaModal #sbAnexoStatus{margin-top:16px}
 @media(max-width:1100px){#siscomBaixaModal .sbV3MatGrid{grid-template-columns:repeat(2,1fr)}#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(3,1fr)!important}#siscomBaixaModal .sbColumns{grid-template-columns:1fr!important}}
 @media(max-width:760px){#siscomBaixaModal .sbHeader h3{font-size:17px!important}#siscomBaixaModal .sbV3Tab{min-width:0;flex:1;padding:12px 7px;font-size:11px}#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(2,1fr)!important}#siscomBaixaModal .sbV3MatGrid{grid-template-columns:1fr}#siscomBaixaModal .sbFooter{flex-wrap:wrap}#siscomBaixaModal .sbFooter #sbPrevia{width:100%;margin-left:0!important;min-width:0}}
+
+/* V4 - Consulta de anexos oficiais da SS */
+#siscomBaixaModal .sbV4AnexoToolbar{align-items:center}
+#siscomBaixaModal .sbV4AnexoToolbar button:disabled{opacity:.5;cursor:not-allowed}
+#siscomBaixaModal .sbV4AnexoInfo{padding:12px 14px;background:#edf5fd;border:1px solid #d0e2f2;border-radius:7px;font-size:13px;color:#20577d;margin:12px 0}
+#siscomBaixaModal .sbV4AnexoInfo.ok{background:#ecf9f1;border-color:#a7dfbd;color:#12683c}
+#siscomBaixaModal .sbV4AnexoInfo.warning{background:#fff5df;border-color:#f1d28b;color:#885610}
+#siscomBaixaModal .sbV4AnexoInfo.error{background:#fff0ed;border-color:#f0c5bd;color:#a63f34}
+#siscomBaixaModal .sbV4AnexoList{max-height:440px;overflow:auto;border:1px solid #dce8f1;border-radius:7px}
+#siscomBaixaModal .sbV4AnexoTable td{overflow-wrap:anywhere;max-width:300px}
+#siscomBaixaModal .sbV4AnexoMore{padding:10px 15px;font-size:12px;color:#7a4d16;background:#fff6e7}
