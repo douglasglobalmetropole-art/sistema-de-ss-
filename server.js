@@ -831,6 +831,47 @@ async function gerarPdfOriginalUmov(link){
  }finally{if(browser)await browser.close().catch(()=>{})}
 }
 
+// GLOBAL_SS_RELATORIO_AGRUPADO_V10_BEGIN
+// Somente leitura: localiza todas as sequencias da mesma SS no banco uMov.
+// A conversao dos PDFs originais usa a rota ja existente /api/relatorio-original-pdf.
+app.get('/api/relatorios-agrupados',async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ const ss=String(req.query.ss||'').trim();
+ const m=/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/.exec(ss);
+ if(!m)return res.status(400).json({ok:false,error:'Selecione uma SS valida, incluindo a sequencia.'});
+ const base=m[1];
+ try{
+  // Pesquisa restrita ao numero-base, nao depende da pagina de resultados carregada.
+  // Retorna ate 100 sequencias; privilegia o ultimo relatorio original valido por sequencia.
+  const r=await pool.query({
+   text:`SELECT l.loc_integrationid AS ss, t.tsk_id AS tarefa, d.tss_id,
+           d.tsk_accesstoken
+         FROM u45468.local l
+         JOIN u45468.task t ON t.loc_id=l.loc_id
+         LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
+         WHERE l.loc_integrationid LIKE $1
+         ORDER BY t.tsk_id DESC LIMIT 1200`,
+   values:[base+'-%'],query_timeout:12000
+  });
+  const porSS=new Map();
+  for(const row of r.rows){
+   const numero=String(row.ss||'').trim();
+   if(!new RegExp('^'+base.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'-\\d{2}$').test(numero))continue;
+   if(!porSS.has(numero))porSS.set(numero,{ss:numero,disponivel:false,tarefa:null,link:null});
+   const atual=porSS.get(numero);
+   const token=String(row.tsk_accesstoken||'');
+   if(!atual.disponivel&&Number(row.tss_id)===50&&Number.isSafeInteger(Number(row.tarefa))&&Number(row.tarefa)>0&&/^[a-zA-Z0-9._~-]+$/.test(token)&&hostRelatorioUmov()){
+    atual.disponivel=true;atual.tarefa=Number(row.tarefa);
+    atual.link='https://'+hostRelatorioUmov()+'/CenterWeb/report/schedule/'+atual.tarefa+'/'+token;
+   }
+  }
+  const sequencias=[...porSS.values()].sort((a,b)=>Number(a.ss.slice(-2))-Number(b.ss.slice(-2)));
+  if(sequencias.length>100)return res.status(413).json({ok:false,error:'Mais de 100 sequencias. Solicite divisao do relatorio.'});
+  res.json({ok:true,base,consultada:ss,sequencias,total:sequencias.length,disponiveis:sequencias.filter(x=>x.disponivel).length});
+ }catch(e){console.error('Consulta relatorio agrupado:',e.message);res.status(502).json({ok:false,error:'Nao foi possivel consultar todas as sequencias no banco uMov.'})}
+});
+// GLOBAL_SS_RELATORIO_AGRUPADO_V10_END
+
 // Converte a própria página original do relatório uMov, inclusive imagens, em PDF.
 // Não usa os campos resumidos da SS: renderiza o HTML original no Chromium.
 app.post('/api/relatorio-original-pdf',async(req,res)=>{
