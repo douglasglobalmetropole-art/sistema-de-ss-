@@ -1,4 +1,0 @@
-Correção: somente public/index.html foi modificado.
-O servidor e o worker foram preservados.
-Extraia ZIP, abra PowerShell na pasta extraida e execute: powershell -ExecutionPolicy Bypass -File .\INSTALAR_E_PUBLICAR.ps1
-A sessao SISCOM individual continua exigida pelo servidor. Operacoes 401 nao sao repetidas automaticamente.

@@ -1,9 +1,0 @@
-Correção GLOBAL SS — Tramitação
-- Macros agora usam cdServico, dcServico retornados pelo SISCOM.
-- Lista de SS usa result.dados e result.totalRegistro.
-- Paginação calcula páginas com base em totalRegistro (totalPaginas retornava 0).
-- SS reconstruída a partir de refAtendimento, cdAtendimento e seqSS.
-- Colunas usam descServicoSolicitado, descServicoExecutado e faseMedicao.
-- Datas em branco continuam omitidas; status mantidos.
-- Macro: filtragem somente dos 25 registros da página; não é filtro global no SISCOM.
-- Alterado somente public/index.html; não executar SQL nem substituir worker.

@@ -2,3 +2,14 @@ node_modules/
 .env
 .vercel/
 npm-debug.log*
+.env.*
+!.env.example
+backups/
+atualizacoes/
+global-ss/
+*.zip
+server.backup*.js
+public/index.backup*
+public/index.html.backup*
+public/index.html.bak
+tatus

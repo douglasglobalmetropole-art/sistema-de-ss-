@@ -1,7 +1,0 @@
-TESTE DE TRAMITAÇÃO • SOMENTE LEITURA
-1. Fazer backup do worker.js e site.
-2. Executar SQL_SUPABASE.sql no projeto correto (verificar constraint atual antes de executar).
-3. Fechar worker em execução e substituir C:\Users\Logic\SISCOM-GATEWAY\worker.js pelo arquivo worker/worker.js. Reiniciar com node worker.js.
-4. Substituir server.js e public/index.html no repositório global-ss. Commit e push; aguardar deploy Vercel.
-5. Fazer novo login individual SISCOM e abrir Tramitação.
-OBS: Não foram testadas respostas reais da API, somente sintaxe. Filtros de macro são locais na página; algumas propriedades das respostas precisam de ajuste após primeiro teste. Nenhuma operação de escrita foi adicionada.
