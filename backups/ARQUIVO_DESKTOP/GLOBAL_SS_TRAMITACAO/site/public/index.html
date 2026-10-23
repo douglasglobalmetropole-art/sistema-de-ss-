@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>SS / Tarefas - Recepção</title>
+<style>
+:root{--blue:#07599a;--blue2:#0879f7;--txt:#0d3970}*{box-sizing:border-box}body{margin:0;background:#eef3f8;font:12px Arial;color:var(--txt)}main{padding:8px 10px}.toolbar{display:flex;align-items:end;gap:7px;background:#fff;padding:10px;border:1px solid #d4e1ec;border-radius:8px;overflow:auto}.tab,.btn{height:40px;border:1px solid #c8d9e8;border-radius:6px;background:#fff;color:#123e6e;font-weight:700;padding:0 16px;white-space:nowrap}.tab.active,.btn.primary{background:var(--blue2);color:#fff}.f{min-width:180px}.f label{display:block;font-weight:700;margin-bottom:5px}.f input{width:100%;height:35px;border:1px solid #cbd9e6;border-radius:4px;padding:0 8px}.multi{position:relative}.multiBtn{width:100%;height:35px;border:1px solid #cbd9e6;border-radius:4px;background:#fff;text-align:left;padding:0 28px 0 8px;color:#153d69;cursor:pointer;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.multiBtn:after{content:'▾';position:absolute;right:9px}.multiMenu{display:none;position:absolute;top:59px;left:0;z-index:20;min-width:290px;max-width:480px;max-height:310px;overflow:auto;background:#fff;border:1px solid #b9cad9;border-radius:6px;box-shadow:0 8px 22px #17344f33;padding:5px}.multi.open .multiMenu{display:block}.multiMenu label{display:flex;align-items:center;gap:7px;padding:7px 8px;cursor:pointer;white-space:nowrap}.multiMenu label:hover,.modalItem:hover{background:#eef7ff}.box{margin-top:10px;background:#fff;border:1px solid #d4e1ec;border-radius:8px;overflow:hidden}.tableScroll{height:calc(100vh - 190px);min-height:420px;overflow:auto}.tableScroll thead th{position:sticky;top:0;z-index:3}table{width:100%;min-width:1400px;border-collapse:collapse;table-layout:fixed}th{background:linear-gradient(#0b64a7,#075795);color:#fff;padding:10px 11px;text-align:left;border-right:1px solid #4e86b2;font-size:11px;cursor:pointer}td{padding:8px 10px;border-right:1px solid #e0e8ef;border-bottom:1px solid #e0e8ef;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.filter td{padding:4px}.filter input{width:100%;height:29px;border:1px solid #cad9e6;border-radius:3px;padding:5px}.check{width:45px;text-align:center}.check input{accent-color:#0879f7}.ss{font-weight:700;color:#064d88}#rows tr:hover td{background:#edf7ff}.selected td{background:#b9ddfa!important}.sort{float:right}.pager{padding:10px 13px;display:flex;align-items:center;border-top:1px solid #e0e8ef}.listControls{margin-left:auto;display:flex;align-items:center;gap:7px;font-weight:600}.hint{padding:9px 12px;background:#f3f8fc;color:#55718c}.lower{display:none;grid-template-columns:1.25fr .85fr .9fr;gap:10px;margin-top:10px}.lower.open{display:grid}.card{background:#fff;border:1px solid #d4e1ec;border-radius:8px;padding:13px;min-height:215px}.card h3{margin:0 0 12px;font-size:13px;border-bottom:1px solid #d9e5ef;padding-bottom:8px}.details{display:grid;grid-template-columns:1fr 1fr;gap:5px 15px}.field{display:grid;grid-template-columns:115px 1fr;gap:5px;align-items:center}.val{background:#edf3f8;border:1px solid #dae4ec;border-radius:3px;padding:5px 7px;min-height:27px}.note{width:100%;height:155px;border:1px solid #cad9e6;border-radius:4px;padding:10px;resize:none}.executionGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.executionGrid[hidden]{display:none}.executionGrid .full{grid-column:1/-1}.executionGrid label{display:block;font-size:11px;font-weight:700;margin:0 0 4px;color:#315b84}.executionValue{min-height:36px;max-height:62px;overflow:auto;white-space:pre-wrap;line-height:1.35}.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.action{height:62px;background:#fff;border:1px solid #cbddeb;border-radius:7px;color:#0879f7;font-weight:700;font-size:11px}.action[hidden]{display:none}.action b{display:block;font-size:19px;margin-bottom:5px}.modalBg{display:none;position:fixed;inset:0;background:#0a294455;z-index:100;align-items:center;justify-content:center}.modalBg.open{display:flex}.modalBox{width:430px;background:#fff;border-radius:8px;padding:15px}.modalBox input{width:100%;height:38px;border:1px solid #cbd9e6;border-radius:5px;padding:0 9px}.modalList{max-height:260px;overflow:auto;border:1px solid #dbe5ed;margin-top:5px;border-radius:5px}.modalItem{padding:9px;cursor:pointer;border-bottom:1px solid #edf2f6}.modalBtns{display:flex;justify-content:flex-end;gap:7px;margin-top:12px}@media(max-width:1000px){.lower{grid-template-columns:1fr}}
+
+/* Nova aba de tramitação: visão de registros baixados, sem mudanças no banco. */
+.tramitacaoIntro{margin-top:10px;border:1px solid #cbddec;background:#fff;border-radius:9px;padding:15px 17px;color:#163f6b}
+.tramitacaoIntro[hidden]{display:none!important}
+.tramitacaoHeading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.tramitacaoHeading h2{margin:3px 0 5px;font-size:19px}
+.tramitacaoHeading p{margin:0;line-height:1.5;color:#536f89;font-size:12px;max-width:760px}
+.tramitacaoEyebrow{font-weight:800;letter-spacing:.08em;font-size:10px;color:#1379ce}
+.tramitacaoIndicador{border:1px solid #c9dceb;background:#eef5fb;border-radius:20px;padding:7px 11px;white-space:nowrap;font-size:10px;font-weight:800;color:#34678e}
+.tramitacaoStats{margin-top:13px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tramitacaoStat{background:#f3f8fc;border:1px solid #d9e7f3;border-radius:7px;padding:10px 13px;display:flex;flex-direction:column;gap:4px}
+.tramitacaoStat small{color:#5a7390;font-weight:600}.tramitacaoStat strong{font-size:20px;color:#0b548f}
+.tramitacaoAviso{margin:12px 0 0;padding:10px 12px;border-left:3px solid #86a9c6;background:#f7fafc;font-size:11px;color:#47667e}
+@media(max-width:850px){.tramitacaoHeading{flex-wrap:wrap}.tramitacaoStats{grid-template-columns:1fr 1fr}.tramitacaoStat:last-child{grid-column:1/-1}}
+
+/* Mantém os menus acima da tabela e impede o recorte pelo cabeçalho. */
+.toolbar{overflow:visible;position:relative;z-index:50}.multiMenu{z-index:200;width:260px;min-width:260px;max-width:260px;max-height:230px;padding:3px;border-color:#b7c8d8;box-shadow:0 5px 13px #17344f29}.multiMenu label{gap:8px;padding:6px 8px;font-size:11px;line-height:18px}.multiMenu input{width:14px;height:14px;margin:0;flex:0 0 14px;accent-color:#0b74d0}.multiMenu .menuFind{display:block;width:calc(100% - 8px);height:29px;margin:4px;border:1px solid #b7c8d8;border-radius:3px;padding:0 7px;font-size:11px}.box{position:relative;z-index:1}
+body.panel-open .tableScroll{height:calc(100vh - 455px);min-height:300px}.tab:disabled{opacity:.48;cursor:not-allowed;background:#edf2f6;color:#6f8499}.pagination{display:flex;align-items:center;gap:4px;margin-left:12px}.pageBtn{height:29px;min-width:30px;padding:0 8px;border:1px solid #c8d9e8;border-radius:4px;background:#fff;color:#0b5d9f;font-weight:700;cursor:pointer}.pageBtn.active{background:#0879f7;color:#fff;border-color:#0879f7}.pageBtn:disabled{opacity:.45;cursor:not-allowed}@media(max-width:1000px){.pager{flex-wrap:wrap;gap:8px}.listControls{margin-left:0}.pagination{margin-left:0}}
+#buscaDiretaBox,#buscaDiretaPainel{display:none!important}
+#refreshBtn{margin-left:auto;white-space:nowrap;background:#f0f7ff;color:#07599a;border-color:#8bb9e2;font-weight:bold}#refreshBtn:disabled{opacity:.6;cursor:wait}#refreshBtn .spin{display:inline-block}#refreshBtn:disabled .spin{animation:refreshSpin .9s linear infinite}@keyframes refreshSpin{to{transform:rotate(360deg)}}
+</style><style>
+.ssQuickSearch{display:flex;align-items:center;flex:0 0 230px;min-width:190px;height:35px;border:1px solid #cbd9e6;border-radius:5px;background:#fff;overflow:hidden;align-self:end}.ssQuickSearch input{width:100%;min-width:0;height:33px;border:0;outline:0;padding:0 8px;color:#123e6e;font-size:12px}.ssQuickSearch button{flex:0 0 29px;height:33px;border:0;background:#fff;color:#07599a;font-size:20px;cursor:pointer}.ssQuickSearch button:hover{background:#edf5fc}#buscaDiretaPainel{position:relative;z-index:2}#buscaDiretaPainel table{min-width:760px}@media(max-width:1100px){.toolbar{flex-wrap:wrap}.ssQuickSearch{flex-basis:220px}}
+</style><style>
+#siscomPanel{display:none;margin-top:10px;background:#fff;border:1px solid #cbddeb;border-radius:8px;padding:14px;color:#173e65}#siscomPanel.open{display:block}.siscomHeader{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center}.siscomHeader h3{margin:0;font-size:14px}.siscomRow{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:12px 0}.siscomRow label{font-weight:700;display:grid;gap:5px}.siscomRow input{height:35px;border:1px solid #bed1e2;border-radius:5px;padding:7px;min-width:240px}.siscomRow button{height:35px;background:#0879f7;border:0;border-radius:5px;color:#fff;font-weight:700;padding:0 14px;cursor:pointer}.siscomRow button:disabled{opacity:.6;cursor:wait}.siscomMeta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}.siscomTile{padding:10px;background:#f1f6fb;border:1px solid #dce8f2;border-radius:6px}.siscomTile small{display:block;color:#55718c;margin-bottom:5px}.siscomTimeline{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:8px}.siscomTimeline li{padding:9px 12px;border-left:3px solid #0879f7;background:#f5f9fd;border-radius:4px}.siscomTimeline small{display:block;color:#55718c;margin-top:4px}.siscomHint{font-size:11px;color:#607b95;margin-top:8px}.siscomState{font-weight:700}
+</style><style>
+#siscomBaixaModal{padding:12px;z-index:400;overflow:auto}
+#siscomBaixaModal .sbShell{width:min(1260px,98vw);max-width:98vw;max-height:96vh;overflow:auto;padding:0;border-radius:12px;box-shadow:0 18px 55px #001e3b50;color:#153b65}
+.sbHeader{background:linear-gradient(100deg,#073969,#0861a8);color:white;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:18px 22px;flex-wrap:wrap}
+.sbHeader h3{margin:0;font-size:18px}.sbHeader h3 span{font-weight:400;font-size:14px}.sbHeader strong{background:#ffe8a4;color:#6e4800;padding:9px 13px;border-radius:7px;font-size:12px}
+.sbColumns{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:15px;background:#f2f6fa;align-items:stretch}
+.sbPane{min-width:0;background:#fff;border:1px solid #d5e2ee;border-radius:9px;padding:17px;box-shadow:0 2px 8px #0b315c0a}
+.sbPane h4{margin:-17px -17px 17px;padding:14px 17px;background:#eaf3fd;color:#084e8c;font-size:14px;border-radius:9px 9px 0 0}
+#siscomBaixaModal .executionGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+#siscomBaixaModal .executionGrid input,#siscomBaixaModal .executionGrid select,#siscomBaixaModal .executionGrid textarea{width:100%;border:1px solid #c8d7e6;border-radius:5px;background:#fff;color:#143c63;font-size:12px;padding:8px;min-width:0}
+#siscomBaixaModal .executionGrid input{height:37px}
+#siscomBaixaModal .executionGrid label{font-size:11px;margin-bottom:5px}
+.sbSummarySS{font-size:13px;margin-bottom:16px}.sbSummarySS div{font-size:17px;margin-top:7px;font-weight:700;color:#07599a}
+.sbSummaryDates{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}
+.sbSummaryField{margin-bottom:18px}.sbSummaryField b,.sbSummaryDates b{display:block;font-size:12px;color:#0a4c89;margin-bottom:7px}
+.sbRead{background:#edf3f8;border:1px solid #d4e1ec;padding:12px;min-height:42px;border-radius:5px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;color:#193e62}
+.sbMultiline{min-height:75px}.sbSource{font-size:11px;color:#617e97;line-height:1.5}
+.sbStatus{font-size:11px;color:#315e82;white-space:pre-wrap;min-height:30px;margin-bottom:0}
+.sbFooter{margin:0;padding:13px 17px;background:#fff;border-top:1px solid #dce6ef;flex-wrap:wrap}
+@media(max-width:850px){.sbColumns{grid-template-columns:1fr}.sbHeader h3{font-size:15px}.sbSummaryDates{grid-template-columns:1fr}}
+@media(max-width:430px){#siscomBaixaModal .executionGrid{grid-template-columns:1fr}.sbColumns{padding:8px}.sbPane{padding:12px}.sbPane h4{margin:-12px -12px 14px}}
+</style><style>
+/* Layout compacto da baixa SISCOM: mantém todos os IDs e eventos JS existentes. */
+#siscomBaixaModal{padding:8px!important}
+#siscomBaixaModal .sbShell{width:min(1500px,99vw)!important;max-width:99vw!important;height:min(940px,98vh);max-height:98vh!important;display:flex;flex-direction:column;overflow:hidden!important}
+#siscomBaixaModal .sbHeader{padding:10px 17px;flex:0 0 auto}
+#siscomBaixaModal .sbHeader h3{font-size:17px}
+#siscomBaixaModal .sbHeader strong{padding:6px 10px}
+#siscomBaixaModal .sbRibbon{background:#f4f8fd;padding:9px 13px 4px;flex:0 0 auto;border-bottom:1px solid #d6e4f1}
+#siscomBaixaModal .sbRibbonTitle{font-size:11px;font-weight:700;margin:0 0 5px;color:#07599a}
+#siscomBaixaModal .sbRibbon .sbSummaryTop{display:grid;grid-template-columns:1.2fr 1.9fr 1fr 1fr 1.7fr 1.6fr;gap:0;margin:0 0 6px;background:#fff;border:1px solid #d5e2ee;border-radius:8px;overflow:hidden}
+#siscomBaixaModal .sbRibbon .sbSummaryTop>div{padding:8px 10px;min-width:0;border-right:1px solid #dce6ef}
+#siscomBaixaModal .sbRibbon .sbSummaryTop>div:last-child{border:0}
+#siscomBaixaModal .sbRibbon .sbSummaryTop b{font-size:10px;margin-bottom:3px}
+#siscomBaixaModal .sbRibbon .sbRead{background:transparent;border:0;padding:0;min-height:0;font-size:12px;overflow-wrap:anywhere}
+#siscomBaixaModal .sbRibbon #sbResumoSS{font-size:15px;font-weight:800;color:#07599a}
+#siscomBaixaModal .sbColumns{flex:1 1 auto;min-height:0;overflow:auto;grid-template-columns:1fr 1fr;gap:12px;padding:10px;align-items:start}
+#siscomBaixaModal .sbPane{padding:12px;min-width:0}
+#siscomBaixaModal .sbPane h4{margin:-12px -12px 10px;padding:10px 12px;font-size:12px}
+#siscomBaixaModal .sbInnerTitle{background:linear-gradient(90deg,#0c477e,#2a679c)!important;color:white!important;border-radius:6px!important;margin:0 0 10px!important}
+#siscomBaixaModal .sbOfficialDetails{border:1px solid #d2e2f0;border-radius:7px;margin-bottom:12px;overflow:hidden}
+#siscomBaixaModal .sbOfficialDetails>summary{cursor:pointer;background:#eaf3fd;padding:9px 11px;font-weight:700;color:#084e8c;font-size:12px}
+#siscomBaixaModal .sbOfficialDetails .sbPill{float:right;font-size:10px;padding:2px 7px}
+#siscomBaixaModal .sbOfficialGrid{padding:10px;gap:8px!important}
+#siscomBaixaModal .sbOfficialGrid .sbCompactField{display:none}
+#siscomBaixaModal .sbOfficialGrid .sbRead{min-height:29px;padding:6px!important}
+#siscomBaixaModal .executionGrid{gap:8px!important}
+#siscomBaixaModal .executionGrid textarea{min-height:60px!important}
+#siscomBaixaModal #sbCompSection{margin-top:12px!important;padding:10px!important}
+#siscomBaixaModal #sbCompSection h4{margin:-10px -10px 10px;padding:10px 12px;background:#e5f1fd;color:#084e8c}
+#siscomBaixaModal #sbCompSection>p{margin:6px 0}
+#siscomBaixaModal .sbSummaryDates{gap:7px;margin-bottom:10px}
+#siscomBaixaModal .sbSummaryField{margin-bottom:9px}
+#siscomBaixaModal .sbSummaryField .sbRead{min-height:40px;max-height:100px;overflow:auto}
+#siscomBaixaModal .sbHistoryPane{margin-top:12px;border:1px solid #d5e2ee;border-radius:8px;overflow:hidden}
+#siscomBaixaModal .sbHistoryPane h4{margin:0;padding:10px 12px;background:linear-gradient(90deg,#0c477e,#2a679c);color:#fff}
+#siscomBaixaModal .sbHistoryPane #sbHistoricoStatus{padding:6px 10px;margin:0}
+#siscomBaixaModal .sbHistoryPane #sbHistoricoLista{max-height:260px!important;overflow:auto;margin:0 9px 9px}
+#siscomBaixaModal .sbFooter{flex:0 0 auto;position:relative!important;display:flex;justify-content:flex-end;gap:8px;padding:9px 13px!important}
+#siscomBaixaModal .sbFooter .btn{height:35px}
+@media(max-width:1050px){#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){#siscomBaixaModal .sbColumns{grid-template-columns:1fr}#siscomBaixaModal .sbRibbon .sbSummaryTop{grid-template-columns:repeat(2,minmax(0,1fr))}#siscomBaixaModal .sbShell{height:98vh}#siscomBaixaModal .sbFooter{flex-wrap:wrap}#siscomBaixaModal .sbFooter .btn{flex:1}}
+</style><style>
+.siscomTopAuth{background:#083d73;color:#fff;border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.siscomTopBrand{font-size:15px;font-weight:800}.siscomTopBrand span{font-weight:400;font-size:11px;color:#c8deef;margin-left:8px}
+.siscomTopButtons{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.siscomTopButtons #siscomIdentityLabel{font-size:12px;font-weight:700;margin-right:8px}
+.siscomTopButtons .btn{height:34px;padding:0 12px}.siscomLoginDialog{max-width:440px;width:min(94vw,440px)!important;padding:24px}
+.siscomLoginDialog h3{font-size:20px;margin:0 0 12px}.siscomLoginDialog p{font-size:12px;line-height:1.6;color:#47627c}
+.siscomLoginDialog label{display:block;font-weight:bold;margin-top:14px}.siscomLoginDialog input{width:100%;height:41px;padding:9px;border:1px solid #b3ccdf;border-radius:6px;margin-top:6px}
+#siscomLoginFeedback{min-height:18px;margin-top:13px;color:#9b2c23;font-size:12px}
+.siscomLoginDialog .modalBtns{margin-top:16px;display:flex;justify-content:flex-end;gap:8px}
+</style>
+</head><body><main>
+<div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
+ <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
+ <div class="siscomTopButtons"><span id="siscomIdentityLabel">SISCOM: não conectado</span><button type="button" class="btn primary" id="siscomLoginTop">🔐 Login SISCOM</button><button type="button" class="btn" id="siscomConsultaTop" disabled>Consultar SS</button><button type="button" class="btn" id="siscomLogoutTop" hidden>Sair</button></div>
+</div>
+<div class="modalBg" id="siscomLoginModal" role="dialog" aria-modal="true" aria-labelledby="siscomLoginTitle">
+ <div class="modalBox siscomLoginDialog"><h3 id="siscomLoginTitle">Login individual SISCOM</h3>
+ <p>Utilize seu usuário e senha do SISCOM. A senha é criptografada antes de seguir para o worker Windows. Nenhuma SS será alterada pelo login.</p>
+ <form id="siscomLoginForm" autocomplete="on"><label for="siscomLoginUser">Usuário SISCOM</label><input id="siscomLoginUser" name="username" autocomplete="username" required maxlength="80" placeholder="usuario.cgm"/>
+ <label for="siscomLoginPassword">Senha SISCOM</label><input id="siscomLoginPassword" type="password" name="password" autocomplete="current-password" required maxlength="256"/>
+ <div id="siscomLoginFeedback" aria-live="polite"></div>
+ <div class="modalBtns"><button type="button" class="btn" id="siscomLoginCancel">Cancelar</button><button type="submit" class="btn primary" id="siscomLoginSubmit">Entrar no SISCOM</button></div></form>
+ </div>
+</div>
+
+<section class="toolbar"><button class="tab active" data-screen="recepcao">▣   RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled="" title="Notas em preparação ainda não estão disponíveis">⚙   PREPARAÇÃO</button><button class="tab" data-screen="campo">▤   NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁   NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas" title="Mantém as situações integradas (incluindo rejeitadas e duplicadas), até a definição de classificação específica">✓   NOTAS BAIXADAS</button><button class="tab" data-screen="tramitacao">⇄   TRAMITAÇÃO</button><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button class="multiBtn" id="macroBtn" type="button">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button class="multiBtn" id="cityBtn" type="button">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"/></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"/></div><button class="btn primary" id="filterBtn">▽   Filtrar</button><button class="btn" id="clearBtn">×   Limpar</button><button class="btn" id="refreshBtn" title="Consultar novamente o banco sem perder os filtros" type="button"><span class="spin">⟳</span>   Atualizar</button><div class="ssQuickSearch" id="buscaDiretaBox" title="Busca de SS em todas as datas, diretamente no PostgreSQL"><input aria-label="Pesquisar SS no banco" autocomplete="off" id="buscaDiretaSS" placeholder="Pesquisar SS..." type="search"/><button aria-label="Pesquisar SS" id="buscaDiretaBtn" title="Pesquisar SS" type="button">⌕</button><button aria-label="Limpar pesquisa de SS" id="buscaDiretaLimpar" title="Limpar pesquisa" type="button">×</button></div></section>
+<section id="tramitacaoIntro" class="tramitacaoIntro" hidden aria-label="Painel de tramitação">
+  <div class="tramitacaoHeading"><div><span class="tramitacaoEyebrow">GESTÃO DE SS</span><h2>Tramitação</h2><p>SS com baixa registrada na integração do GLOBAL SS. Consulte os registros e confira os dados antes da definição do fluxo de tramitação.</p></div><div class="tramitacaoIndicador">SOMENTE CONSULTA</div></div>
+  <div class="tramitacaoStats"><div class="tramitacaoStat"><small>SS nesta página</small><strong id="tramPagina">0</strong></div><div class="tramitacaoStat"><small>SS selecionadas</small><strong id="tramSelecionadas">0</strong></div><div class="tramitacaoStat"><small>Origem dos registros</small><strong style="font-size:13px">uMov / PostgreSQL</strong></div></div>
+  <p class="tramitacaoAviso">A tramitação oficial ainda não está integrada. Nenhuma alteração de status ou envio ao SISCOM será executado nesta aba.</p>
+</section>
+<section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div aria-live="polite" id="buscaDiretaStatus" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
+<section class="box"><div class="tableScroll"><table><thead><tr><th class="check"><input id="all" type="checkbox"/></th><th data-key="ss">SS<span class="sort">↕</span></th><th data-key="equipe_executou" id="receptionTeamHeader">EQUIPE<span class="sort">↕</span></th><th data-key="logradouro">RUA<span class="sort">↕</span></th><th data-key="bairro">BAIRRO<span class="sort">↕</span></th><th data-key="cidade">CIDADE<span class="sort">↕</span></th><th data-key="setor">SETOR<span class="sort">↕</span></th><th data-key="servico">MACRO<span class="sort">↕</span></th><th data-key="tags">TAG<span class="sort">↕</span></th><th data-key="criado_em" id="lastHeader">DATA DE ABERTURA<span class="sort">↕</span></th><th data-key="equipe_executou" hidden="" id="teamHeader">EQUIPE QUE EXECUTOU<span class="sort">↕</span></th><th data-key="status_integracao" hidden="" id="integrationHeader">STATUS INTEGRAÇÃO<span class="sort">↕</span></th></tr></thead><tbody class="filter"><tr><td></td><td><input data-col="ss"/></td><td id="receptionTeamFilterCell"><input data-col="equipe_executou" placeholder="Filtrar equipe..."/></td><td><input data-col="logradouro"/></td><td><input data-col="bairro"/></td><td><input data-col="cidade"/></td><td><input data-col="setor"/></td><td><input data-col="servico"/></td><td><input data-col="tags"/></td><td><input data-col="criado_em" id="lastFilter"/></td><td hidden="" id="teamFilterCell"><input data-col="equipe_executou" id="teamFilter"/></td><td hidden="" id="integrationFilterCell"><input data-col="status_integracao" id="integrationFilter"/></td></tr></tbody><tbody id="rows"></tbody></table></div><div class="pager"><span id="countInfo">Carregando SS...</span><span id="selectedInfo" style="display:none;margin-left:14px;background:#e6f3ff;color:#0871d1;padding:6px 10px;border-radius:14px;font-weight:700"></span><div class="listControls"><span>Mostrar</span><select id="pageSize"><option>10</option><option selected="">25</option><option>50</option><option>100</option></select><span>SS</span></div></div><div class="hint">Marque uma ou várias SS. A opção de envio abre somente após selecionar.</div></section>
+<section class="lower" id="lower"><div class="card"><button id="closeDetail" style="float:right;border:0;background:#eef5fb;border-radius:5px;width:28px;height:28px">×</button><h3>▣   DETALHES DA SS   <span id="titleSS" style="color:#0879f7"></span></h3><div class="details"><div class="field"><span>SS:</span><div class="val" id="dss"></div></div><div class="field"><span>Data de Abertura:</span><div class="val" id="ddata"></div></div><div class="field"><span>Rua:</span><div class="val" id="drua"></div></div><div class="field"><span>Nº / Complemento:</span><div class="val" id="dnumero"></div></div><div class="field"><span>Bairro:</span><div class="val" id="dbairro"></div></div><div class="field"><span>Cidade:</span><div class="val" id="dcidade"></div></div><div class="field"><span>Setor:</span><div class="val" id="dsetor"></div></div><div class="field"><span>Referência:</span><div class="val" id="dreferencia"></div></div><div class="field"><span>Macro:</span><div class="val" id="dmacro"></div></div><div class="field"><span>Tag:</span><div class="val" id="dtag"></div></div><div class="field"><span>Situação:</span><div class="val" id="dsituacao"></div></div><div class="field"><span>Hidrômetro:</span><div class="val" id="dhidrometro"></div></div></div></div><div class="card"><h3 id="detailInfoTitle">▰   INFORMAÇÕES COMPLEMENTARES</h3><textarea class="note" id="note" readonly=""></textarea><div class="executionGrid" hidden="" id="executionInfo"><div><label>QUANDO (EXECUTADO) — INÍCIO</label><div class="val executionValue" id="dInicioAtividade"></div></div><div><label>QUANDO (EXECUTADO) — FIM</label><div class="val executionValue" id="dFimAtividade"></div></div><div class="full"><label>SERVIÇO EXECUTADO</label><div class="val executionValue" id="dInfoExecucao"></div></div><div class="full"><label>MATERIAL USADO</label><div class="val executionValue" id="dMateriais"></div></div><div class="full"><label>PAVIMENTAÇÃO</label><div class="val executionValue" id="dPavimentacao">Não informado</div></div></div></div><div class="card"><h3>⚙   AÇÕES DA SS</h3><div class="actions"><button class="action" hidden="" id="viewSSBtn"><b>▤</b>Visualizar Arquivo</button><button class="action" hidden="" id="generatePdfBtn"><b>▣</b>Gerar PDF do Relatório</button><button class="action" hidden="" id="viewReportBtn"><b>▤</b>Visualizar Relatório</button><button class="action" hidden="" id="groupedBtn"><b>♟</b>Visualizar Agrupado</button><button class="action" hidden="" id="downloadBtn"><b>↓</b>Baixar</button><button class="action" hidden="" id="duplicateBtn"><b>▣+</b>Duplicar</button><button class="action" hidden="" id="rejectBtn"><b>×</b>Rejeitar</button><button class="action" hidden="" id="launchItemsBtn"><b>☷+</b>Lançar Itens</button><button class="action" hidden="" id="returnReceptionBtn"><b>↩</b>Retornar para Recepção</button><button class="action" hidden="" id="tagBtn"><b>◆</b>Adicionar Tag</button><button class="action" hidden="" id="sendTeamBtn"><b>➜</b>Enviar para Equipe</button><button class="action" hidden="" id="removeTeamBtn"><b>↩</b>Remover da Equipe</button></div></div></section><section aria-label="Auditoria oficial SISCOM" id="siscomPanel"><div class="siscomHeader"><h3>◷   SITUAÇÃO E HISTÓRICO OFICIAL SISCOM — <span id="siscomNumber"></span></h3><span class="siscomState" id="siscomState">Não verificado</span></div><div class="siscomRow"><input id="siscomGatewayToken" type="hidden"/><button id="siscomVerify" type="button">Verificar no SISCOM</button></div><div class="siscomMeta"><div class="siscomTile"><small>Status no sistema</small><strong id="siscomLocal">—</strong></div><div class="siscomTile"><small>Status SISCOM</small><strong id="siscomOfficial">Não verificado</strong></div><div class="siscomTile"><small>Responsável / evento final</small><strong id="siscomUser">—</strong></div><div class="siscomTile"><small>Data e hora do evento</small><strong id="siscomDate">—</strong></div></div><div id="siscomFeedback" role="status" style="margin-top:10px"></div><details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700">Histórico de eventos do SISCOM (<span id="siscomCount">0</span>)</summary><ol class="siscomTimeline" id="siscomTimeline"></ol></details><div class="siscomHint">Consulta somente leitura. A consulta exige sessão autenticada; o status local não é alterado.</div></section></main>
+<div aria-labelledby="tagModalTitle" aria-modal="true" class="modalBg" id="tagModal" role="dialog"><div class="modalBox" style="width:460px;max-width:95vw"><h3 id="tagModalTitle">Gerenciar tag das SS</h3><p id="tagModalCount" style="margin:10px 0;color:#476481"></p><label for="tagModalInput" style="display:block;margin-bottom:6px;font-weight:700">Tag</label><input id="tagModalInput" maxlength="120" placeholder="Digite a tag que deseja adicionar" style="width:100%;padding:11px;border:1px solid #bed1e2;border-radius:6px"/><p style="color:#526b80;font-size:12px">Adicionar substitui a tag atual. Limpar remove a tag das SS selecionadas.</p><div aria-live="polite" id="tagModalError" style="color:#b42318;min-height:18px"></div><div class="modalBtns" style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn" id="tagModalCancel" type="button">Cancelar</button><button class="btn" id="tagModalClear" style="border-color:#c94c4c;color:#a92b2b" type="button">Limpar tag</button><button class="btn primary" id="tagModalSave" type="button">Adicionar tag</button></div></div></div>
+<style>
+#siscomBaixaModal .sbShell{width:min(1480px,98vw);max-height:96vh;background:#f4f8fc}
+#siscomBaixaModal .sbHeader{padding:14px 22px}
+#siscomBaixaModal .sbHeader #sbCloseTop{border:0;background:transparent;color:white;font-size:28px;cursor:pointer}
+#siscomBaixaModal .sbColumns{grid-template-columns:1.1fr 1fr;gap:14px}
+#siscomBaixaModal .sbPane{padding:15px}
+#siscomBaixaModal .sbPane h4{margin:-15px -15px 16px;padding:14px 15px;font-size:15px}
+#siscomBaixaModal .sbInnerTitle{margin:18px -15px 14px!important;border-radius:0!important}
+#siscomBaixaModal .sbOfficialGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#siscomBaixaModal .sbOfficialGrid label{display:block;font-size:11px;font-weight:bold;color:#0b4f91;margin-bottom:5px}
+#siscomBaixaModal .sbOfficialGrid .sbRead{min-height:37px;display:flex;align-items:center}
+#siscomBaixaModal .sbOfficialGrid select{height:37px;width:100%;border:1px solid #c8d7e6;border-radius:5px;color:#143c63;background:#fff}
+#siscomBaixaModal .sbPill{float:right;background:#e3f4ec;color:#12603e;border-radius:16px;padding:5px 9px;font-size:11px;font-weight:600}
+#siscomBaixaModal .sbDuration{background:#e5f7ef;color:#176943;font-weight:bold;justify-content:center}
+#siscomBaixaModal .sbSummaryTop{display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:10px;margin-bottom:16px}
+#siscomBaixaModal .sbSummaryTop b{display:block;color:#0a4c89;margin-bottom:6px;font-size:11px}
+#siscomBaixaModal .sbSummaryTop .sbRead{min-height:43px}
+#siscomBaixaModal .sbSummaryDates{margin-bottom:14px}
+#siscomBaixaModal .sbSummaryField{margin-bottom:14px}
+#siscomBaixaModal .sbSummaryField .sbRead{min-height:55px;white-space:pre-wrap}
+#siscomBaixaModal .executionGrid textarea{resize:vertical}
+#siscomBaixaModal #sbEquipes{margin-top:4px}
+#siscomBaixaModal .sbFooter{position:sticky;bottom:0;background:#fff;padding:12px 18px;border-top:1px solid #d8e5f1;z-index:2}
+@media(max-width:900px){#siscomBaixaModal .sbColumns{grid-template-columns:1fr}#siscomBaixaModal .sbSummaryTop{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){#siscomBaixaModal .sbOfficialGrid,#siscomBaixaModal .sbSummaryTop{grid-template-columns:1fr 1fr}}
+</style>
+<div aria-labelledby="siscomBaixaTitle" aria-modal="true" class="modalBg" id="siscomBaixaModal" role="dialog">
+<div class="modalBox sbShell">
+<div class="sbHeader"><h3 id="siscomBaixaTitle">▣ Baixar SS no SISCOM <span>— Baixa real (somente teste)</span></h3><strong>⚠ Baixa real — confirme antes de enviar</strong><button aria-label="Fechar" id="sbCloseTop" type="button">×</button></div>
+<section class="sbRibbon"><div class="sbRibbonTitle">▣ Dados principais da SS</div><div class="sbSummaryTop">
+<div><b>SS</b><div class="sbRead" id="sbResumoSS">—</div></div>
+<div><b>Endereço</b><div class="sbRead" id="sbResumoEndereco">Não informado</div></div>
+<div><b>Bairro</b><div class="sbRead" id="sbResumoBairro">Não informado</div></div>
+<div><b>Setor</b><div class="sbRead" id="sbResumoSetor">Não informado</div></div>
+<div><b>Macro (oficial)</b><div class="sbRead" id="sbResumoMacro">Não informado</div></div>
+<div><b>Tipo de solicitação</b><div class="sbRead" id="sbResumoTipo">Não informado</div></div>
+</div></section><div class="sbColumns">
+<section class="sbPane sbFormPane"><details class="sbOfficialDetails" open=""><summary>▣ Dados oficiais e validação SISCOM<span class="sbPill" id="sbLoadBadge">Aguardando consulta</span></summary><div class="sbOfficialGrid">
+<div class="sbCompactField"><label>SS</label><div class="sbRead" id="sbOfficialSS">—</div></div>
+<div class="sbCompactField"><label>Situação</label><div class="sbRead" id="sbOfficialStatus">Não informado</div></div>
+<div class="sbCompactField"><label>Data de registro</label><div class="sbRead" id="sbOfficialData">Não informado</div></div>
+<div><label>Unidade executora</label><div class="sbRead" id="sbOfficialExecutor">—</div></div>
+<div class="sbCompactField"><label>Macro (código oficial)</label><div class="sbRead" id="sbOfficialMacro">—</div></div>
+<div><label>Última SS</label><select id="sbUltima"><option value="">Não informado</option><option value="S">Sim</option><option value="N">Não</option></select></div>
+<div><label>Início da execução</label><div class="sbRead" id="sbOfficialInicio">Não informado</div></div>
+<div><label>Fim da execução</label><div class="sbRead" id="sbOfficialFim">Não informado</div></div>
+<div><label>Duração</label><div class="sbRead sbDuration" id="sbDuracao">Não informado</div></div>
+</div></details>
+
+
+<h4 class="sbInnerTitle">❶ Preenchimento da baixa</h4>
+<div class="executionGrid">
+<input id="sbToken" type="hidden"/><div><label>Equipe *</label><input autocomplete="off" id="sbEquipeBusca" inputmode="numeric" placeholder="Digite o código"/><select id="sbEquipes"><option value="">Consulte as equipes</option></select></div>
+<div><label>Código da unidade executora</label><input id="sbExecutor" inputmode="numeric" placeholder="Consultando executor..." readonly=""/></div>
+<div><label>Serviço Executado *</label><select id="sbMicro"><option value="">Carregando serviços...</option></select></div>
+<div><label>Macro (código oficial)</label><input id="sbMacro" inputmode="numeric" placeholder="Consultando macro..." readonly=""/></div>
+<div hidden="" id="sbCausaBox"><label>Causa do problema *</label><select id="sbCausa"><option value="">Selecione primeiro o serviço executado</option></select></div>
+<div><label>Início da execução</label><input id="sbInicio" placeholder="Data e hora da equipe"/></div>
+<div><label>Fim da execução</label><input id="sbFim" placeholder="Data e hora da equipe"/></div>
+<div class="full"><label>Descrição da execução *</label><textarea id="sbDescricao" style="min-height:78px"></textarea></div>
+<div class="full"><label>Observações adicionais (prévia)</label><textarea id="sbObservacoes" maxlength="500" placeholder="Observações complementares..." style="min-height:65px"></textarea></div>
+</div>
+<section id="sbCompSection" style="margin-top:16px;padding:14px;border:1px solid #b8d2e6;border-radius:10px;background:#f6faff">
+<h4>❷ SS complementar (operação independente)</h4>
+<p style="font-size:12px">A complementar é criada separadamente da baixa. Confira os dados antes de confirmar.</p>
+<div class="executionGrid">
+<div><label>Área de serviço *</label><select id="sbCompArea"><option value="">Carregar áreas</option></select></div>
+<div><label>Serviço macro *</label><select id="sbCompServico"><option value="">Selecione uma área</option></select></div>
+<div class="full"><label>Descrição da complementar *</label><textarea id="sbCompDescricao" maxlength="1000" placeholder="Descreva o serviço complementar..." rows="3"></textarea></div>
+</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="sbCompAtualizar" type="button">↻ Atualizar áreas e complementares</button><button class="btn primary" id="sbCompCriar" type="button">+ Confirmar e gerar complementar</button></div>
+<p aria-live="polite" class="sbStatus" id="sbCompStatus"></p>
+</section>
+
+<p aria-live="polite" class="sbStatus" id="sbStatus"></p>
+</section>
+<aside class="sbPane sbSummary">
+<h4>▣ Retorno preenchido pela equipe</h4>
+
+<h4 class="sbInnerTitle">▤ Retorno preenchido pela equipe</h4>
+<div class="sbSummaryDates">
+<div><b>Equipe responsável</b><div class="sbRead" id="sbResumoEquipe">Não informado</div></div>
+<div><b>Quando (executado) — início</b><div class="sbRead" id="sbResumoInicio">Não informado</div></div>
+<div><b>Quando (executado) — fim</b><div class="sbRead" id="sbResumoFim">Não informado</div></div>
+</div>
+<div class="sbSummaryField"><b>Informação da execução</b><div class="sbRead sbMultiline" id="sbResumoExecucao">Não informado</div></div>
+<div class="sbSummaryField"><b>Materiais lançados</b><div class="sbRead sbMultiline" id="sbResumoMateriais">Não informado</div></div>
+<div class="sbSummaryField"><b>Pavimentação</b><div class="sbRead sbMultiline" id="sbResumoPavimentacao">Não informado</div></div>
+<p class="sbSource">Informações do retorno real da equipe. Campos não informados não serão inventados.</p>
+<section class="sbHistoryPane">
+<h4>Histórico oficial de eventos do SISCOM</h4>
+<p aria-live="polite" class="sbStatus" id="sbHistoricoStatus">Aguardando consulta...</p>
+<div id="sbHistoricoLista" style="max-height:190px;overflow:auto;font-size:12px"></div>
+</section></aside>
+</div>
+<div class="modalBtns sbFooter"><button class="btn" id="sbRecarregar">↻ Recarregar consultas</button><button class="btn" id="sbLimpar">Limpar campos</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">✓ Confirmar e baixar SS no SISCOM</button></div>
+<input id="sbSS" type="hidden"/>
+</div>
+</div>
+<div class="modalBg" id="teamModal"><div class="modalBox"><h3>Enviar SS para Equipe</h3><div>Digite o <b>número</b> ou o <b>nome</b> da equipe/técnico:</div><input autocomplete="off" id="sendTeamSearch" placeholder="Ex.: 270 ou THIAGO"/><div class="modalList" id="sendTeamList"></div><div id="sendTeamSelected" style="margin-top:8px;font-weight:bold"></div><div class="modalBtns"><button class="btn" id="cancelTeam">Cancelar</button><button class="btn primary" id="confirmTeam">Enviar para equipe</button></div></div></div>
+<script>
+// Notificação global, disponível desde o início da aplicação.
+window.notify = function(message, kind) {
+  let el = document.getElementById('integrationToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'integrationToast';
+    el.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:10000;max-width:360px;padding:12px 15px;border-radius:7px;color:#fff;font-weight:700;box-shadow:0 8px 24px #001a3a44';
+    document.body.appendChild(el);
+  }
+  el.style.background = kind === 'error' ? '#c63b3b' : '#0879f7';
+  el.textContent = String(message);
+  el.hidden = false;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.hidden = true; }, 5000);
+};
+</script>
+<script>
+const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));let currentScreen='recepcao';const fixedCols=['ss','logradouro','bairro','cidade','setor','servico','tags'];const currentCols=()=>currentScreen==='campo'?[...fixedCols,'equipe_executou']:(currentScreen==='baixar'?[...fixedCols,'data_finalizacao','equipe_executou']:((currentScreen==='encerradas'||currentScreen==='tramitacao')?[...fixedCols,'data_finalizacao','equipe_executou','status_integracao']:[fixedCols[0],'equipe_executou',...fixedCols.slice(1),'criado_em']));let raw=[],view=[],cities=[],macros=[],selected={},page=25,sort='',dir=1,target=null;
+const isoDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`};
+function setDefaultDateRange(){const fim=new Date(),inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);$('dateIni').value=isoDate(inicio);$('dateFim').value=isoDate(fim)}
+setDefaultDateRange();
+const val=(x,k)=>{const valor=String(x[k]??'').trim();return k==='status_integracao'&&valor.toLocaleLowerCase('pt-BR')==='baixada no siscom'?'Baixada':valor};
+const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','duplicateBtn','tagBtn','rejectBtn'],campo:['returnReceptionBtn','sendTeamBtn','tagBtn'],baixar:['viewSSBtn','generatePdfBtn','tagBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','launchItemsBtn'],encerradas:['viewReportBtn','groupedBtn'],tramitacao:['viewReportBtn','groupedBtn']};
+function configureActions(screen){const allowed=actionSets[screen]||[];document.querySelectorAll('.actions .action').forEach(button=>button.hidden=!allowed.includes(button.id))}
+function norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+function screenMatch(x){
+  const situacao=norm(val(x,'situacao_campo'));
+  const statusIntegracao=norm(val(x,'status_integracao'));
+  const ultima=val(x,'ultima_atividade');
+
+  // RECEPÇÃO: somente pendentes de envio para campo.
+  if(currentScreen==='recepcao'){
+    return situacao.includes('pendente de envio para campo');
+  }
+
+  // PREPARAÇÃO permanece desativada e não lista dados.
+  if(currentScreen==='preparacao') return false;
+
+  // NOTAS EM CAMPO: somente tarefas efetivamente Em Campo.
+  if(currentScreen==='campo') return situacao.includes('em campo');
+
+  // NOTAS PARA BAIXAR: Retornada de Campo e sem status de integração.
+  if(currentScreen==='baixar'){
+    return situacao.includes('retornada de campo') && !statusIntegracao && !!ultima;
+  }
+
+  // NOTAS ENCERRADAS: qualquer nota já integrada (Baixada, Rejeitada, Duplicada etc.).
+  if(currentScreen==='encerradas') return !!statusIntegracao;
+
+  // TRAMITAÇÃO: SS que constam como baixadas no sistema, sem presumir conclusão da tramitação.
+  if(currentScreen==='tramitacao') return statusIntegracao.startsWith('baixad');
+
+  return true;
+}
+function apply(){
+  const q=Object.fromEntries([...document.querySelectorAll('.filter input')].map(i=>[i.dataset.col,i.value.toLowerCase()]));if(window.__globalSSSearch||window.__buscaSSAtiva)Object.keys(q).forEach(k=>q[k]='');
+  view=raw.filter(x=>(window.__buscaSSAtiva||screenMatch(x))&&(window.__globalSSSearch||window.__buscaSSAtiva||!cities.length||cities.includes(val(x,'cidade')))&&(window.__globalSSSearch||window.__buscaSSAtiva||!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
+  if(sort)view.sort((a,b)=>val(a,sort).localeCompare(val(b,sort),'pt-BR',{numeric:true})*dir);
+  render()
+}
+function render(){let a=view.slice(0,page);$('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(k==='data_finalizacao'?(val(x,'periodo_execucao')||val(x,k)):val(x,k))+'</td>').join('')+'</tr>').join('');[...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];fill(a[i]);render()});$('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';$('countInfo').textContent='Exibindo '+a.length+' de '+view.length+' SS'+(window.ms?' • consulta '+window.ms+' ms':'')}
+function fill(x){if(!x)return;window.__detailSS=x;document.body.classList.add('panel-open');$('lower').classList.add('open');$('titleSS').textContent=$('dss').textContent=val(x,'ss');[['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));const paraBaixar=currentScreen==='baixar';$('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; EXECUÇÃO DA ATIVIDADE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';$('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;if(paraBaixar){$('dInicioAtividade').textContent=val(x,'inicio_atividade')||'Não informado';$('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';$('dInfoExecucao').textContent=val(x,'info_execucao_siscom')||val(x,'informacao_solicitante')||'Não informado';$('dMateriais').textContent=val(x,'materiais_lancados')||'Não informado'}else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||x.info_execucao_siscom||''}
+function menu(box,button,items,selected,empty,suffix,set,label=v=>esc(v)){box.innerHTML='<input class="menuFind" autocomplete="off" placeholder="Digite para pesquisar..."><label style="font-weight:400;border-bottom:1px solid #d8e4ee"><input class="checkAll" type="checkbox" '+(items.length&&selected.length===items.length?'checked':'')+'> Selecione...</label>'+items.map(v=>'<label class="menuOption" data-text="'+esc(String(v).toLowerCase())+'"><input class="menuCheck" type="checkbox" value="'+esc(v)+'" '+(selected.includes(v)?'checked':'')+'> '+label(v)+'</label>').join('')||'<label>Nenhum registro encontrado.</label>';const sync=()=>{const chosen=[...box.querySelectorAll('.menuCheck:checked')].map(x=>x.value);set(chosen);button.textContent=!chosen.length?empty:chosen.length===1?chosen[0]:chosen.length+' '+suffix;box.querySelector('.checkAll').checked=chosen.length===items.length&&!!items.length;apply()};box.querySelector('.checkAll').onchange=e=>{box.querySelectorAll('.menuCheck').forEach(x=>x.checked=e.target.checked);sync()};box.querySelectorAll('.menuCheck').forEach(i=>i.onchange=sync);box.querySelector('.menuFind').oninput=e=>{const q=e.target.value.toLocaleLowerCase('pt-BR');box.querySelectorAll('.menuOption').forEach(x=>x.style.display=!q||x.dataset.text.includes(q)?'flex':'none')}}
+function macroLabel(v){const m=String(v).trim().match(/^(\\d+)\\s*[-–:]?\\s*(.*)$/);return m&&m[2]?'<b>'+esc(m[1])+'</b><span style="color:#58718a"> — '+esc(m[2])+'</span>':esc(v)}
+const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];
+async function loadMenus(){try{const a=await fetch('/api/macros').then(r=>r.json());const ma=(a.rows||[]).map(x=>x.macro).filter(Boolean).sort((x,y)=>x.localeCompare(y,'pt-BR',{numeric:true}));menu($('macroMenu'),$('macroBtn'),ma,macros,'Todos','macros',x=>{macros=x;window.__pageOffset=0;load()},macroLabel);menu($('cityMenu'),$('cityBtn'),CIDADES_CONFIGURADAS,cities,'Todas','cidades',x=>{cities=x;window.__pageOffset=0;load()})}catch(e){$('macroMenu').innerHTML='<label>Erro ao carregar Macros.</label>';menu($('cityMenu'),$('cityBtn'),CIDADES_CONFIGURADAS,cities,'Todas','cidades',x=>{cities=x;window.__pageOffset=0;load()})}}
+async function load(){try{$('countInfo').textContent='Carregando SS...';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,tela:currentScreen}),r=await fetch('/api/recepcao?'+p),j=await r.json();if(!r.ok)throw Error(j.error);raw=j.rows||[];window.ms=j.ms;selected={};apply()}catch(e){$('countInfo').textContent='Erro: '+e.message}}
+['macro','city'].forEach(n=>$(n+'Btn').onclick=e=>{e.stopPropagation();$(n+'Multi').classList.toggle('open')});document.addEventListener('click',()=>document.querySelectorAll('.multi.open').forEach(x=>x.classList.remove('open')));document.querySelectorAll('.multiMenu').forEach(x=>x.onclick=e=>e.stopPropagation());document.querySelectorAll('.filter input').forEach(i=>i.oninput=apply);document.querySelectorAll('th[data-key]').forEach(t=>t.onclick=()=>{sort===t.dataset.key?dir*=-1:(sort=t.dataset.key,dir=1);document.querySelectorAll('.sort').forEach(x=>x.textContent='↕');t.querySelector('.sort').textContent=dir===1?'↑':'↓';apply()});$('pageSize').onchange=e=>{page=+e.target.value;load()};$('filterBtn').onclick=load;$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');setDefaultDateRange();loadMenus();load()};$('all').onchange=e=>{view.slice(0,page).forEach(x=>e.target.checked?selected[x.tarefa]=x:delete selected[x.tarefa]);render()};$('closeDetail').onclick=()=>{$('lower').classList.remove('open');selected={};render()};
+async function teams(){try{let r=await fetch('/api/equipes?q='+encodeURIComponent($('sendTeamSearch').value)),j=await r.json(),a=j.rows||[];$('sendTeamList').innerHTML=a.length?a.map(x=>'<div class="modalItem" data-id="'+esc(x.id)+'" data-name="'+esc(x.nome)+'"><b>'+esc(x.id)+'</b> - '+esc(x.nome)+'</div>').join(''):'<div class="modalItem">Nenhum técnico/equipe encontrado.</div>';document.querySelectorAll('.modalItem[data-id]').forEach(x=>x.onclick=()=>{target={id:x.dataset.id,nome:x.dataset.name};$('sendTeamSearch').value=target.id+' - '+target.nome;$('sendTeamSelected').textContent='Selecionado: '+$('sendTeamSearch').value})}catch(e){$('sendTeamList').textContent='Erro ao buscar equipes.'}}
+$('sendTeamBtn').onclick=async()=>{if(!Object.keys(selected).length&&window.__detailSS?.tarefa)selected[window.__detailSS.tarefa]=window.__detailSS;if(!Object.keys(selected).length)return alert('Selecione uma SS antes de enviar para uma equipe.');target=null;$('sendTeamSearch').value='';$('sendTeamSelected').textContent='';$('teamModal').classList.add('open');await teams();$('sendTeamSearch').focus()};let time;$('sendTeamSearch').oninput=()=>{clearTimeout(time);time=setTimeout(teams,180)};$('cancelTeam').onclick=()=>$('teamModal').classList.remove('open');$('teamModal').onclick=e=>{if(e.target===$('teamModal'))$('teamModal').classList.remove('open')};$('confirmTeam').onclick=async()=>{if(!target)return alert('Selecione uma equipe da lista.');const tarefas=Object.keys(selected).map(Number);if(!tarefas.length)return alert('Selecione pelo menos uma SS.');if(!confirm('Enviar '+tarefas.length+' SS para '+target.nome+'?'))return;const btn=$('confirmTeam');btn.disabled=true;btn.textContent='Enviando...';try{const r=await fetch('/api/enviar-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas,agente:Number(target.id)})});const j=await r.json();if(!r.ok&&!j.resultados)throw Error(j.error||'Erro no envio');const sucesso=(j.resultados||[]).filter(x=>x.ok).length;for(const x of (j.resultados||[])){if(x.ok)equipesPendentes.set(String(x.tarefa),{nome:target.nome,em:Date.now()})}const falhas=(j.resultados||[]).filter(x=>!x.ok);const confirmadas=(j.resultados||[]).filter(x=>x.confirmado).length;window.notify('Equipe atribuída: '+sucesso+' SS. Em Campo confirmadas: '+confirmadas+'.'+(falhas.length?' Falhas: '+falhas.length+'.':'')+(sucesso>confirmadas?' Aguarde sincronização e atualize para verificar a situação.':''),falhas.length?'error':'success');$('teamModal').classList.remove('open');if(sucesso){
+  const ids=new Set((j.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+  for(const item of raw){if(ids.has(String(item.tarefa))){item.equipe_executou=target.nome;item.tecnico=target.nome;}}
+  if(window.__detailSS&&ids.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou=target.nome;window.__detailSS.tecnico=target.nome;}
+  selected={};apply();
+  // A atualização visual é imediata. Uma nova consulta não deve bloquear o botão
+  // nem apagar o nome antes de o uMov sincronizar a atribuição.
+}else{selected={};apply()}}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();load();
+$('closeDetail').addEventListener('click',()=>{document.body.classList.remove('panel-open');window.__detailSS=null});
+document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!document.querySelector('.pick:checked')){document.body.classList.remove('panel-open');$('lower').classList.remove('open')}});
+['macroBtn','cityBtn'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>{const box=id==='macroBtn'?'macroMenu':'cityMenu';$(box).querySelector('.menuFind')?.focus()},0)));
+
+// V10.1: apenas apresentação da aba. NÃO executa nova consulta.
+function setScreen(screen,btn){
+  if(screen==='preparacao') return;
+  // Em Campo: sem restrição de datas por padrão. Preservar as datas que
+  // o programador preencher até sair da aba.
+  if(screen==='campo' && currentScreen!=='campo'){
+    $('dateIni').value='';$('dateFim').value='';
+  }else if(currentScreen==='campo' && screen!=='campo'){
+    setDefaultDateRange();
+  }
+  currentScreen=screen;window.__detailSS=null;
+  $('tramitacaoIntro').hidden=screen!=='tramitacao';
+  document.querySelector('.hint').textContent=screen==='tramitacao'?'Selecione uma SS para visualizar seus dados e relatório. Nenhuma operação de tramitação é executada nesta tela.':'Marque uma ou várias SS. A opção de envio abre somente após selecionar.';
+  configureActions(screen);
+  document.querySelectorAll('.tab[data-screen]').forEach(x=>x.classList.toggle('active',x===btn));
+  const h=$('lastHeader'), f=$('lastFilter'), teamHeader=$('teamHeader'), teamFilterCell=$('teamFilterCell'), teamFilter=$('teamFilter'), integrationHeader=$('integrationHeader'), integrationFilterCell=$('integrationFilterCell'), integrationFilter=$('integrationFilter');
+  $('receptionTeamHeader').hidden=screen!=='recepcao';
+  $('receptionTeamFilterCell').hidden=screen!=='recepcao';
+  const mostraEquipeComData=screen==='baixar'||screen==='encerradas'||screen==='tramitacao';
+  teamHeader.hidden=!mostraEquipeComData;
+  teamFilterCell.hidden=!mostraEquipeComData;
+  integrationHeader.hidden=screen!=='encerradas'&&screen!=='tramitacao';
+  integrationFilterCell.hidden=screen!=='encerradas'&&screen!=='tramitacao';
+  if(screen==='campo'){
+    h.innerHTML='EQUIPE<span class="sort">↕</span>';
+    h.dataset.key='equipe_executou';
+    f.dataset.col='equipe_executou';
+    f.placeholder='Filtrar equipe...';
+  }else if(mostraEquipeComData){
+    h.innerHTML='QUANDO (EXECUTADO)<span class="sort">↕</span>';
+    h.dataset.key='data_finalizacao';
+    f.dataset.col='data_finalizacao';
+    f.placeholder='Filtrar início ou fim...';
+    teamHeader.innerHTML='EQUIPE QUE EXECUTOU<span class="sort">↕</span>';
+    teamHeader.dataset.key='equipe_executou';
+    teamFilter.dataset.col='equipe_executou';
+    teamFilter.placeholder='Filtrar equipe...';
+    if(screen==='encerradas'||screen==='tramitacao'){
+      integrationHeader.innerHTML='STATUS INTEGRAÇÃO<span class="sort">↕</span>';
+      integrationHeader.dataset.key='status_integracao';
+      integrationFilter.dataset.col='status_integracao';
+      integrationFilter.placeholder='Baixada, rejeitada...';
+    }
+  }else{
+    h.innerHTML='DATA DE ABERTURA<span class="sort">↕</span>';
+    h.dataset.key='criado_em';
+    f.dataset.col='criado_em';
+    f.placeholder='';
+  }
+  f.value='';
+  teamFilter.value='';
+  integrationFilter.value='';
+  sort='';
+  load();
+}
+document.querySelectorAll('.tab[data-screen]').forEach(btn=>{
+  btn.addEventListener('click',()=>{if(!btn.disabled)setScreen(btn.dataset.screen,btn)});
+});
+
+configureActions(currentScreen);
+
+
+// ===== V10.5 - relatório sem qualquer nova consulta =====
+(function(){
+  function getSelectedSS(){
+    const checked=[...document.querySelectorAll('tbody input[type="checkbox"]:checked')];
+    if(checked.length){
+      const tr=checked[0].closest('tr');
+      const cell=tr && (tr.querySelector('td.ss') || tr.querySelector('td:nth-child(2)'));
+      if(cell) return cell.textContent.trim();
+    }
+    const d=document.getElementById('dss');
+    if(d) return String(d.value||d.textContent||'').trim();
+    return '';
+  }
+
+  document.addEventListener('click',function(e){
+    const btn=e.target.closest('button');
+    if(!btn) return;
+    const name=(btn.textContent||'').replace(/\s+/g,' ').trim().toLowerCase();
+    if(name!=='visualizar relatório' && name!=='visualizar relatorio') return;
+
+    e.preventDefault();
+    e.stopImmediatePropagation();
+
+    const ss=getSelectedSS();
+    if(!ss){ alert('Selecione uma SS para visualizar o relatório.'); return; }
+
+    const rows=window.__rawReception || (typeof raw!=='undefined'?raw:[]) || [];
+    const row=rows.find(x=>String(x.ss||'').trim()===ss);
+    if(!row || !row.link){
+      alert('Relatório não disponível para esta SS.');
+      return;
+    }
+    window.open(row.link,'_blank','noopener,noreferrer');
+  },true);
+})();
+
+// ===== V10.6 - VISUALIZAR RELATÓRIO =====
+// Usa diretamente o objeto selecionado que já contém link. Não consulta o banco.
+$('viewReportBtn').onclick=()=>{
+  const itens=Object.values(selected||{});
+  if(!itens.length)return alert('Selecione uma SS pelo checkbox para visualizar o relatório.');
+  const x=itens[0];
+  if(!x.link)return alert('Esta SS não possui relatório disponível (tss_id diferente de 50 ou token indisponível).');
+  const w=window.open(x.link,'_blank');
+  if(!w) window.location.href=x.link;
+};
+$('viewSSBtn').onclick=()=>$('viewReportBtn').click();
+$('generatePdfBtn').onclick=async()=>{
+  if(currentScreen!=='baixar')return;
+  const itens=Object.values(selected||{});
+  const x=itens[0]||window.__detailSS;
+  if(!x?.link)return window.notify('Esta SS não possui link do relatório original uMov.','error');
+  const btn=$('generatePdfBtn');btn.disabled=true;
+  const old=btn.innerHTML;btn.innerHTML='<b>◌</b>Gerando PDF...';
+  try{
+    const r=await fetch('/api/relatorio-original-pdf',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({link:x.link,ss:x.ss})
+    });
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Falha ao converter relatório original em PDF.');}
+    const blob=await r.blob();
+    if(blob.type!=='application/pdf')throw Error('O servidor não retornou um PDF válido.');
+    const url=URL.createObjectURL(blob);const el=document.createElement('a');
+    el.href=url;el.download='Relatorio_Original_SS_'+String(x.ss||x.tarefa).replace(/[^\w-]/g,'_')+'.pdf';
+    document.body.appendChild(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+    window.notify('Relatório original convertido em PDF com as fotos.','success');
+  }catch(e){window.notify(e.message||'Erro ao converter relatório original.','error')}
+  finally{btn.disabled=false;btn.innerHTML=old}
+};
+
+
+</script>
+<script>
+/* Paginação no banco: traz apenas a página exibida, mantendo a consulta rápida. */
+window.__pageOffset=0;
+window.__hasMore=false;
+function renderPagination(){
+  let area=$('pagination');
+  if(!area){area=document.createElement('div');area.id='pagination';area.className='pagination';document.querySelector('.listControls').appendChild(area)}
+  const atual=Math.floor(window.__pageOffset/page)+1,nums=[];const totalPaginas=Number.isFinite(window.__totalSS)?Math.max(1,Math.ceil(window.__totalSS/page)):null;
+  for(let n=Math.max(1,atual-2);n<=Math.min(totalPaginas||atual+(window.__hasMore?1:0),atual+2);n++)nums.push(n);
+  area.innerHTML='<button class="pageBtn" '+(atual===1?'disabled':'')+' data-page="'+(atual-1)+'">‹</button>'+nums.map(n=>'<button class="pageBtn '+(n===atual?'active':'')+'" data-page="'+n+'">'+n+'</button>').join('')+'<button class="pageBtn" '+(!window.__hasMore?'disabled':'')+' data-page="'+(atual+1)+'">›</button>';
+  area.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{if(window.__buscaSSAtiva)return;const destino=Number(b.dataset.page);if(destino<1||destino===atual)return;window.__pageOffset=(destino-1)*page;load()});
+}
+function render(){
+  let a=view.slice(0,page);
+  $('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(k==='data_finalizacao'?(val(x,'periodo_execucao')||val(x,k)):val(x,k))+'</td>').join('')+'</tr>').join('');
+  [...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];fill(a[i]);render()});
+  $('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);
+  let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';
+  const inicioPagina=a.length?window.__pageOffset+1:0,fimPagina=window.__pageOffset+a.length;
+  $('countInfo').textContent='Exibindo '+inicioPagina+'–'+fimPagina+' de '+(Number.isFinite(window.__totalSS)?window.__totalSS:'mais SS')+(window.ms?' • consulta '+window.ms+' ms':'');
+  renderPagination();
+  if(currentScreen==='tramitacao'){
+    $('tramPagina').textContent=a.length;
+    $('tramSelecionadas').textContent=Object.keys(selected).length;
+  }
+}
+// Atribuições aceitas pela API podem levar alguns segundos para aparecer no banco.
+// Mostra o vínculo pendente imediatamente, sem atribuí-lo falsamente como confirmado.
+const equipesPendentes=new Map();
+function reconciliarEquipes(rows){
+  for(const x of rows){
+    const key=String(x.tarefa),pendente=equipesPendentes.get(key);
+    if(!pendente)continue;
+    const banco=String(x.equipe_executou||x.tecnico||'').trim();
+    if(banco&&banco===pendente.nome){equipesPendentes.delete(key);continue}
+    if(Date.now()-pendente.em>600000){equipesPendentes.delete(key);continue}
+    x.equipe_executou=pendente.nome;
+    x.tecnico=x.equipe_executou;
+  }
+  return rows;
+}
+let consultaListaAtual=null,numeroConsultaLista=0;
+async function load(forcarAtualizacao=false){
+  if(window.__buscaSSAtiva)return;
+  if(consultaListaAtual)consultaListaAtual.abort();
+  consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
+  try{
+    $('countInfo').textContent='Carregando SS...';
+    const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!somenteEquipe;if(forcarAtualizacao)p.set('_refresh',String(Date.now()));let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
+    if(!r.ok)throw Error(j.error);
+    raw=reconciliarEquipes(j.rows||[]);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
+  }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
+}
+let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},500)}));
+let ssSearchTimer;const ssInput=document.querySelector('.filter input[data-col="ss"]');ssInput.placeholder='Buscar SS em todas as datas...';ssInput.addEventListener('input',()=>{clearTimeout(ssSearchTimer);ssSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},700)});$('pageSize').onchange=e=>{page=+e.target.value;window.__pageOffset=0;load()};
+$('filterBtn').onclick=()=>{window.__pageOffset=0;load()};
+$('refreshBtn').onclick=async()=>{const b=$('refreshBtn');if(b.disabled)return;b.disabled=true;try{await load(true)}finally{b.disabled=false}};
+let dateFilterTimer;
+['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
+  clearTimeout(dateFilterTimer);
+  dateFilterTimer=setTimeout(()=>{if(currentScreen==='campo'||($('dateIni').value&&$('dateFim').value)){window.__pageOffset=0;load()}},250);
+}));
+let equipeFilterTimer;
+['teamFilter','lastFilter'].forEach(id=>$(id).oninput=()=>{
+  const ehFiltroEquipe=(id==='teamFilter'&&(currentScreen==='baixar'||currentScreen==='encerradas'||currentScreen==='tramitacao'))||(id==='lastFilter'&&currentScreen==='campo');
+  if(!ehFiltroEquipe){clearTimeout(equipeFilterTimer);equipeFilterTimer=setTimeout(()=>{window.__pageOffset=0;load()},500);return;}
+  clearTimeout(equipeFilterTimer);
+  equipeFilterTimer=setTimeout(()=>{window.__pageOffset=0;load()},300);
+});
+$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');if(currentScreen==='campo'){$('dateIni').value='';$('dateFim').value=''}else setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
+document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener('click',()=>{window.__pageOffset=0},{capture:true}));
+// Pesquisa direta no PostgreSQL, exibida na própria lista principal.
+(()=>{
+ const input=$('buscaDiretaSS'),botao=$('buscaDiretaBtn'),limpar=$('buscaDiretaLimpar');
+ const painel=$('buscaDiretaPainel');if(painel)painel.remove();
+ let seq=0,timer,anterior=null;
+ async function buscar(){
+  const ss=input.value.trim(),id=++seq;
+  if(ss.length<4){if(!ss)restaurar();else $('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return}
+  if(!window.__buscaSSAtiva)anterior={raw,offset:window.__pageOffset,total:window.__totalSS,hasMore:window.__hasMore,ms:window.ms};
+  window.__buscaSSAtiva=true;botao.disabled=true;$('countInfo').textContent='Pesquisando SS diretamente no PostgreSQL...';
+  try{
+   const r=await fetch('/api/localizar-ss?ss='+encodeURIComponent(ss));const j=await r.json();if(id!==seq)return;
+   if(!r.ok||!j.ok)throw Error(j.error||'Erro na consulta');
+   raw=j.rows||[];selected={};window.__pageOffset=0;window.__totalSS=raw.length;window.__hasMore=false;window.ms=null;apply();
+   if(!raw.length)$('countInfo').textContent='Nenhuma SS encontrada para '+ss+'.';
+  }catch(e){if(id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
+  finally{if(id===seq)botao.disabled=false}
+ }
+ function restaurar(){seq++;clearTimeout(timer);window.__buscaSSAtiva=false;botao.disabled=false;selected={};
+  if(anterior){raw=anterior.raw;window.__pageOffset=anterior.offset;window.__totalSS=anterior.total;window.__hasMore=anterior.hasMore;window.ms=anterior.ms;anterior=null;apply()}else load();
+ }
+ botao.onclick=buscar;
+ input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(timer);buscar()}};
+ input.oninput=()=>{clearTimeout(timer);if(!input.value.trim()){restaurar();return}timer=setTimeout(buscar,550)};
+ limpar.onclick=()=>{input.value='';restaurar()};
+})();
+load();
+</script>
+<script>
+/* Lançamento em lista com consulta separada dos itens já gravados. */
+(function(){
+ let materiais=[],pendentes=[],ssAtual='';
+ const moeda=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+ function modal(){let box=$('itensModal');if(box)return box;box=document.createElement('div');box.id='itensModal';box.className='modalBg';box.innerHTML=`<div class="modalBox" style="width:850px;max-width:96vw;max-height:90vh;overflow:auto"><h3>Materiais da SS <span id="itensSS"></span></h3><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="verLancados">Visualizar itens lançados</button><button class="btn" id="verPendentes">Lista para salvar (<span id="qtdPendentes">0</span>)</button></div><div id="itensLista" style="max-height:240px;overflow:auto;margin:12px 0"></div><hr><h4>Adicionar material à lista</h4><input id="itemMaterial" list="itensMateriais" placeholder="Digite o material" style="width:100%;box-sizing:border-box"><datalist id="itensMateriais"></datalist><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><input id="itemUnidade" placeholder="Unidade"><input id="itemQuantidade" type="number" min="0.0001" step="0.0001" value="1" placeholder="Quantidade"><input id="itemValor" type="number" min="0" step="0.01" placeholder="Valor total"></div><p id="itensStatus" style="font-size:12px"></p><div class="modalBtns"><button class="btn" id="itensFechar">Fechar</button><button class="btn" id="itensAdicionar">Adicionar à lista</button><button class="btn primary" id="itensSalvar">Salvar todos os materiais</button></div></div>`;document.body.appendChild(box);
+ $('itensFechar').onclick=()=>box.classList.remove('open');box.onclick=e=>{if(e.target===box)box.classList.remove('open')};$('itemMaterial').onchange=preencher;$('itemQuantidade').oninput=calcular;$('verLancados').onclick=()=>carregar(ssAtual).catch(e=>$('itensStatus').textContent=e.message);$('verPendentes').onclick=renderPendentes;$('itensAdicionar').onclick=adicionar;$('itensSalvar').onclick=salvar;return box}
+ function selecionado(){const nome=$('itemMaterial').value.trim().toLocaleLowerCase('pt-BR');return materiais.find(x=>String(x.nome||'').trim().toLocaleLowerCase('pt-BR')===nome)}
+ function preencher(){const m=selecionado();if(m){$('itemUnidade').value=m.unidade||'UN';calcular()}}
+ function calcular(){const m=selecionado(),q=Number($('itemQuantidade').value||0);if(m&&Number(m.valor_unitario)>=0)$('itemValor').value=(q*Number(m.valor_unitario||0)).toFixed(2)}
+ function renderPendentes(){const lista=$('itensLista');$('qtdPendentes').textContent=pendentes.length;lista.innerHTML=pendentes.length?'<table style="width:100%"><thead><tr><th>Material</th><th>UN</th><th>Qtd.</th><th>Valor</th><th>Ação</th></tr></thead><tbody>'+pendentes.map((i,n)=>'<tr><td>'+esc(i.nome)+'</td><td>'+esc(i.unidade)+'</td><td>'+esc(i.quantidade)+'</td><td>'+moeda(i.valor_total)+'</td><td><button class="btn removerPendente" data-n="'+n+'">Remover</button></td></tr>').join('')+'</tbody></table>':'Nenhum material na lista. Adicione itens antes de salvar.';lista.querySelectorAll('.removerPendente').forEach(b=>b.onclick=()=>{pendentes.splice(Number(b.dataset.n),1);renderPendentes()})}
+ function adicionar(){const m=selecionado(),unidade=$('itemUnidade').value.trim(),quantidade=Number($('itemQuantidade').value),valor_total=$('itemValor').value;if(!m)return alert('Selecione um material cadastrado.');if(!unidade||!Number.isFinite(quantidade)||quantidade<=0)return alert('Informe unidade e quantidade válida.');if(valor_total!==''&&(!Number.isFinite(Number(valor_total))||Number(valor_total)<0))return alert('Valor inválido.');pendentes.push({material:m.id,nome:m.nome,unidade,quantidade,valor_total});$('itemMaterial').value='';$('itemUnidade').value='';$('itemQuantidade').value='1';$('itemValor').value='';$('itensStatus').textContent='Item adicionado à lista; ainda não foi gravado.';renderPendentes()}
+ async function carregar(ss){$('itensLista').textContent='Carregando itens já lançados...';const r=await fetch('/api/itens?ss='+encodeURIComponent(ss)).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Erro ao consultar itens.');const itens=r.rows||[];$('itensLista').innerHTML=itens.length?'<table style="width:100%"><thead><tr><th>Material</th><th>UN</th><th>Qtd.</th><th>Valor</th><th>Ação</th></tr></thead><tbody>'+itens.map(i=>'<tr><td>'+esc(i.material||i.nome||'')+'</td><td>'+esc(i.unidade||'')+'</td><td>'+esc(i.quantidade||'')+'</td><td>'+moeda(i.valor_total||i.valor||0)+'</td><td><button class="btn excluirItem" data-id="'+esc(i.id||i.item_id||'')+'">Excluir</button></td></tr>').join('')+'</tbody></table>':'Nenhum item lançado nesta SS.';listaHandlers()}
+ function listaHandlers(){$('itensLista').querySelectorAll('.excluirItem').forEach(b=>b.onclick=async()=>{if(!b.dataset.id||!confirm('Excluir este item já lançado?'))return;try{const r=await fetch('/api/itens/'+encodeURIComponent(b.dataset.id),{method:'DELETE'}).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Falha ao excluir');await carregar(ssAtual)}catch(e){alert(e.message)}})}
+ async function salvar(){if(!pendentes.length)return alert('Adicione materiais à lista.');const b=$('itensSalvar');b.disabled=true;$('itensStatus').textContent='Salvando itens no servidor...';try{const r=await fetch('/api/itens/lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ss:ssAtual,itens:pendentes})}).then(x=>x.json());if(!Array.isArray(r.resultados))throw new Error(r.error||'Não foi possível confirmar o salvamento. Confira os itens lançados antes de tentar novamente.');const gravados=new Set(r.resultados.filter(i=>i.ok).map(i=>i.index));pendentes=pendentes.filter((_,i)=>!gravados.has(i));$('qtdPendentes').textContent=pendentes.length;$('itensStatus').textContent=r.gravados+' de '+r.total+' itens gravados. '+(pendentes.length?'Confira os pendentes antes de tentar novamente.':'Todos os itens foram processados.');await carregar(ssAtual)}catch(e){$('itensStatus').textContent=e.message}finally{b.disabled=false}}
+ $('launchItemsBtn').onclick=async()=>{const itens=Object.values(selected||{});if(itens.length!==1)return alert('Selecione somente uma SS.');const ss=itens[0].ss;if(!ss)return alert('SS sem número.');modal();if(ssAtual!==ss){pendentes=[];ssAtual=ss}$('itensSS').textContent=ss;$('qtdPendentes').textContent=pendentes.length;$('itensModal').classList.add('open');try{if(!materiais.length){const r=await fetch('/api/materiais').then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível carregar os materiais.');materiais=r.rows||[];$('itensMateriais').innerHTML=materiais.map(x=>'<option value="'+esc(x.nome||'')+'">').join('')}await carregar(ss)}catch(e){$('itensLista').textContent='Erro: '+e.message}};
+})();
+</script>
+<script>
+// Ações de integração: somente na aba "Notas para Baixar". A chave do uMov
+// permanece no servidor; o navegador envia apenas tarefa(s) e o status.
+(function(){
+  function notify(message,kind){
+    let el=document.getElementById('integrationToast');
+    if(!el){el=document.createElement('div');el.id='integrationToast';el.style.cssText='position:fixed;right:18px;bottom:18px;z-index:1000;max-width:360px;padding:12px 15px;border-radius:7px;color:#fff;font-weight:700;box-shadow:0 8px 24px #001a3a44';document.body.appendChild(el)}
+    el.style.background=kind==='error'?'#c63b3b':'#0879f7';el.textContent=message;el.hidden=false;clearTimeout(el._timer);el._timer=setTimeout(()=>el.hidden=true,5000);
+  }
+  // Disponibiliza o aviso discreto também para o envio de equipes.
+  window.notify = notify;
+  async function changeIntegrationStatus(status,label){
+    const items=Object.values(selected||{});
+    if(currentScreen!=='baixar')return notify('Esta ação é permitida somente em Notas para Baixar.','error');
+    if(!items.length)return notify('Selecione ao menos uma SS.','error');
+    const count=items.length;
+    if(!confirm(`Confirmar ${label.toLowerCase()} ${count===1?'esta SS':count+' SS'}?`))return;
+    const buttons=['downloadBtn','rejectBtn','duplicateBtn'].map(id=>$(id)).filter(Boolean);
+    buttons.forEach(button=>button.disabled=true);
+    try{
+      const response=await fetch('/api/status-integracao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,tarefas:items.map(item=>item.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||result.resultados?.find(item=>!item.ok)?.error||'A ação não foi concluída.');
+      const sucesso=Number(result.sucesso||0),falhas=Number(result.falhas||0);
+      items.forEach(item=>{const updated=(result.resultados||[]).find(row=>String(row.tarefa)===String(item.tarefa));if(updated&&updated.ok)item.status_integracao=status});
+      selected={};apply();
+      notify(`${label}: ${sucesso} concluída(s)${falhas?' • '+falhas+' falha(s)':''}.`,falhas?'error':'success');
+    }catch(error){notify(error.message||'Não foi possível concluir a ação.','error')}
+    finally{buttons.forEach(button=>button.disabled=false)}
+  }
+  $('downloadBtn').onclick=()=>window.openSiscomBaixa?.(); // Baixa oficial somente após validação; não altera status local
+  $('rejectBtn').onclick=()=>window.openSiscomRejeicao?.(); // Rejeição oficial SISCOM; nunca altera status local antes da confirmação
+  $('duplicateBtn').onclick=()=>changeIntegrationStatus('Duplicada','Duplicação');
+  $('removeTeamBtn').onclick=async()=>{
+    if(currentScreen!=='recepcao')return;
+    const escolhidas=Object.values(selected||{});
+    if(!escolhidas.length&&window.__detailSS?.tarefa)escolhidas.push(window.__detailSS);
+    if(!escolhidas.length)return notify('Selecione ou abra uma SS.','error');
+    const comEquipe=escolhidas.filter(x=>String(x.equipe_executou||x.tecnico||'').trim());
+    if(!comEquipe.length)return notify('As SS selecionadas não possuem equipe vinculada.','error');
+    if(!confirm(`Remover a equipe de ${comEquipe.length} SS na Recepção? A situação da SS não será alterada.`))return;
+    const button=$('removeTeamBtn');button.disabled=true;
+    try{
+      const response=await fetch('/api/remover-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:comEquipe.map(x=>x.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível remover a equipe.');
+      const okIds=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));for(const id of okIds)equipesPendentes.delete(id);
+      for(const x of raw){if(okIds.has(String(x.tarefa))){x.equipe_executou='';x.tecnico='';}}
+      if(window.__detailSS&&okIds.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou='';window.__detailSS.tecnico='';}
+      selected={};apply();
+      notify(`Solicitação enviada ao uMov: ${result.sucesso||0} SS. ${result.falhas||0} falha(s). Confirme a atualização após a sincronização.`,result.falhas?'error':'success');
+    }catch(error){notify(error.message||'Erro ao remover equipe.','error')}
+    finally{button.disabled=false}
+  };
+  $('returnReceptionBtn').onclick=async()=>{
+    if(currentScreen!=='campo')return;
+    const items=Object.values(selected||{});
+    if(!items.length)return notify('Selecione uma SS em campo.','error');
+    if(!confirm(`Solicitar retorno de ${items.length} SS para Recepção pelo uMov? A equipe será removida; a mudança de situação será verificada após a sincronização.`))return;
+    const button=$('returnReceptionBtn');button.disabled=true;
+    try{
+      const response=await fetch('/api/retornar-recepcao',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:items.map(item=>item.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw new Error(result.error||'Falha ao retornar SS.');
+      const confirmadas=(result.resultados||[]).filter(item=>item.confirmado).length;notify(`Retirada de equipe solicitada ao uMov: ${result.sucesso||0} SS.${result.falhas?' Falhas: '+result.falhas+'.':''} Situação Pendente de envio ainda não confirmada.`,result.falhas?'error':'success');
+      const ids=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));if(ids.size){raw=raw.filter(x=>!ids.has(String(x.tarefa)));selected={};apply()}else{selected={};await load()}
+    }catch(error){notify(error.message||'Não foi possível retornar para Recepção.','error')}
+    finally{button.disabled=false}
+  };
+  let tagModalItems=[];
+  const closeTagModal=()=>{$('tagModal').classList.remove('open');$('tagModalError').textContent='';};
+  $('tagModalCancel').onclick=closeTagModal;
+  $('tagModal').addEventListener('click',e=>{if(e.target===$('tagModal'))closeTagModal()});
+  $('tagModal').addEventListener('keydown',e=>{if(e.key==='Escape')closeTagModal()});
+  $('tagBtn').onclick=()=>{
+    if(!['recepcao','campo','baixar'].includes(currentScreen))return notify('A tag está disponível nas abas Recepção, Em Campo e Para Baixar.','error');
+    tagModalItems=Object.values(selected||{});
+    if(!tagModalItems.length&&window.__detailSS?.tarefa)tagModalItems=[window.__detailSS];
+    if(!tagModalItems.length)return notify('Selecione ao menos uma SS.','error');
+    if(tagModalItems.length>25)return notify('Selecione no máximo 25 SS por operação de tag.','error');
+    $('tagModalCount').textContent=`${tagModalItems.length} SS selecionada(s)`;
+    $('tagModalInput').value=tagModalItems.length===1?String(tagModalItems[0].tags||''):'';
+    $('tagModalError').textContent='';
+    $('tagModal').classList.add('open');$('tagModalInput').focus();
+  };
+  async function executarTag(limpar){
+    const valor=limpar?'':$('tagModalInput').value.trim().replace(/\s+/g,' ');
+    if(!limpar&&!valor){$('tagModalError').textContent='Digite uma tag para adicionar.';return;}
+    if(limpar&&!confirm(`Limpar a tag de ${tagModalItems.length} SS?`))return;
+    const buttons=[$('tagModalSave'),$('tagModalClear'),$('tagModalCancel')];buttons.forEach(b=>b.disabled=true);
+    $('tagModalError').textContent='';
+    try{
+      const response=await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:limpar?'limpar':'adicionar',tag:valor,tarefas:tagModalItems.map(x=>x.tarefa)})});
+      const result=await response.json();
+      if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível atualizar a tag.');
+      const ids=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
+      for(const item of tagModalItems)if(ids.has(String(item.tarefa)))item.tags=valor;
+      for(const item of raw)if(ids.has(String(item.tarefa)))item.tags=valor;
+      if(window.__detailSS&&ids.has(String(window.__detailSS.tarefa))){window.__detailSS.tags=valor;$('dtag').textContent=valor;}
+      selected={};apply();closeTagModal();
+      notify(`${limpar?'Limpeza':'Atualização'} de tag enviada ao uMov para ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
+    }catch(error){$('tagModalError').textContent=error.message||'Erro ao atualizar tag.'}
+    finally{buttons.forEach(b=>b.disabled=false)}
+  }
+  $('tagModalSave').onclick=()=>executarTag(false);
+  $('tagModalClear').onclick=()=>executarTag(true);
+})();
+</script>
+<script>
+// Exibe o retorno informado pela equipe no uMov; não utiliza dados do SISCOM.
+(function(){
+  document.querySelector('label[for="dInfoExecucao"]')?.remove();
+  window.fill=function(x){
+    if(!x)return;
+    document.body.classList.add('panel-open');$('lower').classList.add('open');
+    $('titleSS').textContent=$('dss').textContent=val(x,'ss');
+    [['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));
+    const paraBaixar=currentScreen==='baixar'||currentScreen==='encerradas'||currentScreen==='tramitacao';
+    $('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; RETORNO PREENCHIDO PELA EQUIPE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';
+    $('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;
+    if(paraBaixar){
+      $('dInicioAtividade').textContent=val(x,'inicio_atividade')||'Não informado';
+      $('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';
+      $('dInfoExecucao').textContent=val(x,'servico_executado')||'Não informado';
+      $('dMateriais').textContent=val(x,'materiais_bombeiro')||'Não informado';
+      $('dPavimentacao').textContent=val(x,'pavimentacao')||'Não informado';
+      const tarefaAtual=String(x.tarefa);
+      fetch('/api/retorno-equipe/'+encodeURIComponent(x.tarefa)).then(r=>r.json()).then(retorno=>{
+        if(!retorno.ok||String(document.querySelector('#titleSS')?.textContent)!==String(x.ss))return;
+        if(retorno.pavimentacao)$('dPavimentacao').textContent=retorno.pavimentacao;
+        if(retorno.servico_executado)$('dInfoExecucao').textContent=retorno.servico_executado;
+        if(retorno.materiais_bombeiro)$('dMateriais').textContent=retorno.materiais_bombeiro;
+      }).catch(()=>{});
+    }else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||'';
+  };
+})();
+</script><script>
+// Painel administrativo: autenticação explícita por consulta, sem guardar credenciais.
+(function(){
+ const $id=id=>document.getElementById(id);
+ const panel=$id('siscomPanel'), btn=$id('siscomVerify');
+ let selectedSS='', selectedLocal='', generation=0;
+ const fmt=d=>{if(!d)return '—';const dt=new Date(d);return isNaN(dt)?String(d):dt.toLocaleString('pt-BR')};
+ const norm=x=>String(x||'').trim().toLowerCase();
+ const set=(id,v)=>{$id(id).textContent=String(v??'—')};
+ function reset(x){generation++;selectedSS=String(x?.ss||'');selectedLocal=String(x?.status_integracao||x?.situacao_campo||'Não informado');panel.classList.toggle('open',!!selectedSS);set('siscomNumber',selectedSS);set('siscomLocal',selectedLocal);set('siscomState','Não verificado');set('siscomOfficial','Não verificado');set('siscomUser','—');set('siscomDate','—');set('siscomCount','0');set('siscomFeedback','');$id('siscomTimeline').replaceChildren();$id('siscomGatewayToken').value='';btn.disabled=false;}
+ const original=window.fill;
+ window.fill=function(x){const result=original?.apply(this,arguments);reset(x);return result};
+ const delay=ms=>new Promise(r=>setTimeout(r,ms));
+ btn.addEventListener('click',async()=>{
+   const ss=selectedSS, g=generation;
+   $id('siscomGatewayToken').value='';
+   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return set('siscomFeedback','Número da SS inválido.');
+   
+   btn.disabled=true;set('siscomState','Consultando...');set('siscomFeedback','Aguardando resposta do worker pela VPN...');
+   try{
+     const headers={'Content-Type':'application/json'};
+     const start=await fetch('/api/siscom-gateway/consultar-eventos-ss',{method:'POST',headers,body:JSON.stringify({numero_ss:ss}),cache:'no-store'});
+     const job=await start.json();if(!start.ok||!job.id)throw Error(job.error||'Falha ao iniciar consulta');
+     let done=null;
+     for(let i=0;i<20;i++){
+       if(g!==generation)return;
+       await delay(1600);
+       const response=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(job.id),{cache:'no-store'});
+       done=await response.json();if(!response.ok)throw Error(done.error||'Falha ao consultar tarefa');
+       if(done.status==='concluido'||done.status==='erro')break;
+     }
+     if(g!==generation)return;
+     if(done?.status!=='concluido')throw Error(done?.error_message||'Consulta não concluída no prazo');
+     const result=done.result||{};
+     if(result.numero_ss!==ss)throw Error('Número de SS divergente na resposta');
+     const events=Array.isArray(result.eventos)?result.eventos:[];
+     const final9=[...events].reverse().find(e=>Number(e.codigo)===9);
+     const rejection=[...events].reverse().find(e=>Number(e.codigo)===4);
+     // Evidência, não estado definitivo: podem existir eventos posteriores.
+     const last=events[events.length-1];
+     let official='Não confirmado';
+     if(final9&&(!rejection||String(final9.data_hora)>=String(rejection.data_hora)))official='Encerrada (evento 9)';
+     else if(rejection)official='Rejeição identificada (evento 4)';
+     const evt=official.startsWith('Encerrada')?final9:official.startsWith('Rejeição')?rejection:last;
+     set('siscomOfficial',official);set('siscomUser',evt?.usuario||'Não informado');set('siscomDate',fmt(evt?.data_hora));set('siscomCount',events.length);
+     const local=norm(selectedLocal);
+     let compare='Revisar histórico';
+     if(official.startsWith('Encerrada')&&(/baixad|encerrad/.test(local)))compare='Conforme (evento 9)';
+     else if(official.startsWith('Rejeição')&&/rejeitad/.test(local))compare='Indício de conformidade (evento 4)';
+     else if(official!=='Não confirmado'&&(/baixad|encerrad|rejeitad/.test(local)))compare='Divergência — verificar';
+     set('siscomState',compare);
+     set('siscomFeedback','Consulta concluída. Último evento: '+(last?.descricao||'não informado')+'. Eventos posteriores podem alterar a interpretação.');
+     const timeline=$id('siscomTimeline');timeline.replaceChildren();
+     for(const e of events){const li=document.createElement('li'),title=document.createElement('strong'),detail=document.createElement('small');title.textContent=(e.codigo??'?')+' — '+(e.descricao||'Evento');detail.textContent=fmt(e.data_hora)+' · '+(e.usuario||'Usuário não informado')+' · '+(e.unidade||'Unidade não informada');li.append(title,detail);timeline.append(li)}
+   }catch(err){if(g===generation){set('siscomState','Falha na consulta');set('siscomFeedback',err.message||'Erro desconhecido')}}finally{if(g===generation)btn.disabled=false}
+ });
+ $id('closeDetail')?.addEventListener('click',()=>{generation++;panel.classList.remove('open');$id('siscomGatewayToken').value=''});
+})();
+</script><script>
+// Formulário de baixa automático, somente leitura; sem POST de baixa.
+(function(){
+ const $=id=>document.getElementById(id);let equipes=[],micros=[],causas=[],current='',generation=0;
+ const status=t=>{$('sbStatus').textContent=t;};
+ const unwrap=v=>Array.isArray(v)?v:(v&&typeof v==='object'?['data','items','rows','resultado','equipes','servicos','causas','body','result'].map(k=>v[k]).find(Array.isArray)||[]:[]);
+ let baixaBloqueada=false;
+ const historicoStatus=t=>{$('sbHistoricoStatus').textContent=t;};
+ async function carregarHistorico(g){
+  historicoStatus('Consultando eventos oficiais...');$('sbHistoricoLista').replaceChildren();
+  try{
+   const r=await job('consultar-eventos-ss',{numero_ss:current},g);if(g!==generation)return;
+   const eventos=Array.isArray(r?.eventos)?r.eventos:[];
+   const ordenados=[...eventos].sort((a,b)=>String(a.data_hora||'').localeCompare(String(b.data_hora||'')));
+   const ultimo=ordenados.at(-1);
+   const encerrada=ultimo&&(Number(ultimo.codigo)===9||/^encerrada$/i.test(String(ultimo.descricao||'').trim()));
+   baixaBloqueada=Boolean(encerrada);
+   $('sbPrevia').disabled=baixaBloqueada;
+   historicoStatus(baixaBloqueada?'SS ENCERRADA oficialmente no último evento. Nova baixa bloqueada.':
+    'Eventos encontrados: '+eventos.length+'. Situação atual deve ser conferida antes da baixa.');
+   for(const e of ordenados){const linha=document.createElement('div');linha.style.cssText='padding:6px 0;border-bottom:1px solid #e4ebf2';
+    const titulo=document.createElement('strong');titulo.textContent=(e.codigo??'—')+' — '+(e.descricao||'Evento');
+    const detalhe=document.createElement('div');detalhe.textContent=[e.data_hora,e.usuario,e.unidade].filter(Boolean).join(' · ');
+    linha.append(titulo,detalhe);$('sbHistoricoLista').append(linha);
+   }
+  }catch(e){if(g===generation){historicoStatus('Histórico indisponível: '+e.message+'. Baixa bloqueada até verificação.');baixaBloqueada=true;$('sbPrevia').disabled=true;}}
+ }
+ const requiredCause=m=>m?.obgCausaProbl===true||['S','SIM','TRUE','1','Y'].includes(String(m?.obgCausaProbl??'').toUpperCase());
+ function options(id,rows,placeholder,value,label){const el=$(id);el.replaceChildren(new Option(placeholder,''));rows.forEach(x=>el.add(new Option(label(x),String(value(x)))));}
+ async function job(route,payload,g){
+  
+  const headers={'Content-Type':'application/json'};
+  const r=await fetch('/api/siscom-gateway/'+route,{method:'POST',headers,body:JSON.stringify(payload),cache:'no-store'});
+  const j=await r.json();if(!r.ok)throw Error(j.error||'Não foi possível iniciar a consulta');
+  for(let i=0;i<50;i++){
+   if(g!==generation)throw Error('Consulta cancelada');
+   await new Promise(resolve=>setTimeout(resolve,1200));
+   const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{cache:'no-store'});
+   const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
+   const state=String(x.status).toLowerCase();
+   if(['concluido','concluído','completed','done','success'].includes(state))return route==='baixar-ss'?{...x.result,__job_id:j.id}:x.result;
+   if(['erro','error','failed','errored'].includes(state))throw Error(x.error_message||'Falha no worker');
+  }
+  throw Error('Tempo excedido. Confira o worker VPN.');
+ }
+ function renderEquipes(){
+  const q=$('sbEquipeBusca').value.trim(),chosen=$('sbEquipes').value;
+  options('sbEquipes',equipes.filter(e=>String(e.cdEquipe).includes(q)),'Selecione a equipe',e=>e.cdEquipe,e=>String(e.cdEquipe)+(e.nomeEquipe?" — "+e.nomeEquipe:""));
+  if(equipes.some(e=>String(e.cdEquipe)===q))$('sbEquipes').value=q;
+  else if([...$('sbEquipes').options].some(o=>o.value===chosen))$('sbEquipes').value=chosen;
+ }
+ async function loadEquipes(executor,g){
+  const rows=unwrap(await job('equipes',{cd_executor:executor},g));
+  equipes=[...new Map(rows.filter(x=>x.cdEquipe!=null).map(x=>[String(x.cdEquipe),x])).values()].sort((a,b)=>Number(a.cdEquipe)-Number(b.cdEquipe));
+  renderEquipes();
+  const selecionada=equipes.find(e=>String(e.cdEquipe)===$('sbEquipeBusca').value);
+  if(selecionada)sbResumoSet('sbResumoEquipe',selecionada.cdEquipe+(selecionada.nomeEquipe?' — '+selecionada.nomeEquipe:''));
+  if(!equipes.length)throw Error('GET de equipes retornou lista vazia');
+ }
+ async function loadMicros(macro,g){
+  micros=unwrap(await job('micros',{cd_macro:macro},g));
+  options('sbMicro',micros,'Selecione o serviço executado',m=>m.cdServico,m=>m.cdServico+' — '+(m.dcServico||''));
+  if(!micros.length)throw Error('GET de serviços executados retornou lista vazia');
+ }
+ async function loadAll(){
+  const g=++generation;
+  baixaBloqueada=true;$('sbPrevia').disabled=true;
+  carregarHistorico(g);
+  compConsultar();
+  status('Consultando SS oficial...');
+  try{
+   const data=await job('consultar-ss-baixa',{numero_ss:current},g);if(g!==generation)return;
+   const obj=data?.data||data?.result||data||{};
+   const macro=obj.servicoMacroDTO?.cdServico;
+   const executor=obj.unidadeExecutoraDTO?.cdExecutor??obj.unidadeExecutoraDTO?.cdUnidadeExecutora;
+   if(!macro)throw Error('SISCOM não retornou o macro oficial');
+   if(!executor)throw Error('SISCOM não retornou o código da unidade executora');
+   $('sbMacro').value=macro;$('sbExecutor').value=executor;sbResumoSet('sbOfficialMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbResumoMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbOfficialExecutor',executor);$('sbLoadBadge').textContent='Consulta oficial concluída';
+   if(obj.codEquipe!=null)$('sbEquipeBusca').value=String(obj.codEquipe);
+   if(!$('sbInicio').value&&obj.dataHoraExecucaoIni)$('sbInicio').value=obj.dataHoraExecucaoIni;
+   if(!$('sbFim').value&&obj.dataHoraExecucaoFim)$('sbFim').value=obj.dataHoraExecucaoFim;
+   if(!$('sbDescricao').value&&obj.descricaoExecucao)$('sbDescricao').value=obj.descricaoExecucao;sbAtualizarDuracao();
+   status('Macro '+macro+' identificado. Carregando equipes e serviços...');
+   const results=await Promise.allSettled([loadEquipes(executor,g),loadMicros(macro,g)]);
+   if(g!==generation)return;
+   const failures=results.filter(x=>x.status==='rejected').map(x=>x.reason.message);
+   status(failures.length?'Consultas parcialmente concluídas: '+failures.join('; '):
+    'Consultas concluídas: '+equipes.length+' equipes e '+micros.length+' serviços executados. Selecione o serviço.');
+  }catch(e){if(g===generation)status('Erro: '+e.message);}
+ }
+ function sbResumoSet(id,v){$(id).textContent=String(v??'').trim()||'Não informado';}
+ function sbAtualizarDuracao(){
+  const a=$('sbInicio').value,b=$('sbFim').value;
+  sbResumoSet('sbOfficialInicio',a);sbResumoSet('sbOfficialFim',b);
+  const parse=t=>{const m=String(t||'').match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);return m?new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]).getTime():NaN;};
+  const d=Math.round((parse(b)-parse(a))/60000);
+  $('sbDuracao').textContent=Number.isFinite(d)&&d>=0?(Math.floor(d/60)+'h '+String(d%60).padStart(2,'0')+'min'):'Não informado';
+ }
+ function sbResumoPreencher(x){
+  sbResumoSet('sbResumoSS',x.ss);sbResumoSet('sbOfficialSS',x.ss);sbResumoSet('sbResumoEndereco',[x.logradouro,x.numero].filter(Boolean).join(', '));sbResumoSet('sbResumoBairro',x.bairro);sbResumoSet('sbResumoSetor',x.setor);sbResumoSet('sbResumoTipo',x.servico);sbResumoSet('sbResumoMacro',x.macro);sbResumoSet('sbOfficialStatus',x.situacao_campo||x.status_integracao);sbResumoSet('sbOfficialData',x.criado_em);sbResumoSet('sbOfficialMacro',x.macro);
+  sbResumoSet('sbResumoEquipe',x.nome_equipe||x.equipe_nome||x.equipe||x.nomeEquipe||'Não informado');
+  sbResumoSet('sbResumoInicio',x.inicio_atividade);
+  sbResumoSet('sbResumoFim',x.fim_atividade||x.data_finalizacao);
+  sbResumoSet('sbResumoExecucao',x.servico_executado);
+  sbResumoSet('sbResumoMateriais',x.materiais_bombeiro);
+  sbResumoSet('sbResumoPavimentacao',x.pavimentacao);sbAtualizarDuracao();
+  const ss=String(x.ss||''),tarefa=x.tarefa;
+  if(!tarefa)return;
+  fetch('/api/retorno-equipe/'+encodeURIComponent(tarefa),{cache:'no-store'})
+   .then(r=>{if(!r.ok)throw Error('Falha ao consultar retorno');return r.json();})
+   .then(retorno=>{
+    if(!retorno.ok||$('sbSS').value!==ss||!$('siscomBaixaModal').classList.contains('open'))return;
+    if(retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe)sbResumoSet('sbResumoEquipe',retorno.nome_equipe||retorno.equipe_nome||retorno.nomeEquipe||retorno.equipe);
+    if(retorno.inicio_atividade)sbResumoSet('sbResumoInicio',retorno.inicio_atividade);
+    if(retorno.fim_atividade)sbResumoSet('sbResumoFim',retorno.fim_atividade);
+    if(retorno.servico_executado)sbResumoSet('sbResumoExecucao',retorno.servico_executado);
+    if(retorno.materiais_bombeiro)sbResumoSet('sbResumoMateriais',retorno.materiais_bombeiro);
+    if(retorno.pavimentacao)sbResumoSet('sbResumoPavimentacao',retorno.pavimentacao);if(retorno.inicio_atividade&&!$('sbInicio').value)$('sbInicio').value=retorno.inicio_atividade;if(retorno.fim_atividade&&!$('sbFim').value)$('sbFim').value=retorno.fim_atividade;if(retorno.servico_executado&&!$('sbDescricao').value)$('sbDescricao').value=retorno.servico_executado;sbAtualizarDuracao();
+   }).catch(()=>{});
+ }
+ window.openSiscomBaixa=()=>{
+  if(typeof currentScreen!=='undefined'&&currentScreen!=='baixar')return alert('Disponível somente em Notas para Baixar');
+  const items=Object.values(selected||{});if(items.length!==1)return alert('Selecione exatamente uma SS.');
+  const x=items[0];current=String(x.ss||'');generation++;equipes=[];micros=[];causas=[];
+  $('sbSS').value=current;$('sbLoadBadge').textContent='Aguardando consulta';sbResumoPreencher(x);$('sbExecutor').value='';$('sbMacro').value='';$('sbEquipeBusca').value='';
+  options('sbEquipes',[],'Aguardando consulta',e=>e.cdEquipe,e=>e.cdEquipe);
+  options('sbMicro',[],'Aguardando macro oficial',m=>m.cdServico,m=>m.dcServico);
+  options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
+  $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
+  $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbObservacoes').value='';sbAtualizarDuracao();
+  compAreas=[];compServicos=[];compExistentes=[];$('sbCompDescricao').value='';compStatus('Consulta automática iniciada...');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
+  status('Consultando SISCOM automaticamente...');
+  $('siscomBaixaModal').classList.add('open');loadAll();
+ };
+ $('sbCloseTop').onclick=()=>$('sbFechar').click();$('sbLimpar').onclick=()=>{$('sbEquipeBusca').value='';$('sbEquipes').value='';$('sbMicro').value='';$('sbCausaBox').hidden=true;$('sbDescricao').value='';$('sbObservacoes').value='';status('Campos editáveis limpos. Dados oficiais e retorno da equipe preservados.');};['sbInicio','sbFim'].forEach(id=>$(id).addEventListener('input',sbAtualizarDuracao));
+ $('sbFechar').onclick=()=>{generation++;$('siscomBaixaModal').classList.remove('open');};
+ // Complementares: criação manual independente, sem disparar baixa automaticamente.
+ let compAreas=[],compServicos=[],compExistentes=[];
+ const compStatus=t=>{$('sbCompStatus').textContent=t;};
+ async function compConsultar(){
+  const g=generation,ss=current;
+  compStatus('Consultando áreas e complementares no SISCOM...');
+  try{
+   const [a,c]=await Promise.all([job('complementar-areas',{numero_ss:ss},g),job('complementar-consultar',{numero_ss:ss},g)]);
+   if(g!==generation||ss!==current)return;
+   compAreas=unwrap(a);compExistentes=unwrap(c);
+   options('sbCompArea',compAreas,'Selecione a área',x=>x.codAraeExecutora,x=>x.codAraeExecutora+' — '+(x.descricaoAreaExecutora||''));
+   options('sbCompServico',[],'Selecione uma área',x=>x.cdServico,x=>x.dcServico);
+   compStatus('Áreas: '+compAreas.length+' | Complementares existentes: '+compExistentes.length+'.');
+  }catch(e){if(g===generation)compStatus('Falha na consulta: '+e.message);}
+ }
+ $('sbCompArea').onchange=async()=>{
+  const g=generation,area=$('sbCompArea').value;
+  compServicos=[];options('sbCompServico',[],'Carregando serviços...',x=>x.cdServico,x=>x.dcServico);
+  if(!area)return;
+  try{compServicos=unwrap(await job('complementar-servicos',{numero_ss:current,area:Number(area)},g));
+   if(g!==generation)return;
+   options('sbCompServico',compServicos,'Selecione o serviço macro',x=>x.cdServico,x=>x.cdServico+' — '+(x.dcServico||''));
+   compStatus(compServicos.length+' serviços disponíveis na área selecionada.');
+  }catch(e){if(g===generation)compStatus('Falha ao consultar serviços: '+e.message);}
+ };
+ $('sbCompAtualizar').onclick=compConsultar;
+ $('sbCompCriar').onclick=async()=>{
+  const ss=current,area=Number($('sbCompArea').value),macro=Number($('sbCompServico').value),descricao=$('sbCompDescricao').value.trim();
+  if(!compAreas.some(x=>Number(x.codAraeExecutora)===area)||!compServicos.some(x=>Number(x.cdServico)===macro)||!descricao)return compStatus('Selecione área, serviço macro e informe a descrição.');
+  const resumo='SS '+ss+'\nÁrea: '+area+'\nMacro: '+macro+'\nDescrição: '+descricao;
+  if(!window.confirm('GERAR NOVA SS COMPLEMENTAR NO SISCOM?\n\n'+resumo+'\n\nEsta ação é independente da baixa. Não repita em caso de resultado incerto.'))return;
+  const btn=$('sbCompCriar');btn.disabled=true;compStatus('Enviando criação da complementar; aguarde a confirmação...');
+  try{const r=await job('complementar-criar',{numero_ss:ss,area,macro,descricao,confirmacao:'COMPLEMENTAR '+ss},generation);
+   compStatus('Resultado: '+(r.status_complementar||'INCERTO')+' — '+(r.mensagem||'')+' | Consulte o SISCOM antes de qualquer novo envio.');
+   if(r.status_complementar==='CONFIRMADA')alert('Complementar confirmada no SISCOM. A baixa da SS original permanece independente.');
+  }catch(e){compStatus('Resultado não confirmado: '+e.message+'. NÃO reenvie antes de conferir a complementar no SISCOM.');}
+  finally{btn.disabled=false;}
+ };
+ $('sbRecarregar').onclick=loadAll;$('sbEquipeBusca').oninput=renderEquipes;
+ $('sbEquipes').onchange=()=>{$('sbEquipeBusca').value=$('sbEquipes').value;const e=equipes.find(x=>String(x.cdEquipe)===$('sbEquipes').value);if(e)sbResumoSet('sbResumoEquipe',e.cdEquipe+(e.nomeEquipe?' — '+e.nomeEquipe:''));};
+ $('sbMicro').onchange=async()=>{
+  const g=++generation,code=$('sbMicro').value;$('sbCausaBox').hidden=true;
+  options('sbCausa',[],'Não aplicável',c=>c.id,c=>c.descricao);
+  if(!code)return;const micro=micros.find(x=>String(x.cdServico)===code);
+  if(!requiredCause(micro)){status('Serviço selecionado. Causa do problema não obrigatória.');return;}
+  $('sbCausaBox').hidden=false;status('Consultando causas oficiais...');
+  try{causas=unwrap(await job('causas',{cd_micro:code},g));if(g!==generation)return;
+   options('sbCausa',causas,'Selecione a causa',c=>c.id,c=>c.descricao||c.id);
+   status(causas.length+' causas oficiais carregadas.');
+  }catch(e){if(g===generation)status('Erro ao carregar causas: '+e.message);}
+ };
+ async function mostrarTentativaExistente(){
+  try{
+   const r=await fetch('/api/siscom-gateway/tentativa-baixa/'+encodeURIComponent(current),{cache:'no-store'});
+   const x=await r.json();if(!r.ok)throw Error(x.error||'Falha ao consultar tentativa');
+   const detalhes=[x.status_baixa&&'Resultado: '+x.status_baixa,x.http_status&&'HTTP SISCOM: '+x.http_status,x.diagnostico_validacao&&'Validação: '+x.diagnostico_validacao,x.mensagem,x.error_message].filter(Boolean).join(' | ');
+   status('Tentativa anterior ('+x.status+'): '+(detalhes||'sem diagnóstico disponível')+'. NÃO reenviar automaticamente.');
+   return x;
+  }catch(e){status('Não foi possível consultar a tentativa anterior: '+e.message+'. NÃO reenviar.');return null;}
+ }
+ $('sbPrevia').onclick=async()=>{
+  if(baixaBloqueada)return status('Baixa bloqueada: histórico oficial não validado ou SS encerrada.');
+  const code=$('sbEquipes').value,micro=$('sbMicro').value,desc=$('sbDescricao').value.trim();
+  if(!code||!equipes.some(x=>String(x.cdEquipe)===code))return status('Selecione uma equipe validada pelo GET.');
+  if(!micro||!micros.some(x=>String(x.cdServico)===micro))return status('Selecione um serviço executado validado pelo GET.');
+  if(!desc)return status('Preencha a descrição da execução.');
+  const m=micros.find(x=>String(x.cdServico)===micro);
+  if(requiredCause(m)&&!$('sbCausa').value)return status('O serviço exige causa do problema.');
+  if(!['S','N'].includes($('sbUltima').value))return status('Informe se é a última SS.');
+  status('PRÉVIA VALIDADA — SS '+current+' | Equipe '+code+' | Macro '+$('sbMacro').value+
+   ' | Serviço executado '+micro+' | Causa '+($('sbCausa').value||'não exigida')+
+   ' | Início '+$('sbInicio').value+' | Fim '+$('sbFim').value+
+   ' | Última SS '+($('sbUltima').value||'não informado')+' | Pronta para confirmação.');
+  if(!window.confirm('ATENÇÃO: Encerrar definitivamente a SS '+current+' no SISCOM? Esta operação não deve ser repetida.'))return;
+  const btn=$('sbPrevia');btn.disabled=true;status('Enviando baixa real. Não feche nem reenvie...');
+  try{const r=await job('baixar-ss',{numero_ss:current,confirmacao:'BAIXAR '+current,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},generation);status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+(r.http_status?' | HTTP '+r.http_status:'')+(r.diagnostico_validacao?' | Validação: '+r.diagnostico_validacao:'')+' — '+(r.mensagem||''));if(r.status_baixa==='CONFIRMADA'){
+    status('Baixa confirmada no SISCOM. Atualizando status no uMov...');
+    try{
+     const sync=await fetch('/api/siscom-gateway/sincronizar-baixa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:current,job_id:r.__job_id}),cache:'no-store'});
+     const sj=await sync.json();if(!sync.ok||!sj.ok)throw Error(sj.error||'Sincronização não confirmada');
+     status('SS '+current+' encerrada no SISCOM e marcada como Baixada no uMov.');
+     if(typeof raw!=='undefined'){raw=raw.filter(x=>String(x.ss)!==current);selected={};apply();}
+     $('siscomBaixaModal').classList.remove('open');
+     alert('SS '+current+' encerrada e movida para Notas Baixadas.');
+     if(typeof load==='function')load();
+    }catch(syncErr){status('SS encerrada no SISCOM, porém sincronização local pendente: '+syncErr.message+'. NÃO reenviar baixa.');alert('Baixa oficial confirmada, mas não foi possível mover a SS automaticamente. NÃO envie novamente.');}
+   }else alert('Resultado não confirmado. NÃO tente novamente antes de conferir o SISCOM.');}catch(e){status('Envio não confirmado: '+e.message+' — NÃO reenviar.');await mostrarTentativaExistente();}
+ };
+})();
+</script>
+<script>
+// Operacoes SISCOM: autenticacao pela sessao individual, sem senha administrativa.
+// Requisicoes que retornam 401 nao sao reenviadas automaticamente (evita escrita duplicada).
+(()=>{
+ const originalFetch=window.fetch.bind(window);
+ let opening=false;
+ window.fetch=async(input,init)=>{
+  const url=typeof input==='string'?input:input instanceof Request?input.url:String(input);
+  if(!url.includes('/api/siscom-gateway/'))return originalFetch(input,init);
+  const response=await originalFetch(input,init);
+  if(response.status!==401)return response;
+  try{
+   const state=await originalFetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'});
+   const data=state.ok?await state.json():null;
+   if(!data?.authenticated && !opening){
+    opening=true;
+    const btn=document.getElementById('siscomLoginTop');
+    const modal=document.getElementById('siscomLoginModal');
+    if(btn && modal && !modal.classList.contains('open'))btn.click();
+    opening=false;
+   }
+  }catch(e){opening=false;}
+  // Preserva o 401 original. Nenhuma consulta ou operacao de escrita e repetida.
+  return response;
+ };
+})();
+</script>
+<script>
+// SISCOM individual - mesma sessão HTTPOnly usada em todas as abas.
+(function(){
+ const $=id=>document.getElementById(id);
+ const btn=$('siscomLoginTop'),modal=$('siscomLoginModal'),form=$('siscomLoginForm'),
+  feedback=$('siscomLoginFeedback'),label=$('siscomIdentityLabel'),consult=$('siscomConsultaTop'),logout=$('siscomLogoutTop');
+ let active=false;
+ const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ function paint(data){
+  active=!!data?.authenticated;
+  label.textContent=active?'SISCOM: '+(data.user?.nome||'Conectado'):'SISCOM: não conectado';
+  btn.hidden=active;logout.hidden=!active;consult.disabled=!active;
+  document.body.dataset.siscomAuthenticated=active?'true':'false';
+ }
+ async function refresh(){try{const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'});const x=await r.json();paint(x)}catch{paint(null)}}
+ btn.addEventListener('click',()=>{feedback.textContent='';modal.classList.add('open');$('siscomLoginPassword').value='';$('siscomLoginUser').focus()});
+ $('siscomLoginCancel').addEventListener('click',()=>modal.classList.remove('open'));
+ form.addEventListener('submit',async ev=>{
+  ev.preventDefault();const submit=$('siscomLoginSubmit');submit.disabled=true;
+  const login=$('siscomLoginUser').value.trim(),password=$('siscomLoginPassword').value;
+  feedback.style.color='#24527a';feedback.textContent='Autenticando pelo worker Windows...';
+  try{
+   const r=await fetch('/api/siscom-individual/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({login,password}),cache:'no-store'});
+   $('siscomLoginPassword').value='';
+   const j=await r.json();if(!r.ok)throw Error(j.error||'Não foi possível autenticar');
+   let done=false;
+   for(let i=0;i<65;i++){
+    await wait(1400);
+    const rr=await fetch('/api/siscom-individual/login-status',{cache:'no-store',credentials:'same-origin'});
+    const x=await rr.json();if(rr.status===202)continue;
+    if(!rr.ok)throw Error(x.error||'Erro de autenticação');
+    done=true;paint({authenticated:true,user:x.user});modal.classList.remove('open');break;
+   }
+   if(!done)throw Error('Tempo excedido. Confira o worker Windows conectado à VPN.');
+  }catch(e){feedback.style.color='#a52828';feedback.textContent=e.message}
+  finally{submit.disabled=false;$('siscomLoginPassword').value=''}
+ });
+ logout.addEventListener('click',async()=>{
+  logout.disabled=true;
+  try{await fetch('/api/siscom-individual/logout',{method:'POST',credentials:'same-origin'});}finally{logout.disabled=false;paint(null)}
+ });
+ consult.addEventListener('click',async()=>{
+  const current=window.__detailSS?.ss||'';
+  const numero=prompt('Número da SS a consultar no SISCOM (somente leitura):',current);
+  if(numero===null)return;
+  const ss=numero.trim();if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){alert('Formato de SS inválido');return}
+  consult.disabled=true;
+  try{
+   const start=await fetch('/api/siscom-gateway/consultar-ss',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:ss}),credentials:'same-origin'});
+   const startJ=await start.json();if(!start.ok)throw Error(startJ.error||'Falha ao consultar');
+   let done=false;
+   for(let i=0;i<50;i++){
+    await wait(1250);
+    const r=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(startJ.id),{cache:'no-store',credentials:'same-origin'});
+    const x=await r.json();if(!r.ok)throw Error(x.error||'Falha ao consultar tarefa');
+    if(x.status==='erro')throw Error(x.error_message||'SISCOM recusou consulta');
+    if(x.status==='concluido'){done=true;alert('Consulta SISCOM autorizada para '+ss+'.\n\n'+JSON.stringify(x.result||{},null,2).slice(0,1200));break}
+   }
+   if(!done)throw Error('Tempo de consulta excedido');
+  }catch(e){alert('Consulta SISCOM: '+e.message)}finally{consult.disabled=!active}
+ });
+ refresh();
+})();
+</script>
+<style>
+#siscomRejeicaoModal{position:fixed;inset:0;background:#0b24468a;z-index:99999;display:none;align-items:center;justify-content:center;padding:12px}
+#siscomRejeicaoModal.open{display:flex}
+#siscomRejeicaoModal .rejBox{background:#fff;border-radius:10px;width:min(850px,98vw);max-height:92vh;overflow:auto;padding:20px;color:#163c64;box-shadow:0 10px 50px #0018}
+#siscomRejeicaoModal .rejGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#siscomRejeicaoModal label{display:block;font-weight:700;margin:8px 0 4px}
+#siscomRejeicaoModal input,#siscomRejeicaoModal textarea{width:100%;padding:9px;border:1px solid #b8cadc;border-radius:5px;font:inherit}
+#siscomRejeicaoModal button{padding:10px 14px;margin:8px 6px 0 0;border:1px solid #9fb8d3;border-radius:5px;background:#edf5fc;cursor:pointer}
+#siscomRejeicaoModal button:disabled{opacity:.55;cursor:not-allowed}
+#siscomRejeicaoModal .rejPrimary{background:#0879f7;color:#fff;border-color:#0879f7}
+#siscomRejeicaoModal .rejWarn{background:#fff4d8;padding:12px;border-radius:6px;margin:12px 0;line-height:1.5}
+#siscomRejeicaoModal #rejStatus{white-space:pre-wrap;padding:10px;border-radius:5px;background:#edf5fc;min-height:36px}
+@media(max-width:650px){#siscomRejeicaoModal .rejGrid{grid-template-columns:1fr}}
+</style>
+<div id="siscomRejeicaoModal" role="dialog" aria-modal="true" aria-labelledby="rejTitle"><div class="rejBox">
+ <button type="button" id="rejFechar" style="float:right">Fechar ×</button><h2 id="rejTitle">Rejeitar SS no SISCOM</h2>
+ <p class="rejWarn"><b>Ação oficial e irreversível.</b> Primeiro valide a SS; depois confira o motivo, equipe, horários e observação. O sistema não repete o envio automaticamente.</p>
+ <div class="rejGrid"><div><label for="rejNumero">Código SS</label><input id="rejNumero" placeholder="08/26-106136-02" autocomplete="off"></div><div><label>Sessão SISCOM</label><div id="rejLogin" style="padding:10px;background:#edf5fc">Verificando...</div></div></div>
+ <button type="button" id="rejConsultar">Pesquisar e validar SS</button><button type="button" id="rejTentativa">Consultar tentativa anterior</button><button type="button" id="rejSincronizar" hidden>Sincronizar confirmação com uMov</button>
+ <div id="rejResumo" style="margin-top:8px;padding:10px;background:#edf5fc">Nenhuma SS validada.</div>
+ <h3>Formulário de rejeição</h3>
+ <label>Motivo</label>
+ <div style="display:flex;gap:20px;flex-wrap:wrap;margin:8px 0"><label><input type="radio" name="rejMotivo" value="NAO_EXECUCAO" checked style="width:auto"> Não Execução</label><label title="Aguardando payload oficial de duplicidade"><input type="radio" name="rejMotivo" value="DUPLICIDADE" disabled style="width:auto"> Duplicidade (aguardando integração)</label></div>
+ <div class="rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="datetime-local"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="datetime-local"></div></div>
+ <label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe">
+ <label for="rejObservacao">Observação obrigatória</label><textarea id="rejObservacao" rows="4" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea>
+ <div class="rejWarn" id="rejPermissao">Verificando autorização de escrita...</div>
+ <button type="button" class="rejPrimary" id="rejConfirmar" disabled>Confirmar e rejeitar oficialmente</button>
+ <div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
+</div></div>
+<script>
+// Rejeição oficial SISCOM: sem gravação local até evento oficial 4 confirmado.
+(()=>{
+ const $=id=>document.getElementById(id),modal=$('siscomRejeicaoModal');
+ let validada=null,permissao=false,ocupado=false,ultimoConfirmado=null;
+ const setStatus=s=>{$('rejStatus').textContent=s};
+ const ssValida=s=>/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(s);
+ const wait=ms=>new Promise(r=>setTimeout(r,ms));
+ function atualizarBotao(){ $('rejConfirmar').disabled=ocupado||!permissao||!validada||validada.numero_ss!==$('rejNumero').value.trim(); }
+ async function api(url,payload){
+  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(payload),cache:'no-store'});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Falha ao comunicar com o gateway');return j;
+ }
+ async function acompanhar(id){
+  for(let i=0;i<65;i++){
+   await wait(1200);
+   const r=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
+   const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Erro ao acompanhar tarefa');
+   if(j.status==='erro')throw Error(j.error_message||'Operação rejeitada pelo worker');
+   if(j.status==='concluido')return j.result||{};
+  }
+  throw Error('Tempo excedido. Consulte o histórico antes de tentar novamente.');
+ }
+ function selectedSS(){
+  const items=Object.values(selected||{});
+  if(items.length>1){alert('Selecione somente uma SS para rejeitar.');return null;}
+  return items[0]?.ss||window.__detailSS?.ss||'';
+ }
+ window.openSiscomRejeicao=async()=>{
+  const ss=selectedSS();if(ss===null)return;
+  $('rejNumero').value=ss;$('rejResumo').textContent='Nenhuma SS validada.';validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;ocupado=false;permissao=false;atualizarBotao();
+  modal.classList.add('open');setStatus('Aguardando validação oficial.');
+  try{
+   const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'}),me=await r.json();
+   $('rejLogin').textContent=me.authenticated?'Conectado: '+(me.user?.nome||'Usuário SISCOM'):'Não conectado';
+   permissao=!!me.rejeicaoEnabled;
+   $('rejPermissao').textContent=permissao?'Rejeição oficial habilitada para esta conta.':'Envio desabilitado. Login individual e autorização de escrita são obrigatórios; consultas continuam disponíveis.';
+   if(!me.authenticated){modal.classList.remove('open');$('siscomLoginTop')?.click();}
+   atualizarBotao();
+  }catch(e){$('rejLogin').textContent='Falha ao verificar sessão: '+e.message;}
+ };
+ $('rejFechar').onclick=()=>{if(ocupado)return alert('Aguarde a tarefa terminar ou consulte o histórico antes de fechar.');modal.classList.remove('open')};
+ modal.addEventListener('click',e=>{if(e.target===modal&&!ocupado)modal.classList.remove('open')});
+ $('rejNumero').addEventListener('input',()=>{validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;$('rejResumo').textContent='Validação pendente.';atualizarBotao()});
+ $('rejConsultar').onclick=async()=>{
+  const numero=$('rejNumero').value.trim();if(!ssValida(numero))return setStatus('Informe uma SS no formato 08/26-106136-02.');
+  $('rejConsultar').disabled=true;validada=null;atualizarBotao();setStatus('Consultando e validando SS no SISCOM...');
+  try{
+   const job=await api('/api/siscom-gateway/rejeicao-validar',{numero_ss:numero});
+   const r=await acompanhar(job.id);
+   if(r.numero_ss!==numero||!r.validada)throw Error('SISCOM não validou esta SS');
+   validada=r;
+   $('rejResumo').textContent='SS: '+r.numero_ss+' | Unidade: '+(r.unidade||r.executor)+' | Macro: '+r.macro+' — '+(r.descricao_macro||'');
+   setStatus('SS validada. Confira a equipe, datas e observação antes de confirmar.');
+  }catch(e){setStatus('Validação não concluída: '+e.message)}finally{$('rejConsultar').disabled=false;atualizarBotao()}
+ };
+ async function sincronizarConfirmada(){
+  if(!ultimoConfirmado)return setStatus('Nenhuma rejeição confirmada para sincronizar.');
+  $('rejSincronizar').disabled=true;
+  try{
+   const sync=await api('/api/siscom-gateway/sincronizar-rejeicao',{numero_ss:ultimoConfirmado.numero,job_id:ultimoConfirmado.id});
+   setStatus(sync.ok?'Rejeição CONFIRMADA no SISCOM e status atualizado no uMov. Atualize a listagem.':'Rejeição confirmada no SISCOM, mas sincronização local pendente.');
+  }catch(e){setStatus('Rejeição CONFIRMADA no SISCOM; sincronização uMov pendente: '+e.message+'. NÃO reenviar rejeição.');}
+  finally{$('rejSincronizar').disabled=false}
+ }
+ $('rejSincronizar').onclick=sincronizarConfirmada;
+ $('rejTentativa').onclick=async()=>{
+  const numero=$('rejNumero').value.trim();if(!ssValida(numero))return setStatus('Informe a SS para consultar a tentativa.');
+  $('rejTentativa').disabled=true;
+  try{
+   const r=await fetch('/api/siscom-gateway/rejeicao-tentativa/'+encodeURIComponent(numero),{credentials:'same-origin',cache:'no-store'});
+   const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Falha na consulta');
+   setStatus('Tentativa '+j.id+' | '+j.status+' | '+(j.result?.status_rejeicao||j.error_message||'Sem resultado oficial')+'. '+(j.result?.mensagem||''));
+   if(j.status==='concluido'&&j.result?.status_rejeicao==='CONFIRMADA'){ultimoConfirmado={id:j.id,numero};$('rejSincronizar').hidden=false;}
+  }catch(e){setStatus('Tentativa: '+e.message)}finally{$('rejTentativa').disabled=false}
+ };
+ $('rejConfirmar').onclick=async()=>{
+  const numero=$('rejNumero').value.trim();if(!validada||validada.numero_ss!==numero||!permissao)return setStatus('Valide a SS e verifique a permissão.');
+  const equipe=Number($('rejEquipe').value),ini=$('rejInicio').value,fim=$('rejFim').value,observacao=$('rejObservacao').value.trim();
+  if(!Number.isSafeInteger(equipe)||equipe<1)return setStatus('Informe o código da equipe.');
+  if(!ini||!fim||!Number.isFinite(new Date(ini).getTime())||!Number.isFinite(new Date(fim).getTime())||new Date(fim)<new Date(ini))return setStatus('Informe datas válidas e cronológicas.');
+  if(!observacao||observacao.length>1000)return setStatus('Informe a observação (até 1000 caracteres).');
+  if(!confirm('ATENÇÃO: rejeitar oficialmente a SS '+numero+' no SISCOM como NÃO EXECUÇÃO? Esta operação não será reenviada automaticamente.'))return;
+  const digitado=prompt('Para confirmar, digite exatamente: REJEITAR '+numero);
+  if(digitado!=='REJEITAR '+numero)return setStatus('Confirmação cancelada. Nenhuma rejeição enviada.');
+  ocupado=true;atualizarBotao();$('rejConsultar').disabled=true;setStatus('Enviando UMA ÚNICA vez para o SISCOM...');
+  try{
+   const job=await api('/api/siscom-gateway/rejeicao-confirmar',{numero_ss:numero,motivo:'NAO_EXECUCAO',equipe,inicio:new Date(ini).toISOString(),fim:new Date(fim).toISOString(),observacao,confirmacao:digitado});
+   setStatus('Tarefa '+job.id+' registrada. Aguardando confirmação oficial...');
+   const r=await acompanhar(job.id);
+   if(r.status_rejeicao!=='CONFIRMADA'){
+    setStatus('RESULTADO INCERTO: '+(r.mensagem||'Não houve confirmação oficial')+' NÃO reenvie. Tarefa: '+job.id);
+    return;
+   }
+   setStatus('Rejeição confirmada no SISCOM. Sincronizando status com o uMov...');
+   ultimoConfirmado={id:job.id,numero};$('rejSincronizar').hidden=false;
+   await sincronizarConfirmada();
+  }catch(e){setStatus('Não foi possível confirmar o resultado: '+e.message+'. Se o envio foi iniciado, NÃO tente novamente sem verificar a tentativa oficial.');}
+  finally{ocupado=false;$('rejConsultar').disabled=false;atualizarBotao()}
+ };
+})();
+</script>
+</body></html>

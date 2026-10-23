@@ -1,0 +1,18 @@
+GLOBAL SS — DETALHES DA TRAMITAÇÃO (SOMENTE CONSULTA)
+Base: GLOBAL_SS_TRAMITACAO_FILTROS_SUPERIORES_UNIFICADOS(1).zip enviado pelo usuário.
+
+ALTERADO SOMENTE: site/public/index.html
+
+Ao clicar na SS ou em Ver:
+- Abre painel grande com cabeçalho, SS, fase e ações Imprimir/Atualizar/Fechar.
+- Consulta tram_detalhes (dados da medição).
+- Consulta tram_anexos por SS.
+- Consulta tram_itens e tram_historico por identificador da medição obtido em tram_detalhes.
+- Mostra os itens, anexos e histórico em tabelas com paginação oficial de 25 registros por requisição.
+- Não inclui botões para aprovar, cancelar, tramitar, excluir ou editar.
+- Os anexos exibem metadados; visualizar/baixar arquivo ainda depende de endpoint oficial não fornecido.
+- Não exige SQL, alteração de server.js ou worker.js se as operações tram_* já estiverem presentes no worker atual.
+
+LIMITAÇÕES DE TESTE: validada sintaxe JavaScript. Necessário testar o retorno real de tram_detalhes e demais operações no SISCOM autenticado.
+
+INSTALAÇÃO: extraia este ZIP em C:\Users\Logic\Desktop\global-ss\atualizacoes\tram_detalhes e execute INSTALAR.ps1 a partir dessa pasta, ou copie o arquivo site/public/index.html para global-ss/public/index.html, após backup.

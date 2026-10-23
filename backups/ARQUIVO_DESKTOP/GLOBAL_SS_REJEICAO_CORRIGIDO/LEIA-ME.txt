@@ -1,0 +1,56 @@
+GLOBAL SS - REJEIÇÃO OFICIAL SISCOM - 22/10/2026
+
+ENTREGUE
+- Site: server.js + public/index.html, baseados no ZIP global-ss(20261022-220957).zip.
+- Worker: worker.js, baseado EXATAMENTE no worker(6).js enviado pelo usuário.
+- Formulário "Rejeitar SS" nas ações de Recepção e Notas para Baixar.
+- GET validaSS + GET lista oficial; PUT único e não repetido; confirmação por novo evento oficial 4.
+- Sincronização uMov somente depois de confirmação oficial, pelo job autenticado.
+- Duplicidade exibida porém bloqueada: falta payload oficial.
+- Motivo NÃO EXECUÇÃO usa DTO id=44, descrição NÃO EXECUTADO, flagModoRejeicao=false,
+  conforme o único payload oficial fornecido. Outros motivos não são inferidos.
+- Nunca envia token SISCOM para navegador nem para fila Supabase.
+- Worker mantém login individual, baixa, eventos e complementares.
+
+INSTALAÇÃO (LEIA ANTES)
+1. Execute MIGRACAO_REJEICAO.sql no SQL Editor do Supabase (não muda status de SS).
+2. PARE o worker em execução com Ctrl+C na janela em que roda "node .\worker.js".
+3. Extraia este ZIP, abra PowerShell NA PASTA EXTRAÍDA e execute:
+   powershell -ExecutionPolicy Bypass -File ".\INSTALAR_E_PUBLICAR.ps1"
+4. O script faz backups fora do Git, copia os arquivos, commit/push do site e
+   deixa o worker pronto para reiniciar. Não mexe no .env.
+5. Inicie SOMENTE UMA instância do worker:
+   cd "C:\Users\Logic\SISCOM-GATEWAY"
+   node .\worker.js
+6. Faça login individual SISCOM novamente no site.
+7. TESTE PRIMEIRO apenas "Pesquisar e validar SS" com as flags de escrita DESLIGADAS.
+8. Após validar consultas, habilite explicitamente a gravação SOMENTE para usuários autorizados:
+   Vercel:
+      SISCOM_INDIVIDUAL_WRITE_ENABLED=true
+      SISCOM_INDIVIDUAL_WRITE_USERS=<idUsuario autorizado, obtido no login>
+      SISCOM_REJEICAO_WRITE_ENABLED=true
+   Worker .env:
+      SISCOM_INDIVIDUAL_WRITE_ENABLED=true
+      SISCOM_REJEICAO_WRITE_ENABLED=true
+   Reinicie o worker, refaça o login SISCOM e aguarde o deploy Vercel.
+   OBS: SISCOM_INDIVIDUAL_WRITE_ENABLED também habilita outras escritas
+   individuais existentes (baixa e complementar). Não ative sem essa autorização.
+9. Execute UMA rejeição de teste formalmente autorizada e verifique o resultado oficial.
+
+REGRAS DE SEGURANÇA
+- Só sessão individual SISCOM, com HMAC assinado, pode validar/rejeitar.
+- Senha administrativa do Vercel NÃO substitui o login individual nesta operação.
+- Uma SS não pode ter 2 jobs de rejeição (índice único no Supabase).
+- HTTP 200 no PUT NÃO significa rejeição confirmada; só novo evento oficial 4.
+- Timeout, erro HTTP ou falta de evento -> INCERTO; NÃO reenviar automaticamente.
+- Se confirmação oficial ocorrer e sincronização uMov falhar, NÃO reenviar PUT.
+- A função de rejeição local antiga foi desativada para evitar divergências.
+- Não incluímos .env, senhas, chaves privadas, tokens, node_modules ou .git.
+
+LIMITAÇÕES
+- Os endpoints oficiais foram identificados pelo cURL do usuário; sem conexão
+  à VPN aqui, não foi possível executar um teste real de rejeição.
+- A estrutura exata do retorno validaSS e a emissão de evento 4 devem ser
+  confirmadas com uma SS de teste autorizada. Se houver divergência, a ação
+  bloqueia ou retorna INCERTO, sem reenvio.
+- Duplicidade requer cURL/payload próprio antes de ser habilitada.

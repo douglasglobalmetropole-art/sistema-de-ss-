@@ -1,0 +1,21 @@
+GLOBAL SS — Filtros de Tramitação na barra superior
+- Ao abrir TRAMITAÇÃO, os filtros superiores antigos (Macro, Cidade, Data Início, Data Fim, Filtrar e Limpar) são ocultados.
+- No mesmo espaço superior aparecem os filtros oficiais: Divisão/Contrato, Status, Macro, Execução inicial/final, Pesquisar e Limpar.
+- Os filtros de Tramitação não são duplicados na área inferior.
+- Nas outras abas, os filtros antigos continuam visíveis e funcionais.
+- Botão Limpar da Tramitação preserva contrato, limpa status/macro/datas e não envia consultas automaticamente.
+- Mantidas opções de 25/50/75/100 por página e visualização de SS.
+- Alterado somente public/index.html. Não requer SQL nem worker novo.
+
+INSTALAÇÃO (PowerShell; o ZIP pode estar em Downloads):
+$site='C:\Users\Logic\Desktop\global-ss'
+$zip=Join-Path $env:USERPROFILE 'Downloads\GLOBAL_SS_TRAMITACAO_FILTROS_SUPERIORES_UNIFICADOS.zip'
+$destino=Join-Path $site 'atualizacoes\tram_filtros_superiores'
+New-Item -ItemType Directory -Force -Path (Join-Path $site 'backups') | Out-Null
+Expand-Archive -LiteralPath $zip -DestinationPath $destino -Force
+Copy-Item (Join-Path $site 'public\index.html') (Join-Path $site ('backups\index_'+(Get-Date -Format 'yyyyMMdd_HHmmss')+'.html'))
+Copy-Item (Join-Path $destino 'site\public\index.html') (Join-Path $site 'public\index.html') -Force
+Set-Location $site
+git add public/index.html
+git commit -m 'Exibir filtros da tramitacao na barra superior'
+git push origin main
