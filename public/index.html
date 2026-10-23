@@ -1015,7 +1015,7 @@ load();
     if(q.status==='erro')throw Error(q.error_message||'Worker recusou o envio');
     if(q.status==='concluido'){
      const d=q.result||{};status('SISCOM: '+(d.status_anexo||'INCERTO')+' — '+(d.mensagem||''));
-     if(!['CONFIRMADO','JA_EXISTE'].includes(d.status_anexo))status('Resultado incerto. Confira a aba Anexos do SISCOM antes de reenviar.');
+     if(!['CONFIRMADO','JA_EXISTE'].includes(d.status_anexo))status('Envio sem confirmacao automatica. Verifique o anexo na SS no SISCOM antes de tentar novamente.');
      return;
     }
    }
