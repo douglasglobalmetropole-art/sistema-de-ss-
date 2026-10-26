@@ -63,6 +63,45 @@ async function mapaVeiculosFrotas(){
 const CACHE=new Map();
 const DATA_CACHE=new Map();
 const DATA_CACHE_TTL=5*60*1000;
+
+// CP_V21: consultas isoladas por IDs. Falha de um complemento não invalida a lista base.
+// Não usa JOIN amplo nas tabelas de integração. Todos os números continuam parciais
+// até a sincronização completa do uMov ser implementada.
+async function cpLerComplementos(tarefas){
+ const ids=[...new Set(tarefas.map(t=>Number(t.tsk_id)).filter(Number.isSafeInteger))];
+ const locaisIds=[...new Set(tarefas.map(t=>Number(t.loc_id)).filter(Number.isSafeInteger))];
+ const falhas=[];
+ const consultar=async(nome,texto,values,ms)=>{
+  if(!values[0]?.length)return {ok:true,rows:[]};
+  try{return {ok:true,rows:(await pool.query({text:texto,values,query_timeout:ms})).rows}}
+  catch(error){falhas.push(nome+': '+String(error.message||error).slice(0,120));return {ok:false,rows:[]}}
+ };
+ const [tarefasOut,locais,locaisOut]=await Promise.all([
+  consultar('dbout_task',`SELECT tsk_id,age_id,tss_id,tsk_situation,tsk_scheduleinitialdatehour,
+      tsk_realinitialdatehour,tsk_realfinaldatehour,e_situacao,e_tag
+      FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])`,[ids],2600),
+  consultar('local',`SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,
+      loc_streetnumber FROM u45468.local WHERE loc_id=ANY($1::bigint[])`,[locaisIds],2600),
+  consultar('dbout_local',`SELECT loc_id,e_situacao,e_servicoexecutadosiscom,
+      e_informacaoexecucaosiscom,e_userbaixasiscom,e_horariobaixasiscom,
+      loc_description,e_localidade,e_bairro,e_reflocalizacao,loc_street,loc_streetnumber,
+      loc_neighborhood,loc_city,loc_geoposition
+      FROM u45468.dbout_local WHERE loc_id=ANY($1::bigint[])`,[locaisIds],1300)
+ ]);
+ const equipeIds=[...new Set([...tarefas.map(t=>Number(t.age_id)),...tarefasOut.rows.map(t=>Number(t.age_id))].filter(Number.isSafeInteger))];
+ const tipoIds=[...new Set(tarefas.map(t=>Number(t.tty_id)).filter(Number.isSafeInteger))];
+ const [agentes,tipos]=await Promise.all([
+  consultar('agent',`SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])`,[equipeIds],1600),
+  consultar('tasktype',`SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])`,[tipoIds],1600)
+ ]);
+ const mapa=(rows,id)=>new Map(rows.map(r=>[String(r[id]),r]));
+ return {
+  dt:mapa(tarefasOut.rows,'tsk_id'),local:mapa(locais.rows,'loc_id'),
+  dl:mapa(locaisOut.rows,'loc_id'),agent:mapa(agentes.rows,'age_id'),
+  tipo:mapa(tipos.rows,'tty_id'),falhas,dtOk:tarefasOut.ok
+ };
+}
+
 function setBounded(map,key,value,max=120){
  map.delete(key);map.set(key,value);
  while(map.size>max)map.delete(map.keys().next().value);
@@ -152,7 +191,7 @@ async function buscarCamposTarefa(ids){
 app.get('/api/cp/veiculos',async(req,res)=>{try{res.json(await lerVeiculos())}catch(e){res.status(502).json({ok:false,error:'Consulta de frotas indisponivel.'})}});
 
 app.get('/api/cp/health',async(req,res)=>{
- try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V20 busca progressiva por origem'})}
+ try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V21 IDs antes dos complementos'})}
  catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -172,8 +211,9 @@ app.get('/api/cp/ss',async(req,res)=>{
  // Páginas maiores evitam dezenas de chamadas sequenciais no navegador.
  const offset=Math.min(Math.max(Number(req.query.offset||0),0),200000);
  if(!Number.isSafeInteger(offset))return res.status(400).json({ok:false,error:'Offset invalido.'});
- const chave=`v20|${modo}|${di}|${df}|${limite}|${offset}`;
+ const chave=`v21|${modo}|${di}|${df}|${limite}|${offset}`;
  const fresh=req.query.refresh==='1';
+ let etapa='cache';
  const lifeMs=df>=cpToday()?120000:900000;
  const maxStale=df>=cpToday()?48*3600000:14*86400000;
  let fallbackCache=null;
@@ -225,56 +265,63 @@ app.get('/api/cp/ss',async(req,res)=>{
    // V20: consulta leve por origem; primeiro traz SS criadas no periodo.
    // Depois (modo movimentadas) complementa pelas movimentacoes do uMov.
    // Cada consulta pagina os IDs antes dos JOINs. Nunca soma amostras como total oficial.
+   etapa='consulta-ids';
    const fonteCriadas=modo==='criadas';
-   const tabela=fonteCriadas?'u45468.task':'u45468.dbout_task';
-   const coluna=fonteCriadas?'tsk_insertdatehour':'tsk_lastexecutiondatehour';
-   const r=await pool.query({text:`
-WITH lote_ids AS MATERIALIZED (
- SELECT tsk_id FROM ${tabela}
- WHERE ${coluna} >= $1::date AND ${coluna} < ($2::date + INTERVAL '1 day')
- ORDER BY ${coluna} DESC, tsk_id DESC
- LIMIT $3 OFFSET $4
-), pagina AS MATERIALIZED (
- SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
-   COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) AS programacao_real,
-   COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) AS inicio_real,
-   COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real,
-   COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour,
-            d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour,t.tsk_insertdatehour) AS data_referencia,
-   l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
-   l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-   a.age_name AS tecnico,COALESCE(NULLIF(BTRIM(tt.tty_description),''),NULLIF(BTRIM(to_jsonb(d)->>'tty_description'),'')) AS servico,
-   d.tsk_situation AS t_situacao_campo,d.tss_id AS t_tss_id,
-   d.e_tag AS t_tags,d.e_situacao AS t_status_integracao
- FROM lote_ids ids
- JOIN u45468.task t ON t.tsk_id=ids.tsk_id
- LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
- LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
- LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
- LEFT JOIN u45468.tasktype tt ON tt.tty_id=COALESCE(NULLIF(t.tty_id,0),CASE WHEN (to_jsonb(d)->>'tty_id') ~ '^[0-9]+$' THEN (to_jsonb(d)->>'tty_id')::bigint END)
-)
-SELECT p.*,
- dl.e_situacao AS s_situacao,
- dl.e_servicoexecutadosiscom AS s_servico_executado_siscom,
- dl.e_informacaoexecucaosiscom AS s_info_execucao_siscom,
- dl.e_userbaixasiscom AS s_usuario_baixa_siscom,
- dl.e_horariobaixasiscom AS s_horario_baixa_siscom,
- dl.loc_description AS s_localizacao,
- dl.e_localidade AS s_cidade_umov,
- dl.e_bairro AS s_bairro_umov,
- dl.e_reflocalizacao AS s_referencia_localizacao,
- dl.loc_street AS s_logradouro_umov,
- dl.loc_streetnumber AS s_numero_umov,
- dl.loc_neighborhood AS s_bairro_sistema,
- dl.loc_city AS s_cidade_sistema,
- dl.loc_geoposition AS s_geoposicao
-FROM pagina p
-LEFT JOIN u45468.dbout_local dl ON dl.loc_id=p.loc_id
-ORDER BY p.tsk_id DESC
-`,values:[di,df,limite+1,offset],query_timeout:5200});
+   const keys=fonteCriadas?
+    await pool.query({text:`SELECT tsk_id,loc_id,age_id,tty_id,tsk_insertdatehour,
+        tsk_scheduleinitialdatehour,tsk_realinitialdatehour,tsk_realfinaldatehour
+        FROM u45468.task WHERE tsk_insertdatehour >= $1::date
+          AND tsk_insertdatehour < ($2::date + INTERVAL '1 day')
+        ORDER BY tsk_insertdatehour DESC,tsk_id DESC LIMIT $3 OFFSET $4`,
+      values:[di,df,limite+1,offset],query_timeout:3500}):
+    await pool.query({text:`SELECT tsk_id FROM u45468.dbout_task
+        WHERE tsk_lastexecutiondatehour >= $1::date
+          AND tsk_lastexecutiondatehour < ($2::date + INTERVAL '1 day')
+        ORDER BY tsk_lastexecutiondatehour DESC,tsk_id DESC LIMIT $3 OFFSET $4`,
+      values:[di,df,limite+1,offset],query_timeout:3500});
+   const truncado=keys.rows.length>limite;
+   const ids=keys.rows.slice(0,limite);
+   etapa='leitura-tarefas';
+   const tarefas=fonteCriadas?ids:
+    ids.length?(await pool.query({text:`SELECT tsk_id,loc_id,age_id,tty_id,
+        tsk_insertdatehour,tsk_scheduleinitialdatehour,tsk_realinitialdatehour,
+        tsk_realfinaldatehour FROM u45468.task WHERE tsk_id=ANY($1::bigint[])`,
+        values:[ids.map(x=>x.tsk_id)],query_timeout:2300})).rows:[];
+   etapa='complementos';
+   const extra=await cpLerComplementos(tarefas);
+   if(extra.falhas.length)console.warn('CP_V21 dados complementares parciais:',extra.falhas.join(' | '));
+   const linhas=tarefas.map(t=>{
+     const d=extra.dt.get(String(t.tsk_id))||{};
+     const l=extra.local.get(String(t.loc_id))||{};
+     const dl=extra.dl.get(String(t.loc_id))||{};
+     const a=extra.agent.get(String(d.age_id||t.age_id))||{};
+     const tt=extra.tipo.get(String(t.tty_id))||{};
+     const programacao_real=d.tsk_scheduleinitialdatehour||t.tsk_scheduleinitialdatehour||null;
+     const inicio_real=d.tsk_realinitialdatehour||t.tsk_realinitialdatehour||null;
+     const fim_real=d.tsk_realfinaldatehour||t.tsk_realfinaldatehour||null;
+     return {
+       tsk_id:t.tsk_id,loc_id:t.loc_id,ss:l.loc_integrationid||'',
+       cidade:l.loc_city||'',bairro:l.loc_neighborhood||'',
+       logradouro:l.loc_street||'',numero:l.loc_streetnumber||'',
+       tecnico:a.age_name||'',servico:tt.tty_description||'',
+       programacao_real,inicio_real,fim_real,
+       data_referencia:inicio_real||programacao_real||t.tsk_insertdatehour,
+       t_situacao_campo:d.tsk_situation||'',t_tss_id:d.tss_id||null,
+       t_tags:d.e_tag||'',t_status_integracao:d.e_situacao||'',
+       s_situacao:dl.e_situacao||'',s_servico_executado_siscom:dl.e_servicoexecutadosiscom||'',
+       s_info_execucao_siscom:dl.e_informacaoexecucaosiscom||'',
+       s_usuario_baixa_siscom:dl.e_userbaixasiscom||'',
+       s_horario_baixa_siscom:dl.e_horariobaixasiscom||'',
+       s_localizacao:dl.loc_description||'',s_cidade_umov:dl.e_localidade||'',
+       s_bairro_umov:dl.e_bairro||'',s_referencia_localizacao:dl.e_reflocalizacao||'',
+       s_logradouro_umov:dl.loc_street||'',s_numero_umov:dl.loc_streetnumber||'',
+       s_bairro_sistema:dl.loc_neighborhood||'',s_cidade_sistema:dl.loc_city||'',
+       s_geoposicao:dl.loc_geoposition||''
+     };
+   });
    const sqlMs=Date.now()-sqlInicio;
-   const truncado=r.rows.length>limite;
-   const linhas=r.rows.slice(0,limite);
+   res.set('X-CP-Partial','1');res.set('X-CP-Version','V21');
+   if(extra.falhas.length)res.set('X-CP-Enrichment-Partial','1');
    let baixadas=0,rejeitadas=0,duplicadas=0,soma=0,qtd=0;
    const dados=linhas.map(x=>{
      const s={
@@ -364,7 +411,7 @@ ORDER BY p.tsk_id DESC
     res.set('X-CP-Partial','1');res.set('X-CP-Source','movimentadas-indisponivel');
     res.set('X-CP-Truncated','0');return res.json([]);
    }
-   res.status(timeout?504:500).json({ok:false,error:timeout?'Consulta do uMov excedeu 5,2 segundos. Se recorrente, revisar indices do banco de origem.':'Falha na consulta ao uMov.'});
+   res.status(timeout?504:500).json({ok:false,etapa,error:timeout?'Consulta uMov excedeu tempo na etapa '+etapa+'. Verifique o indice da consulta.':'Falha na consulta ao uMov na etapa '+etapa+'.'});
  }
 });
 
@@ -383,7 +430,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
     return res.json(ATIVAS_CACHE.dados);
    }
    if(ATIVAS_CACHE.dados)activeFallback={dados:ATIVAS_CACHE.dados,at:new Date(ATIVAS_CACHE.ts).toISOString()};
-   const persistido=await cpCache.load('ativas_v15',{maxAgeMs:60000,maxStaleMs:48*3600000,timeoutMs:700});
+   const persistido=await cpCache.load('ativas_v21',{maxAgeMs:60000,maxStaleMs:48*3600000,timeoutMs:700});
    if(persistido?.payload.dados?.length===1){
     const dados=persistido.payload.dados[0];
     if(!activeFallback||Date.parse(persistido.at)>Date.parse(activeFallback.at))activeFallback={dados,at:persistido.at};
@@ -401,50 +448,38 @@ app.get('/api/cp/ativas',async(req,res)=>{
   }
   const limite=200;
   const inicioConsulta=Date.now();
-  const r=await pool.query({text:`
-/* CP_V14_ATIVAS_PARCIAL: amostra recente; nao equivale ao estoque operacional completo */
-WITH recentes AS MATERIALIZED (
-  SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour
-  FROM u45468.task t
-  ORDER BY t.tsk_insertdatehour DESC NULLS LAST,t.tsk_id DESC
-  LIMIT $1
-), base_ativas AS MATERIALIZED (
-  SELECT r.*, d.tsk_situation,d.tsk_scheduleinitialdatehour,
-    d.tsk_realinitialdatehour,d.tsk_realfinaldatehour,
-    d.e_situacao,d.age_id AS db_age_id
-  FROM recentes r
-  JOIN u45468.dbout_task d ON d.tsk_id=r.tsk_id
-  WHERE UPPER(BTRIM(d.tsk_situation))='EM CAMPO'
-     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%'
-     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%'
-)
-SELECT d.tsk_id,d.tsk_situation AS situacao_campo,
-  d.tsk_scheduleinitialdatehour AS programacao_real,
-  d.tsk_realinitialdatehour AS inicio_real,
-  d.tsk_realfinaldatehour AS fim_real,
-  d.e_situacao AS status_integracao,
-  d.loc_id,l.loc_integrationid AS ss,
-  l.loc_city AS cidade,l.loc_neighborhood AS bairro,
-  l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-  a.age_name AS equipe,COALESCE(NULLIF(BTRIM(tt.tty_description),''),NULLIF(BTRIM(to_jsonb(d)->>'tty_description'),'')) AS servico,
-  dl.e_situacao AS s_situacao,
-  dl.e_localidade AS s_cidade_umov,
-  dl.e_bairro AS s_bairro_umov,
-  dl.loc_city AS s_cidade_sistema,
-  dl.loc_neighborhood AS s_bairro_sistema,
-  dl.loc_street AS s_logradouro_umov,
-  dl.loc_streetnumber AS s_numero_umov,
-  dl.loc_description AS s_localizacao,
-  dl.loc_geoposition AS s_geoposicao
-FROM base_ativas d
-LEFT JOIN u45468.local l ON l.loc_id=d.loc_id
-LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.db_age_id,0),d.age_id)
-LEFT JOIN u45468.tasktype tt ON tt.tty_id=COALESCE(NULLIF(d.tty_id,0),CASE WHEN (to_jsonb(d)->>'tty_id') ~ '^[0-9]+$' THEN (to_jsonb(d)->>'tty_id')::bigint END)
-LEFT JOIN u45468.dbout_local dl ON dl.loc_id=d.loc_id
-ORDER BY d.tsk_id DESC
-`,values:[limite],query_timeout:5200});
-  const truncado=true; // dados parciais: amostra das ultimas tarefas
-  const linhas=r.rows.slice(0,limite);
+  const r=await pool.query({text:`SELECT tsk_id,loc_id,age_id,tty_id,tsk_insertdatehour,
+    tsk_scheduleinitialdatehour,tsk_realinitialdatehour,tsk_realfinaldatehour
+    FROM u45468.task ORDER BY tsk_insertdatehour DESC NULLS LAST,tsk_id DESC
+    LIMIT $1`,values:[limite],query_timeout:3500});
+  const extra=await cpLerComplementos(r.rows);
+  if(!extra.dtOk)throw Error('dbout_task indisponivel; classificacao atual nao confirmada');
+  const truncado=true; // apenas as 200 tarefas mais recentes; nao total oficial
+  const linhas=r.rows.flatMap(t=>{
+    const d=extra.dt.get(String(t.tsk_id));if(!d)return [];
+    const sit=norm(d.tsk_situation);
+    if(sit!=='EM CAMPO'&&!sit.startsWith('PENDENTE')&&!sit.startsWith('AGUARDANDO'))return [];
+    const l=extra.local.get(String(t.loc_id))||{};
+    const dl=extra.dl.get(String(t.loc_id))||{};
+    const a=extra.agent.get(String(d.age_id||t.age_id))||{};
+    const tipo=extra.tipo.get(String(t.tty_id))||{};
+    return [{
+      tsk_id:t.tsk_id,situacao_campo:d.tsk_situation,
+      programacao_real:d.tsk_scheduleinitialdatehour||t.tsk_scheduleinitialdatehour||null,
+      inicio_real:d.tsk_realinitialdatehour||t.tsk_realinitialdatehour||null,
+      fim_real:d.tsk_realfinaldatehour||t.tsk_realfinaldatehour||null,
+      status_integracao:d.e_situacao||'',loc_id:t.loc_id,
+      ss:l.loc_integrationid||'',cidade:l.loc_city||'',bairro:l.loc_neighborhood||'',
+      logradouro:l.loc_street||'',numero:l.loc_streetnumber||'',
+      equipe:a.age_name||'',servico:tipo.tty_description||'',
+      s_situacao:dl.e_situacao||'',s_cidade_umov:dl.e_localidade||'',
+      s_bairro_umov:dl.e_bairro||'',s_cidade_sistema:dl.loc_city||'',
+      s_bairro_sistema:dl.loc_neighborhood||'',s_logradouro_umov:dl.loc_street||'',
+      s_numero_umov:dl.loc_streetnumber||'',s_localizacao:dl.loc_description||'',
+      s_geoposicao:dl.loc_geoposition||''
+    }];
+  });
+  if(extra.falhas.length){console.warn('CP_V21 ativas parciais:',extra.falhas.join(' | '));res.set('X-CP-Enrichment-Partial','1');}
   const registros=linhas.map(x=>{
     const s={
       cidade_umov:x.s_cidade_umov||'',cidade_sistema:x.s_cidade_sistema||'',
@@ -488,13 +523,13 @@ ORDER BY d.tsk_id DESC
   };
   const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,escopo:'amostra das ultimas 200 tarefas',stats,registros};
   ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.now();
-  await Promise.race([cpCache.save('ativas_v15',{dados:[dados],truncado}),new Promise(resolve=>setTimeout(resolve,350))]);
+  await Promise.race([cpCache.save('ativas_v21',{dados:[dados],truncado}),new Promise(resolve=>setTimeout(resolve,350))]);
   res.set('X-CP-Cached-At',new Date().toISOString());
   res.set('Cache-Control','no-store');res.set('X-Cache','UMOV');res.set('Server-Timing',`cp_ativas;dur=${Date.now()-inicioConsulta}`);res.json(dados);
  }catch(err){
   console.error('ERRO /api/cp/ativas:',err.message);
   try{
-   const persistido=activeFallback?null:await cpCache.load('ativas_v15',{maxAgeMs:0,maxStaleMs:14*86400000,timeoutMs:700});
+   const persistido=activeFallback?null:await cpCache.load('ativas_v21',{maxAgeMs:0,maxStaleMs:14*86400000,timeoutMs:700});
    const anterior=activeFallback?.dados||ATIVAS_CACHE.dados||persistido?.payload?.dados?.[0];
    if(anterior?.ok&&Array.isArray(anterior.registros)){
     res.set('X-Cache','STALE-ON-ERROR');res.set('X-CP-Stale','1');
@@ -504,7 +539,7 @@ ORDER BY d.tsk_id DESC
   }catch(fallbackError){console.warn('Cache CP ativas indisponivel:',fallbackError.message);}
   const timeout=/timeout|timed out|canceling statement/i.test(String(err.message||''));
   res.status(timeout?504:500).json({ok:false,error:timeout?
-    'Consulta atual das SS excedeu o limite de 6,5 segundos. Verifique os índices do uMov.':
+    'Consulta atual excedeu o limite de 3,5 segundos na leitura das tarefas. Verifique indices do uMov.':
     'Nao foi possivel consultar as situacoes atuais da dbout_task.'});
  }
 });
