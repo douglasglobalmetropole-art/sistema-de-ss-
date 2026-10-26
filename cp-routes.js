@@ -179,6 +179,7 @@ app.get('/api/cp/ss',async(req,res)=>{
      SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
        l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
        COALESCE(t.tsk_realinitialdatehour,t.tsk_scheduleinitialdatehour,t.tsk_insertdatehour) AS data_referencia,
+       t.tsk_scheduleinitialdatehour AS programacao_real,
        t.tsk_realinitialdatehour AS inicio_real,t.tsk_realfinaldatehour AS fim_real,
        a.age_name AS tecnico,tt.tty_description AS servico
      FROM tarefas t
@@ -223,7 +224,9 @@ app.get('/api/cp/ss',async(req,res)=>{
        info_execucao_siscom:s.info_execucao_siscom||'',
        usuario_baixa_siscom:s.usuario_baixa_siscom||'',
        horario_baixa_siscom:s.horario_baixa_siscom||'',
+       programacao_iso:x.programacao_real||null,
        inicio_real_iso:x.inicio_real||null, fim_real_iso:x.fim_real||null,
+       programacao:brDT(x.programacao_real),
        inicio:brDT(x.inicio_real),fim:brDT(x.fim_real),
        duracao:dm==null?'':hhmm(dm),
        situacao:s.situacao,
