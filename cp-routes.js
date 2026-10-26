@@ -77,8 +77,11 @@ function categoria(v){
  if(n==='DUPLICADA')return'DUPLICADA';
  return n||'SEM SITUACAO';
 }
-function brDate(v){if(!v)return'';const d=new Date(v);if(isNaN(d))return'';return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo'}).format(d)}
-function brDT(v){if(!v)return'';const d=new Date(v);if(isNaN(d))return'';return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d).replace(',','')}
+// Reutilizar Intl.DateTimeFormat evita milhares de construcoes por consulta.
+const CP_DATE_FORMATTER=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo'});
+const CP_DT_FORMATTER=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+function brDate(v){if(!v)return'';const d=new Date(v);if(isNaN(d))return'';return CP_DATE_FORMATTER.format(d)}
+function brDT(v){if(!v)return'';const d=new Date(v);if(isNaN(d))return'';return CP_DT_FORMATTER.format(d).replace(',','')}
 function mins(a,b){if(!a||!b)return null;const m=Math.round((new Date(b)-new Date(a))/60000);return Number.isFinite(m)&&m>=0?m:null}
 function hhmm(m){if(m==null)return'00:00';return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`}
 
@@ -165,6 +168,7 @@ app.get('/api/cp/ss',async(req,res)=>{
    const cached=DATA_CACHE.get(chave);
    if(cached && (Date.now()-cached.ts)<DATA_CACHE_TTL){
      res.set('X-Cache','HIT');
+     res.set('Server-Timing','cp_cache;dur=0');
      res.set('X-CP-Truncated',cached.truncated?'1':'0');
      if(cached.truncated)res.set('X-CP-Next-Offset',String(offset+limite));
      return res.json(cached.dados);
@@ -172,6 +176,10 @@ app.get('/api/cp/ss',async(req,res)=>{
    // Período de execução: inclui SS iniciadas, concluídas ou que atravessam o mês.
    // Datas da dbout_task (retorno operacional) prevalecem sobre task quando presentes.
    // O COALESCE antigo selecionava apenas uma data e excluía encerramentos no mês.
+   const sqlInicio=Date.now();
+   // Uma unica ida ao PostgreSQL: seleciona e pagina primeiro as tarefas,
+   // somente depois agrega os campos complementares da dbout_task/dbout_local.
+   // Remove a CTE MATERIALIZED de todas as tarefas, que forçava trabalho excessivo.
    const r=await pool.query({text:`
      WITH tarefas AS (
        SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
@@ -180,7 +188,7 @@ app.get('/api/cp/ss',async(req,res)=>{
               COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real
        FROM u45468.task t
        LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
-     ), elegiveis AS MATERIALIZED (
+     ), elegiveis AS (
        SELECT *,COALESCE(inicio_real,programacao_real,tsk_insertdatehour) AS data_referencia
        FROM tarefas
        WHERE
@@ -192,33 +200,69 @@ app.get('/api/cp/ss',async(req,res)=>{
          OR (inicio_real IS NULL AND programacao_real IS NULL
              AND tsk_insertdatehour >= $1::date
              AND tsk_insertdatehour < ($2::date + INTERVAL '1 day'))
+     ), pagina AS MATERIALIZED (
+       SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
+         l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
+         t.data_referencia,t.programacao_real,t.inicio_real,t.fim_real,
+         a.age_name AS tecnico,tt.tty_description AS servico
+       FROM elegiveis t
+       LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
+       LEFT JOIN u45468.agent a ON a.age_id=t.age_id
+       LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
+       ORDER BY t.data_referencia ASC NULLS LAST,t.tsk_id ASC
+       LIMIT $3 OFFSET $4
      )
-     SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
-       l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-       t.data_referencia,t.programacao_real,t.inicio_real,t.fim_real,
-       a.age_name AS tecnico,tt.tty_description AS servico
-     FROM elegiveis t
-     LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
-     LEFT JOIN u45468.agent a ON a.age_id=t.age_id
-     LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-     ORDER BY t.data_referencia ASC NULLS LAST,t.tsk_id ASC
-     LIMIT $3 OFFSET $4
+     SELECT p.*,
+       dl.e_situacao AS s_situacao,
+       dl.e_servicoexecutadosiscom AS s_servico_executado_siscom,
+       dl.e_informacaoexecucaosiscom AS s_info_execucao_siscom,
+       dl.e_userbaixasiscom AS s_usuario_baixa_siscom,
+       dl.e_horariobaixasiscom AS s_horario_baixa_siscom,
+       dl.loc_description AS s_localizacao,
+       dl.e_localidade AS s_cidade_umov,
+       dl.e_bairro AS s_bairro_umov,
+       dl.e_reflocalizacao AS s_referencia_localizacao,
+       dl.loc_street AS s_logradouro_umov,
+       dl.loc_streetnumber AS s_numero_umov,
+       dl.loc_neighborhood AS s_bairro_sistema,
+       dl.loc_city AS s_cidade_sistema,
+       dl.loc_geoposition AS s_geoposicao,
+       dt.tsk_situation AS t_situacao_campo,
+       dt.tss_id AS t_tss_id,
+       dt.e_tag AS t_tags,
+       dt.e_situacao AS t_status_integracao
+     FROM pagina p
+     LEFT JOIN u45468.dbout_local dl ON dl.loc_id=p.loc_id
+     LEFT JOIN u45468.dbout_task dt ON dt.tsk_id=p.tsk_id
+     ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
    `,values:[di,df,limite+1,offset],query_timeout:25000});
-
-   // ETAPA 2: situação somente para loc_id retornados, em lotes pequenos
+   const sqlMs=Date.now()-sqlInicio;
    const truncado=r.rows.length>limite;
    const linhas=r.rows.slice(0,limite);
-   const [sit,tarefaExtra]=await Promise.all([
-     buscarSituacoes(linhas.map(x=>x.loc_id)),
-     buscarCamposTarefa(linhas.map(x=>x.tsk_id))
-   ]);
    let baixadas=0,rejeitadas=0,duplicadas=0,soma=0,qtd=0;
    const dados=linhas.map(x=>{
-     const s=sit.get(String(x.loc_id))||{
-       situacao:'',info:'',servico_executado_siscom:'',
-       usuario_baixa_siscom:'',horario_baixa_siscom:''
+     const s={
+       situacao:x.s_situacao||'',
+       servico_executado_siscom:x.s_servico_executado_siscom||'',
+       info_execucao_siscom:x.s_info_execucao_siscom||'',
+       usuario_baixa_siscom:x.s_usuario_baixa_siscom||'',
+       horario_baixa_siscom:x.s_horario_baixa_siscom||'',
+       localizacao:x.s_localizacao||'',
+       cidade_umov:x.s_cidade_umov||'',
+       bairro_umov:x.s_bairro_umov||'',
+       referencia_localizacao:x.s_referencia_localizacao||'',
+       logradouro_umov:x.s_logradouro_umov||'',
+       numero_umov:x.s_numero_umov||'',
+       bairro_sistema:x.s_bairro_sistema||'',
+       cidade_sistema:x.s_cidade_sistema||'',
+       geoposicao:x.s_geoposicao||''
      };
-     const tx=tarefaExtra.get(String(x.tsk_id))||{};
+     const tx={
+       situacao_campo:x.t_situacao_campo||'',
+       tss_id:x.t_tss_id||'',
+       tags:x.t_tags||'',
+       status_integracao:x.t_status_integracao||''
+     };
      const cat=categoria(s.situacao);
      if(cat==='BAIXADA')baixadas++;
      if(cat==='REJEITADA')rejeitadas++;
@@ -254,6 +298,7 @@ app.get('/api/cp/ss',async(req,res)=>{
    CACHE.set(chave,{...k,ts:Date.now()});
    DATA_CACHE.set(chave,{dados,truncated:truncado,ts:Date.now()});
    res.set('X-Cache','MISS');
+   res.set('Server-Timing',`cp_sql;dur=${sqlMs},cp_total;dur=${Date.now()-sqlInicio}`);
    res.set('X-CP-Truncated',truncado?'1':'0');
    if(truncado)res.set('X-CP-Next-Offset',String(offset+limite));
    res.set('Cache-Control','no-store');
@@ -276,6 +321,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
    return res.json(ATIVAS_CACHE.dados);
   }
   const limite=5000;
+  const inicioConsulta=Date.now();
   const r=await pool.query({text:`
     SELECT d.tsk_id, d.tsk_situation AS situacao_campo,
            d.tsk_scheduleinitialdatehour AS programacao_real,
@@ -285,12 +331,22 @@ app.get('/api/cp/ativas',async(req,res)=>{
            t.loc_id, l.loc_integrationid AS ss,
            l.loc_city AS cidade, l.loc_neighborhood AS bairro,
            l.loc_street AS logradouro, l.loc_streetnumber AS numero,
-           a.age_name AS equipe, tt.tty_description AS servico
+           a.age_name AS equipe, tt.tty_description AS servico,
+           dl.e_situacao AS s_situacao,
+           dl.e_localidade AS s_cidade_umov,
+           dl.e_bairro AS s_bairro_umov,
+           dl.loc_city AS s_cidade_sistema,
+           dl.loc_neighborhood AS s_bairro_sistema,
+           dl.loc_street AS s_logradouro_umov,
+           dl.loc_streetnumber AS s_numero_umov,
+           dl.loc_description AS s_localizacao,
+           dl.loc_geoposition AS s_geoposicao
     FROM u45468.dbout_task d
     LEFT JOIN u45468.task t ON t.tsk_id=d.tsk_id
     LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
     LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
     LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
+    LEFT JOIN u45468.dbout_local dl ON dl.loc_id=t.loc_id
     WHERE UPPER(BTRIM(d.tsk_situation)) = 'EM CAMPO'
        OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
        OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
@@ -299,11 +355,14 @@ app.get('/api/cp/ativas',async(req,res)=>{
   `,values:[limite+1],query_timeout:18000});
   const truncado=r.rows.length>limite;
   const linhas=r.rows.slice(0,limite);
-  let sit=new Map();
-  try{sit=await buscarSituacoes(linhas.map(x=>x.loc_id));}
-  catch(err){console.warn('CP ativas: consulta complementar de local indisponivel:',err.message)}
   const registros=linhas.map(x=>{
-    const s=sit.get(String(x.loc_id))||{};
+    const s={
+      cidade_umov:x.s_cidade_umov||'',cidade_sistema:x.s_cidade_sistema||'',
+      bairro_umov:x.s_bairro_umov||'',bairro_sistema:x.s_bairro_sistema||'',
+      logradouro_umov:x.s_logradouro_umov||'',numero_umov:x.s_numero_umov||'',
+      localizacao:x.s_localizacao||'',geoposicao:x.s_geoposicao||'',
+      situacao:x.s_situacao||''
+    };
     return {
       tsk_id:x.tsk_id,ss:x.ss||'',data:brDate(x.inicio_real||x.programacao_real),
       equipe:x.equipe||'',cidade:s.cidade_umov||s.cidade_sistema||x.cidade||'',
@@ -335,7 +394,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
   };
   const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,stats,registros};
   ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.now();
-  res.set('Cache-Control','no-store');res.set('X-Cache','MISS');res.json(dados);
+  res.set('Cache-Control','no-store');res.set('X-Cache','MISS');res.set('Server-Timing',`cp_ativas;dur=${Date.now()-inicioConsulta}`);res.json(dados);
  }catch(err){
   console.error('ERRO /api/cp/ativas:',err.message);
   const timeout=/timeout|timed out|canceling statement/i.test(String(err.message||''));

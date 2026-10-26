@@ -11,6 +11,8 @@ const xml = v => String(v == null ? '' : v).replace(/[\u0000-\u0008\u000B\u000C\
 const safe = v => String(v == null ? '' : v).slice(0,500);
 
 // ZIP no formato padrao OpenXML. Sem formula HYPERLINK(): links externos verdadeiros.
+// IMPORTANTE: bit 3 (0x0008) deve ficar DESLIGADO, pois nao emitimos data descriptors.
+// Se ativado, o Excel tenta reparar a estrutura ZIP mesmo quando outros leitores abrem.
 const crcTable = new Uint32Array(256);
 for (let n=0;n<256;n++) { let c=n;for(let j=0;j<8;j++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);crcTable[n]=c>>>0; }
 function crc32(data) { let c=0xFFFFFFFF;for(const b of data)c=crcTable[(c^b)&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0; }
@@ -18,9 +20,9 @@ function makeZip(entries) {
  const parts=[], central=[];let offset=0;
  for(const [filename,content] of entries) {
   const name=Buffer.from(filename), raw=Buffer.from(content,'utf8'),compressed=zlib.deflateRawSync(raw,{level:6}),crc=crc32(raw);
-  const local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(8,6);local.writeUInt16LE(8,8);local.writeUInt32LE(crc,14);local.writeUInt32LE(compressed.length,18);local.writeUInt32LE(raw.length,22);local.writeUInt16LE(name.length,26);
+  const local=Buffer.alloc(30);local.writeUInt32LE(0x04034b50,0);local.writeUInt16LE(20,4);local.writeUInt16LE(0,6);local.writeUInt16LE(8,8);local.writeUInt32LE(crc,14);local.writeUInt32LE(compressed.length,18);local.writeUInt32LE(raw.length,22);local.writeUInt16LE(name.length,26);
   parts.push(local,name,compressed);
-  const cd=Buffer.alloc(46);cd.writeUInt32LE(0x02014b50,0);cd.writeUInt16LE(20,4);cd.writeUInt16LE(20,6);cd.writeUInt16LE(8,8);cd.writeUInt16LE(8,10);cd.writeUInt32LE(crc,16);cd.writeUInt32LE(compressed.length,20);cd.writeUInt32LE(raw.length,24);cd.writeUInt16LE(name.length,28);cd.writeUInt32LE(offset,42);
+  const cd=Buffer.alloc(46);cd.writeUInt32LE(0x02014b50,0);cd.writeUInt16LE(20,4);cd.writeUInt16LE(20,6);cd.writeUInt16LE(0,8);cd.writeUInt16LE(8,10);cd.writeUInt32LE(crc,16);cd.writeUInt32LE(compressed.length,20);cd.writeUInt32LE(raw.length,24);cd.writeUInt16LE(name.length,28);cd.writeUInt32LE(offset,42);
   central.push(cd,name);offset+=local.length+name.length+compressed.length;
  }
  const centralSize=central.reduce((n,b)=>n+b.length,0);
