@@ -248,6 +248,85 @@ app.get('/api/cp/ss',async(req,res)=>{
  }
 });
 
+
+// Fonte oficial para os indicadores OPERACIONAIS: situacao e datas da dbout_task.
+// Nao aplicar filtro de data: SS que continuam Em Campo podem ter sido abertas ha meses.
+const ATIVAS_CACHE={dados:null,ts:0};
+app.get('/api/cp/ativas',async(req,res)=>{
+ try{
+  if(ATIVAS_CACHE.dados && Date.now()-ATIVAS_CACHE.ts<60000){
+   res.set('Cache-Control','no-store');res.set('X-Cache','HIT');
+   return res.json(ATIVAS_CACHE.dados);
+  }
+  const limite=5000;
+  const r=await pool.query({text:`
+    SELECT d.tsk_id, d.tsk_situation AS situacao_campo,
+           d.tsk_scheduleinitialdatehour AS programacao_real,
+           d.tsk_realinitialdatehour AS inicio_real,
+           d.tsk_realfinaldatehour AS fim_real,
+           d.e_situacao AS status_integracao,
+           t.loc_id, l.loc_integrationid AS ss,
+           l.loc_city AS cidade, l.loc_neighborhood AS bairro,
+           l.loc_street AS logradouro, l.loc_streetnumber AS numero,
+           a.age_name AS equipe, tt.tty_description AS servico
+    FROM u45468.dbout_task d
+    LEFT JOIN u45468.task t ON t.tsk_id=d.tsk_id
+    LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
+    LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
+    LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
+    WHERE d.tsk_situation IN ('Em Campo','Pendente de Campo','Pendente Campo',
+                              'EM CAMPO','PENDENTE DE CAMPO','PENDENTE CAMPO')
+    ORDER BY d.tsk_id DESC
+    LIMIT $1
+  `,values:[limite+1],query_timeout:18000});
+  const truncado=r.rows.length>limite;
+  const linhas=r.rows.slice(0,limite);
+  let sit=new Map();
+  try{sit=await buscarSituacoes(linhas.map(x=>x.loc_id));}
+  catch(err){console.warn('CP ativas: consulta complementar de local indisponivel:',err.message)}
+  const registros=linhas.map(x=>{
+    const s=sit.get(String(x.loc_id))||{};
+    return {
+      tsk_id:x.tsk_id,ss:x.ss||'',data:brDate(x.inicio_real||x.programacao_real),
+      equipe:x.equipe||'',cidade:s.cidade_umov||s.cidade_sistema||x.cidade||'',
+      bairro:s.bairro_umov||s.bairro_sistema||x.bairro||'',
+      rua:[s.logradouro_umov||x.logradouro,s.numero_umov||x.numero].filter(Boolean).join(', '),
+      localizacao:s.localizacao||'',geoposicao:s.geoposicao||'',servico:x.servico||'',
+      situacao_campo:x.situacao_campo||'',
+      status_integracao:x.status_integracao||'',status_siscom:s.situacao||'',
+      situacao:s.situacao||'',
+      programacao_iso:x.programacao_real||null,
+      inicio_real_iso:x.inicio_real||null,fim_real_iso:x.fim_real||null,
+      programacao:brDT(x.programacao_real),
+      inicio:brDT(x.inicio_real),fim:brDT(x.fim_real),
+      duracao:hhmm(mins(x.inicio_real,x.fim_real)),
+      snapshot_ativa:true
+    };
+  });
+  const comEquipe=x=>!!String(x.equipe||'').trim();
+  const stats={
+    total_status_em_campo:registros.filter(x=>norm(x.situacao_campo)==='EM CAMPO').length,
+    total_status_pendente_campo:registros.filter(x=>norm(x.situacao_campo).includes('PENDENTE')).length,
+    com_inicio_sem_fim:registros.filter(x=>x.inicio_real_iso&&!x.fim_real_iso).length,
+    sem_inicio_com_equipe:registros.filter(x=>!x.inicio_real_iso&&!x.fim_real_iso&&comEquipe(x)).length,
+    sem_inicio_sem_equipe:registros.filter(x=>!x.inicio_real_iso&&!x.fim_real_iso&&!comEquipe(x)).length,
+    com_fim:registros.filter(x=>!!x.fim_real_iso).length,
+    sem_programacao:registros.filter(x=>!x.programacao_iso).length,
+    ss_distintas:new Set(registros.map(x=>x.ss).filter(Boolean)).size,
+    tarefas:registros.length
+  };
+  const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,stats,registros};
+  ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.now();
+  res.set('Cache-Control','no-store');res.set('X-Cache','MISS');res.json(dados);
+ }catch(err){
+  console.error('ERRO /api/cp/ativas:',err.message);
+  const timeout=/timeout|timed out|canceling statement/i.test(String(err.message||''));
+  res.status(timeout?504:500).json({ok:false,error:timeout?
+    'Consulta atual das SS excedeu o tempo limite. Verifique indices e volume de tarefas.':
+    'Nao foi possivel consultar as situacoes atuais da dbout_task.'});
+ }
+});
+
 // GPS separado da consulta principal: falhas aqui nao afetam os KPIs.
 const GPS_CACHE=new Map();
 app.post('/api/cp/ss-gps',async(req,res)=>{
