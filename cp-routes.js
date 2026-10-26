@@ -156,38 +156,53 @@ app.get('/api/cp/ss',async(req,res)=>{
  // Para o período padrão de dois dias, 8 mil linhas são mais que suficientes.
  // O limite anterior de 30 mil gerava centenas de consultas extras e travava.
  const limite=Math.min(Math.max(Number(req.query.limite||8000),1),12000);
- const chave=`${di}|${df}|${limite}`;
+ // Paginação explícita: nunca esconder SS de meses movimentados no limite de 8.000.
+ const offset=Math.min(Math.max(Number(req.query.offset||0),0),200000);
+ if(!Number.isSafeInteger(offset))return res.status(400).json({ok:false,error:'Offset invalido.'});
+ const chave=`${di}|${df}|${limite}|${offset}`;
  try{
    const cached=DATA_CACHE.get(chave);
    if(cached && (Date.now()-cached.ts)<DATA_CACHE_TTL){
      res.set('X-Cache','HIT');
      res.set('X-CP-Truncated',cached.truncated?'1':'0');
+     if(cached.truncated)res.set('X-CP-Next-Offset',String(offset+limite));
      return res.json(cached.dados);
    }
-   // ETAPA 1: mesma estratégia rápida da V7, sem aggregated JOIN
+   // Período de execução: inclui SS iniciadas, concluídas ou que atravessam o mês.
+   // Datas da dbout_task (retorno operacional) prevalecem sobre task quando presentes.
+   // O COALESCE antigo selecionava apenas uma data e excluía encerramentos no mês.
    const r=await pool.query({text:`
-     WITH tarefas AS MATERIALIZED(
-       SELECT tsk_id,loc_id,age_id,tty_id,
-              tsk_insertdatehour,tsk_scheduleinitialdatehour,
-              tsk_realinitialdatehour,tsk_realfinaldatehour
-       FROM u45468.task
-       WHERE COALESCE(tsk_realinitialdatehour,tsk_scheduleinitialdatehour,tsk_insertdatehour) >= $1::date
-         AND COALESCE(tsk_realinitialdatehour,tsk_scheduleinitialdatehour,tsk_insertdatehour) < ($2::date + INTERVAL '1 day')
-       ORDER BY COALESCE(tsk_realinitialdatehour,tsk_scheduleinitialdatehour,tsk_insertdatehour) ASC
-       LIMIT $3
+     WITH tarefas AS (
+       SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
+              COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) AS programacao_real,
+              COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) AS inicio_real,
+              COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real
+       FROM u45468.task t
+       LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
+     ), elegiveis AS MATERIALIZED (
+       SELECT *,COALESCE(inicio_real,programacao_real,tsk_insertdatehour) AS data_referencia
+       FROM tarefas
+       WHERE
+         (inicio_real >= $1::date AND inicio_real < ($2::date + INTERVAL '1 day'))
+         OR (fim_real >= $1::date AND fim_real < ($2::date + INTERVAL '1 day'))
+         OR (inicio_real < $1::date AND fim_real >= ($2::date + INTERVAL '1 day'))
+         OR (inicio_real IS NULL AND programacao_real >= $1::date
+             AND programacao_real < ($2::date + INTERVAL '1 day'))
+         OR (inicio_real IS NULL AND programacao_real IS NULL
+             AND tsk_insertdatehour >= $1::date
+             AND tsk_insertdatehour < ($2::date + INTERVAL '1 day'))
      )
      SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
        l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-       COALESCE(t.tsk_realinitialdatehour,t.tsk_scheduleinitialdatehour,t.tsk_insertdatehour) AS data_referencia,
-       t.tsk_scheduleinitialdatehour AS programacao_real,
-       t.tsk_realinitialdatehour AS inicio_real,t.tsk_realfinaldatehour AS fim_real,
+       t.data_referencia,t.programacao_real,t.inicio_real,t.fim_real,
        a.age_name AS tecnico,tt.tty_description AS servico
-     FROM tarefas t
+     FROM elegiveis t
      LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
      LEFT JOIN u45468.agent a ON a.age_id=t.age_id
      LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-     ORDER BY COALESCE(t.tsk_realinitialdatehour,t.tsk_scheduleinitialdatehour,t.tsk_insertdatehour) ASC, t.tsk_id ASC
-   `,values:[di,df,limite+1],query_timeout:15000});
+     ORDER BY t.data_referencia ASC NULLS LAST,t.tsk_id ASC
+     LIMIT $3 OFFSET $4
+   `,values:[di,df,limite+1,offset],query_timeout:25000});
 
    // ETAPA 2: situação somente para loc_id retornados, em lotes pequenos
    const truncado=r.rows.length>limite;
@@ -239,6 +254,7 @@ app.get('/api/cp/ss',async(req,res)=>{
    DATA_CACHE.set(chave,{dados,truncated:truncado,ts:Date.now()});
    res.set('X-Cache','MISS');
    res.set('X-CP-Truncated',truncado?'1':'0');
+   if(truncado)res.set('X-CP-Next-Offset',String(offset+limite));
    res.set('Cache-Control','no-store');
    res.json(dados);
  }catch(e){
