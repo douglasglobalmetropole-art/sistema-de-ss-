@@ -25,7 +25,7 @@ function create(options={}) {
    u.searchParams.set('select','cached_at,payload_b64');
    u.searchParams.set('cache_key','eq.'+hashed);
    u.searchParams.set('limit','1');
-   const response=await fetch(u,{headers:headers(),signal:AbortSignal.timeout(3500)});
+   const response=await fetch(u,{headers:headers(),signal:AbortSignal.timeout(/* CP_V12_CACHE_TIMEOUT */ 3000)});
    if(!response.ok)throw Error('read:'+response.status);
    const rows=await response.json();
    const row=rows?.[0];

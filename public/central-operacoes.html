@@ -416,10 +416,10 @@ async function load(force=false){
  let cpNetworkShown=false;
  if(cpVisibleKey!==key){base=[];cpVisibleKey='';}
  cpHistoricoPendente=true;
- snapshotAtivasOk=false;snapshotAtivasInfo=null;snapshotAtivasErro='';
+ if(cpVisibleKey!==key){snapshotAtivasOk=false;snapshotAtivasInfo=null;}snapshotAtivasErro='';
  $('indicador').textContent='Buscando dados em cache e atualização do uMov...';
  $('indicador').className='muted';
- if(!force)void cpReadSnapshot(key).then(snapshot=>{
+ /* CP_V12_PRESERVAR_SNAPSHOT */ void cpReadSnapshot(key).then(snapshot=>{
   if(version!==cpLoadVersion||cpNetworkShown||!snapshot||!Array.isArray(snapshot.rows))return;
   // Snapshot local e uma previa, explicitamente identificada como cache.
   if(Date.now()-snapshot.at>6*60*60*1000)return;
@@ -431,10 +431,11 @@ async function load(force=false){
   $('indicador').textContent='Exibindo cache de '+cpCachedClock(snapshot.at)+' · atualizando uMov em paralelo...';
   $('indicador').className='muted';
  }).catch(()=>{});
- const historicoTask=fetchAllCpRows(di,df,force);
+ let historicoTask;
  const ativasTask=fetch('/api/cp/ativas'+(force?'?refresh=1':''),{cache:'no-store'}).then(async response=>({
   ok:response.ok,status:response.status,stale:response.headers.get('X-CP-Stale')==='1',cachedAt:response.headers.get('X-CP-Cached-At'),data:response.ok?await response.json():null
  }));
+ historicoTask=ativasTask.then(()=>fetchAllCpRows(di,df,force),()=>fetchAllCpRows(di,df,force));
  // Exibe as Programadas e Em Campo assim que a consulta leve estiver pronta,
  // sem aguardar a consulta histórica. Retornadas ficam como "..." até concluir.
  void ativasTask.then(atualResp=>{
@@ -482,10 +483,6 @@ async function load(force=false){
   const dataCache=cacheAt||ativasResult.value?.cachedAt;
   $('indicador').textContent=`● Consulta ${((performance.now()-t0)/1000).toFixed(1)}s · ${historico.length} no período + ${snapshotAtivasInfo?.stats?.tarefas??'—'} SS atuais · ${dadosAntigos?'CACHE DESATUALIZADO de '+(dataCache?cpCachedClock(Date.parse(dataCache)):'horário anterior'):'atualizado às '+new Date().toLocaleTimeString('pt-BR')}${parcial?' · CONSULTA PARCIAL':''}${!snapshotAtivasOk?' · FALHA NA CONSULTA ATUAL':''}`;
   $('indicador').className=snapshotAtivasOk&&!parcial&&!dadosAntigos?'ok':'muted';
-  if(dadosAntigos&&!force&&!cpStaleRefreshOnce.has(key)){
-   cpStaleRefreshOnce.add(key);
-   setTimeout(()=>{if(version===cpLoadVersion)void load(true)},600);
-  }
   $('rodape').textContent=!snapshotAtivasOk?
     'Consulta atual das SS indisponível: os indicadores Programadas e Em Campo não podem ser confirmados. '+snapshotAtivasErro:
     parcial?'Atenção: o limite de registros foi atingido. Totais parciais; confira a auditoria de situações atuais.':
@@ -499,7 +496,7 @@ async function load(force=false){
   render();
  }
 }
-let today=new Date();let local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('di').value=local;$('df').value=local;$('reload').onclick=()=>load(true);$('busca').addEventListener('input',render);['di','df'].forEach(id=>$(id).addEventListener('change',load));load();setInterval(()=>{if(!document.hidden)load(false)},300000);
+let today=new Date();let local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('di').value=local;$('df').value=local;/* CP_V13_REFRESH_REAL */ $('reload').onclick=()=>load(true);$('busca').addEventListener('input',render);['di','df'].forEach(id=>$(id).addEventListener('change',load));load();setInterval(()=>{if(!document.hidden)load(false)},300000);
 </script>
 
 <!-- GLOBAL_THEME_SWITCH_START -->

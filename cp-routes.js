@@ -148,7 +148,7 @@ async function buscarCamposTarefa(ids){
 app.get('/api/cp/veiculos',async(req,res)=>{try{res.json(await lerVeiculos())}catch(e){res.status(502).json({ok:false,error:'Consulta de frotas indisponivel.'})}});
 
 app.get('/api/cp/health',async(req,res)=>{
- try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true})}
+ try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V13' /* CP_V13_RELEASE */})}
  catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -168,7 +168,7 @@ app.get('/api/cp/ss',async(req,res)=>{
  const chave=`${di}|${df}|${limite}|${offset}`;
  const fresh=req.query.refresh==='1';
  const lifeMs=df>=cpToday()?120000:900000;
- const maxStale=df>=cpToday()?3600000:86400000;
+ const maxStale=df>=cpToday()?48*3600000:14*86400000;
  try{
    if(!fresh){
     const cached=DATA_CACHE.get(chave);
@@ -182,7 +182,7 @@ app.get('/api/cp/ss',async(req,res)=>{
     }
     const persistido=await cpCache.load('historico:'+chave,{maxAgeMs:lifeMs,maxStaleMs:maxStale});
     if(persistido){
-      DATA_CACHE.set(chave,{...persistido.payload,ts:Date.parse(persistido.at)});
+      DATA_CACHE.set(chave,{dados:persistido.payload.dados,truncated:persistido.payload.truncado,ts:Date.parse(persistido.at)});
       res.set('X-Cache','PERSISTENT');
       res.set('X-CP-Stale',persistido.stale?'1':'0');
       res.set('X-CP-Cached-At',persistido.at);
@@ -233,17 +233,22 @@ app.get('/api/cp/ss',async(req,res)=>{
          OR (inicio_real IS NULL AND programacao_real IS NULL
              AND tsk_insertdatehour >= $1::date
              AND tsk_insertdatehour < ($2::date + INTERVAL '1 day'))
+     ), pagina_ids AS MATERIALIZED (
+       /* CP_V12_PAGINAR_ANTES_DOS_JOINS */
+       SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,
+         t.data_referencia,t.programacao_real,t.inicio_real,t.fim_real
+       FROM elegiveis t
+       ORDER BY t.data_referencia ASC NULLS LAST,t.tsk_id ASC
+       LIMIT $3 OFFSET $4
      ), pagina AS MATERIALIZED (
        SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
          l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
          t.data_referencia,t.programacao_real,t.inicio_real,t.fim_real,
          a.age_name AS tecnico,tt.tty_description AS servico
-       FROM elegiveis t
+       FROM pagina_ids t
        LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
        LEFT JOIN u45468.agent a ON a.age_id=t.age_id
        LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-       ORDER BY t.data_referencia ASC NULLS LAST,t.tsk_id ASC
-       LIMIT $3 OFFSET $4
      )
      SELECT p.*,
        dl.e_situacao AS s_situacao,
@@ -268,7 +273,7 @@ app.get('/api/cp/ss',async(req,res)=>{
      LEFT JOIN u45468.dbout_local dl ON dl.loc_id=p.loc_id
      LEFT JOIN u45468.dbout_task dt ON dt.tsk_id=p.tsk_id
      ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
-   `,values:[di,df,limite+1,offset],query_timeout:25000});
+   `,values:[di,df,limite+1,offset],query_timeout:10000});
    const sqlMs=Date.now()-sqlInicio;
    const truncado=r.rows.length>limite;
    const linhas=r.rows.slice(0,limite);
@@ -332,7 +337,7 @@ app.get('/api/cp/ss',async(req,res)=>{
    DATA_CACHE.set(chave,{dados,truncated:truncado,ts:Date.now()});
    // Persistencia permite resposta rapida mesmo em outro processo Vercel.
    // A escrita e aguardada somente quando o banco uMov ja foi consultado.
-   await cpCache.save('historico:'+chave,{dados,truncado});
+   await Promise.race([cpCache.save('historico:'+chave,{dados,truncado}),new Promise(resolve=>setTimeout(resolve,1200))]);
    res.set('X-CP-Cached-At',new Date().toISOString());
    res.set('X-Cache','UMOV');
    res.set('Server-Timing',`cp_sql;dur=${sqlMs},cp_total;dur=${Date.now()-sqlInicio}`);
@@ -342,6 +347,19 @@ app.get('/api/cp/ss',async(req,res)=>{
    res.json(dados);
  }catch(e){
    console.error('ERRO /api/cp/ss:',e.message);
+   try{
+    const memoria=DATA_CACHE.get(chave);
+    const salvo=Array.isArray(memoria?.dados)?null:await cpCache.load('historico:'+chave,{maxAgeMs:0,maxStaleMs:14*86400000});
+    const linhas=Array.isArray(memoria?.dados)?memoria.dados:salvo?.payload?.dados;
+    if(Array.isArray(linhas)){
+     const trunc=memoria?.truncated??salvo?.payload?.truncado??false;
+     res.set('X-Cache','STALE-ON-ERROR');res.set('X-CP-Stale','1');
+     res.set('X-CP-Cached-At',new Date(memoria?.ts||salvo?.at||Date.now()).toISOString());
+     res.set('X-CP-Truncated',trunc?'1':'0');
+     if(trunc)res.set('X-CP-Next-Offset',String(offset+limite));
+     return res.json(linhas);
+    }
+   }catch(fallbackError){console.warn('Cache CP indisponivel:',fallbackError.message);}
    const timeout=/timeout|timed out|canceling statement/i.test(String(e.message||''));
    res.status(timeout?504:500).json({ok:false,error:timeout?'A consulta ao uMov excedeu 15 segundos. Tente novamente.':'Falha na consulta ao uMov. Verifique a configuracao e as permissoes do banco.'});
  }
@@ -360,7 +378,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
     res.set('X-CP-Cached-At',new Date(ATIVAS_CACHE.ts).toISOString());
     return res.json(ATIVAS_CACHE.dados);
    }
-   const persistido=await cpCache.load('ativas',{maxAgeMs:60000,maxStaleMs:3600000});
+   const persistido=await cpCache.load('ativas',{maxAgeMs:60000,maxStaleMs:48*3600000});
    if(persistido?.payload.dados?.length===1){
     const dados=persistido.payload.dados[0];
     ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.parse(persistido.at);
@@ -373,7 +391,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
   const inicioConsulta=Date.now();
   const r=await pool.query({text:`
     WITH base_ativas AS MATERIALIZED (
-      SELECT d.* FROM u45468.dbout_task d
+      SELECT d.tsk_id,d.tsk_situation,d.tsk_scheduleinitialdatehour,d.tsk_realinitialdatehour,d.tsk_realfinaldatehour,d.e_situacao,d.age_id FROM u45468.dbout_task d
       WHERE UPPER(BTRIM(d.tsk_situation)) = 'EM CAMPO'
        OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
        OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
@@ -406,7 +424,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
     
     ORDER BY d.tsk_id DESC
     LIMIT $1
-  `,values:[limite+1],query_timeout:18000});
+  `,values:[limite+1],query_timeout:10000});
   const truncado=r.rows.length>limite;
   const linhas=r.rows.slice(0,limite);
   const registros=linhas.map(x=>{
@@ -448,11 +466,20 @@ app.get('/api/cp/ativas',async(req,res)=>{
   };
   const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,stats,registros};
   ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.now();
-  await cpCache.save('ativas',{dados:[dados],truncado});
+  await Promise.race([cpCache.save('ativas',{dados:[dados],truncado}),new Promise(resolve=>setTimeout(resolve,1200))]);
   res.set('X-CP-Cached-At',new Date().toISOString());
   res.set('Cache-Control','no-store');res.set('X-Cache','UMOV');res.set('Server-Timing',`cp_ativas;dur=${Date.now()-inicioConsulta}`);res.json(dados);
  }catch(err){
   console.error('ERRO /api/cp/ativas:',err.message);
+  try{
+   const persistido=ATIVAS_CACHE.dados?null:await cpCache.load('ativas',{maxAgeMs:0,maxStaleMs:14*86400000});
+   const anterior=ATIVAS_CACHE.dados||persistido?.payload?.dados?.[0];
+   if(anterior?.ok&&Array.isArray(anterior.registros)){
+    res.set('X-Cache','STALE-ON-ERROR');res.set('X-CP-Stale','1');
+    res.set('X-CP-Cached-At',new Date(ATIVAS_CACHE.ts||persistido?.at||Date.now()).toISOString());
+    return res.json(anterior);
+   }
+  }catch(fallbackError){console.warn('Cache CP ativas indisponivel:',fallbackError.message);}
   const timeout=/timeout|timed out|canceling statement/i.test(String(err.message||''));
   res.status(timeout?504:500).json({ok:false,error:timeout?
     'Consulta atual das SS excedeu o tempo limite. Verifique indices e volume de tarefas.':
