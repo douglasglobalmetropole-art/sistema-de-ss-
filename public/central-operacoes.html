@@ -151,7 +151,7 @@ function mapEligible(x,ignoreTeam=false){
 // Evita refazer a mesma consulta para os KPIs e o mapa do mesmo mês.
 const cpPeriodCache=new Map(),cpPeriodPending=new Map();
 const CP_PERIOD_TTL=4*60*1000;
-async function fetchAllCpRows(di,df,force=false){
+async function fetchAllCpRows(di,df,force=false,onProgress=null){
  const key=`${di}|${df}`;
  const hit=cpPeriodCache.get(key);
  if(!force&&hit&&Date.now()-hit.ts<CP_PERIOD_TTL)return hit.result;
@@ -169,8 +169,10 @@ async function fetchAllCpRows(di,df,force=false){
    if(!Array.isArray(rows))throw Error(rows.error||'Resposta inesperada da API de SS');
    for(const x of rows){const id=String(x.tsk_id||'');if(id&&!seen.has(id)){seen.add(id);all.push(x)}}
    const hasMore=response.headers.get('X-CP-Truncated')==='1';
+   const next=hasMore?Number(response.headers.get('X-CP-Next-Offset')):null;
+   const progress={rows:all,partial:hasMore,stale,oldestAt,nextOffset:next,page};
+   if(typeof onProgress==='function')try{onProgress(progress)}catch(e){console.warn('Atualizacao progressiva CP:',e?.message||e)}
    if(!hasMore)break;
-   const next=Number(response.headers.get('X-CP-Next-Offset'));
    if(!Number.isSafeInteger(next)||next<=offset){partial=true;break}
    nextOffset=next;
    if(page===49)partial=true;
@@ -290,8 +292,8 @@ let movementTab='retornadas';
 function isProgramada(x){return classify(x)==='programada'}
 function isExecutando(x){return classify(x)==='campo'}
 let cpGpsRefreshTimer=null;
-function scheduleGpsRefresh(){clearTimeout(cpGpsRefreshTimer);cpGpsRefreshTimer=setTimeout(()=>{if(!mapLoading)void enrichGps(mapSource().filter(x=>mapEligible(x,true)))},400)}
-function render(){filtered=base.filter(passesSharedFilters);let total=filtered.length,campo=filtered.filter(x=>classify(x)==='campo').length,ret=filtered.filter(x=>classify(x)==='retorno').length,prog=filtered.filter(isProgramada).length,teams=new Set(filtered.filter(x=>classify(x)==='campo').map(x=>x.equipe).filter(Boolean)).size,percent=total?Math.round(ret/total*100):0;let pend=filtered.filter(isProgramada).length;let k=[['Retornadas',cpHistoricoPendente?'…':ret],['Programadas · amostra',snapshotAtivasOk?prog:'—'],['Em campo · amostra',snapshotAtivasOk?campo:'—'],['Baixadas',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='baixada').length],['Rejeitadas',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length],['Duplicadas',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='duplicada').length]];$('kpis').innerHTML=k.map(([t,n])=>`<div class="kpi"><span>${t}</span><strong>${n}</strong></div>`).join('');const audit=$('cp-auditoria-ativas');if(audit){if(snapshotAtivasOk&&snapshotAtivasInfo){const st=snapshotAtivasInfo;const warn=st.truncado?' ATENÇÃO: limite atingido, valores parciais.':'';audit.textContent=`Consulta atual uMov (sem limite de datas): ${st.stats.total_status_em_campo} com status Em Campo + ${st.stats.total_status_pendente_campo} Pendente de Campo = ${st.stats.tarefas} registros; ${st.stats.com_inicio_sem_fim} iniciadas sem fim; ${st.stats.sem_inicio_com_equipe} sem início com equipe; ${st.stats.sem_inicio_sem_equipe} sem início/sem equipe; ${st.stats.com_fim} com fim. Indicadores amarelo e verde consideram APENAS as datas selecionadas e os filtros de município, equipe e situação. Os ${st.stats.tarefas} registros são o estoque atual, não a programação do período.${warn}`;audit.style.color=st.truncado?'#f6a34b':'';}else{audit.textContent='CONSULTA ATUAL INDISPONÍVEL: '+(snapshotAtivasErro||'não foi possível consultar a dbout_task')+'. Não considere os totais de Programadas/Em Campo como zero.';audit.style.color='#f04452';}}// V9: graficos por municipio e acompanhamento por equipe usam somente SS
+function scheduleGpsRefresh(){clearTimeout(cpGpsRefreshTimer);cpGpsRefreshTimer=setTimeout(()=>{if(!mapLoading&&!cpHistoricoPendente)void enrichGps(mapSource().filter(x=>mapEligible(x,true)))},400)}
+function render(){filtered=base.filter(passesSharedFilters);let total=filtered.length,campo=filtered.filter(x=>classify(x)==='campo').length,ret=filtered.filter(x=>classify(x)==='retorno').length,prog=filtered.filter(isProgramada).length,teams=new Set(filtered.filter(x=>classify(x)==='campo').map(x=>x.equipe).filter(Boolean)).size,percent=total?Math.round(ret/total*100):0;let pend=filtered.filter(isProgramada).length;let k=[['Retornadas'+(cpHistoricoPendente?' · atualizando':''),ret],['Programadas · amostra',snapshotAtivasOk?prog:'—'],['Em campo · amostra',snapshotAtivasOk?campo:'—'],['Baixadas'+(cpHistoricoPendente?' · atualizando':''),filtered.filter(x=>x.no_periodo&&integration(x)==='baixada').length],['Rejeitadas'+(cpHistoricoPendente?' · atualizando':''),filtered.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length],['Duplicadas'+(cpHistoricoPendente?' · atualizando':''),filtered.filter(x=>x.no_periodo&&integration(x)==='duplicada').length]];$('kpis').innerHTML=k.map(([t,n])=>`<div class="kpi"><span>${t}</span><strong>${n}</strong></div>`).join('');const audit=$('cp-auditoria-ativas');if(audit){if(snapshotAtivasOk&&snapshotAtivasInfo){const st=snapshotAtivasInfo;const warn=st.truncado?' ATENÇÃO: limite atingido, valores parciais.':'';audit.textContent=`Consulta atual uMov (sem limite de datas): ${st.stats.total_status_em_campo} com status Em Campo + ${st.stats.total_status_pendente_campo} Pendente de Campo = ${st.stats.tarefas} registros; ${st.stats.com_inicio_sem_fim} iniciadas sem fim; ${st.stats.sem_inicio_com_equipe} sem início com equipe; ${st.stats.sem_inicio_sem_equipe} sem início/sem equipe; ${st.stats.com_fim} com fim. Indicadores amarelo e verde consideram APENAS as datas selecionadas e os filtros de município, equipe e situação. Os ${st.stats.tarefas} registros são o estoque atual, não a programação do período.${warn}`;audit.style.color=st.truncado?'#f6a34b':'';}else{audit.textContent='CONSULTA ATUAL INDISPONÍVEL: '+(snapshotAtivasErro||'não foi possível consultar a dbout_task')+'. Não considere os totais de Programadas/Em Campo como zero.';audit.style.color='#f04452';}}// V9: graficos por municipio e acompanhamento por equipe usam somente SS
 // com movimentacao no intervalo (historico), ou com inicio/programacao no periodo.
 // O estoque atual de /api/cp/ativas NAO e um total de movimentacoes do periodo.
 const periodRows=filtered.filter(x=>x.no_periodo===true||isProgramada(x)||classify(x)==='campo');
@@ -428,16 +430,29 @@ async function load(force=false){
   base=snapshot.rows;cpVisibleKey=key;
   snapshotAtivasOk=!!snapshot.snapshotAtivasOk;
   snapshotAtivasInfo=snapshot.snapshotAtivasInfo||null;
-  cpHistoricoPendente=false;
+  cpHistoricoPendente=true;
   populate('cidade','cidade');populate('equipe','equipe');render();
-  $('indicador').textContent='Exibindo cache de '+cpCachedClock(snapshot.at)+' · atualizando uMov em paralelo...';
+  $('indicador').textContent=(snapshot.partial?'Exibindo cache parcial de ':'Exibindo cache de ')+cpCachedClock(snapshot.at)+' · atualizando dados em segundo plano...';
   $('indicador').className='muted';
  }).catch(()=>{});
  let historicoTask;
  const ativasTask=fetch('/api/cp/ativas'+(force?'?refresh=1':''),{cache:'no-store',signal:AbortSignal.timeout(10000)}).then(async response=>({
   ok:response.ok,status:response.status,stale:response.headers.get('X-CP-Stale')==='1',cachedAt:response.headers.get('X-CP-Cached-At'),data:response.ok?await response.json():null
  }));
- historicoTask=fetchAllCpRows(di,df,force);
+ historicoTask=fetchAllCpRows(di,df,force,progress=>{
+  if(version!==cpLoadVersion)return;
+  const acumulado=new Map(progress.rows.map(x=>[String(x.tsk_id),{...x,no_periodo:true}]));
+  for(const x of base.filter(x=>x.snapshot_ativa)){
+   const id=String(x.tsk_id||'');if(!id)continue;
+   acumulado.set(id,{...(acumulado.get(id)||{}),...x,snapshot_ativa:true});
+  }
+  base=[...acumulado.values()];cpVisibleKey=key;cpNetworkShown=true;
+  populate('cidade','cidade');populate('equipe','equipe');render();
+  $('indicador').textContent=`Carregando histórico · ${progress.rows.length} SS recebidas${progress.partial?' · buscando próximo lote':''}`;
+  $('indicador').className='muted';
+  if(progress.page===0||progress.page%3===2||!progress.partial)
+   void cpSaveSnapshot(key,{rows:base,snapshotAtivasOk,snapshotAtivasInfo,partial:progress.partial});
+ });
  // Histórico e situação atual são consultados em paralelo; cada bloco da tela
  // passa a ser atualizado assim que sua fonte responde.
  void ativasTask.then(atualResp=>{
@@ -475,7 +490,7 @@ async function load(force=false){
   cpHistoricoPendente=false;
   base=[...map.values()];cpVisibleKey=key;
   cpNetworkShown=true;
-  void cpSaveSnapshot(key,{rows:base,snapshotAtivasOk,snapshotAtivasInfo});
+  void cpSaveSnapshot(key,{rows:base,snapshotAtivasOk,snapshotAtivasInfo,partial:false});
   populate('cidade','cidade');populate('equipe','equipe');render();
   if(mapDateStart||mapDateEnd)void refreshMapData();
   const parcialAtivas=!!snapshotAtivasInfo?.truncado;

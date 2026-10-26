@@ -152,7 +152,7 @@ async function buscarCamposTarefa(ids){
 app.get('/api/cp/veiculos',async(req,res)=>{try{res.json(await lerVeiculos())}catch(e){res.status(502).json({ok:false,error:'Consulta de frotas indisponivel.'})}});
 
 app.get('/api/cp/health',async(req,res)=>{
- try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V15 completa'})}
+ try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V16 progressiva'})}
  catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
