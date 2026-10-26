@@ -168,7 +168,7 @@ app.get('/api/cp/ss',async(req,res)=>{
  const chave=`${di}|${df}|${limite}|${offset}`;
  const fresh=req.query.refresh==='1';
  const lifeMs=df>=cpToday()?120000:900000;
- const maxStale=df>=cpToday()?900000:7200000;
+ const maxStale=df>=cpToday()?3600000:86400000;
  try{
    if(!fresh){
     const cached=DATA_CACHE.get(chave);
@@ -199,12 +199,27 @@ app.get('/api/cp/ss',async(req,res)=>{
    // somente depois agrega os campos complementares da dbout_task/dbout_local.
    // Remove a CTE MATERIALIZED de todas as tarefas, que forçava trabalho excessivo.
    const r=await pool.query({text:`
-     WITH tarefas AS (
+     WITH candidatas AS MATERIALIZED (
+       /* CP_V11B_FILTRAR_IDS_ANTES_DOS_JOINS */
+       SELECT tsk_id FROM u45468.dbout_task
+       WHERE (tsk_realinitialdatehour >= $1::date AND tsk_realinitialdatehour < ($2::date + INTERVAL '1 day'))
+          OR (tsk_realfinaldatehour >= $1::date AND tsk_realfinaldatehour < ($2::date + INTERVAL '1 day'))
+          OR (tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour >= ($2::date + INTERVAL '1 day'))
+          OR (tsk_scheduleinitialdatehour >= $1::date AND tsk_scheduleinitialdatehour < ($2::date + INTERVAL '1 day'))
+       UNION
+       SELECT tsk_id FROM u45468.task
+       WHERE (tsk_realinitialdatehour >= $1::date AND tsk_realinitialdatehour < ($2::date + INTERVAL '1 day'))
+          OR (tsk_realfinaldatehour >= $1::date AND tsk_realfinaldatehour < ($2::date + INTERVAL '1 day'))
+          OR (tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour >= ($2::date + INTERVAL '1 day'))
+          OR (tsk_scheduleinitialdatehour >= $1::date AND tsk_scheduleinitialdatehour < ($2::date + INTERVAL '1 day'))
+          OR (tsk_insertdatehour >= $1::date AND tsk_insertdatehour < ($2::date + INTERVAL '1 day'))
+     ), tarefas AS (
        SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
               COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) AS programacao_real,
               COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) AS inicio_real,
               COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real
-       FROM u45468.task t
+       FROM candidatas c
+       JOIN u45468.task t ON t.tsk_id=c.tsk_id
        LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
      ), elegiveis AS (
        SELECT *,COALESCE(inicio_real,programacao_real,tsk_insertdatehour) AS data_referencia
@@ -345,7 +360,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
     res.set('X-CP-Cached-At',new Date(ATIVAS_CACHE.ts).toISOString());
     return res.json(ATIVAS_CACHE.dados);
    }
-   const persistido=await cpCache.load('ativas',{maxAgeMs:60000,maxStaleMs:300000});
+   const persistido=await cpCache.load('ativas',{maxAgeMs:60000,maxStaleMs:3600000});
    if(persistido?.payload.dados?.length===1){
     const dados=persistido.payload.dados[0];
     ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.parse(persistido.at);
@@ -357,6 +372,13 @@ app.get('/api/cp/ativas',async(req,res)=>{
   const limite=5000;
   const inicioConsulta=Date.now();
   const r=await pool.query({text:`
+    WITH base_ativas AS MATERIALIZED (
+      SELECT d.* FROM u45468.dbout_task d
+      WHERE UPPER(BTRIM(d.tsk_situation)) = 'EM CAMPO'
+       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
+       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
+      ORDER BY d.tsk_id DESC LIMIT $1
+    )
     SELECT d.tsk_id, d.tsk_situation AS situacao_campo,
            d.tsk_scheduleinitialdatehour AS programacao_real,
            d.tsk_realinitialdatehour AS inicio_real,
@@ -375,15 +397,13 @@ app.get('/api/cp/ativas',async(req,res)=>{
            dl.loc_streetnumber AS s_numero_umov,
            dl.loc_description AS s_localizacao,
            dl.loc_geoposition AS s_geoposicao
-    FROM u45468.dbout_task d
+    FROM base_ativas d
     LEFT JOIN u45468.task t ON t.tsk_id=d.tsk_id
     LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
     LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
     LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
     LEFT JOIN u45468.dbout_local dl ON dl.loc_id=t.loc_id
-    WHERE UPPER(BTRIM(d.tsk_situation)) = 'EM CAMPO'
-       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
-       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
+    
     ORDER BY d.tsk_id DESC
     LIMIT $1
   `,values:[limite+1],query_timeout:18000});

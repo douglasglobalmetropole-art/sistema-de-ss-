@@ -499,7 +499,7 @@ async function load(force=false){
   render();
  }
 }
-let today=new Date();let local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('di').value=local;$('df').value=local;$('reload').onclick=()=>load(true);$('busca').addEventListener('input',render);['di','df'].forEach(id=>$(id).addEventListener('change',load));load();setInterval(()=>{if(!document.hidden)load(true)},300000);
+let today=new Date();let local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('di').value=local;$('df').value=local;$('reload').onclick=()=>load(true);$('busca').addEventListener('input',render);['di','df'].forEach(id=>$(id).addEventListener('change',load));load();setInterval(()=>{if(!document.hidden)load(false)},300000);
 </script>
 
 <!-- GLOBAL_THEME_SWITCH_START -->
