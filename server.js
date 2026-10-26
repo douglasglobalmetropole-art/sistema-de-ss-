@@ -17,7 +17,7 @@ const poolPrincipal=new Pool({
  password:String(process.env.DB_PASSWORD||''),
  ssl:String(process.env.DB_SSL||'false').toLowerCase()==='true'?{rejectUnauthorized:false}:false,
  max:3,
- connectionTimeoutMillis:10000,
+ connectionTimeoutMillis:5000,
  idleTimeoutMillis:20000,
  allowExitOnIdle:true
 });
@@ -29,7 +29,7 @@ const poolLote1=new Pool({
  host:process.env.DB_HOST,port:Number(process.env.DB_PORT||5432),database:nomeBancoLote1,
  user:process.env.DB_USER,password:String(process.env.DB_PASSWORD||''),
  ssl:String(process.env.DB_SSL||'false').toLowerCase()==='true'?{rejectUnauthorized:false}:false,
- max:3,connectionTimeoutMillis:10000,idleTimeoutMillis:20000,allowExitOnIdle:true
+ max:3,connectionTimeoutMillis:5000,idleTimeoutMillis:20000,allowExitOnIdle:true
 });
 const pool={query:(...args)=>{
  if(!emLote1())return poolPrincipal.query(...args);

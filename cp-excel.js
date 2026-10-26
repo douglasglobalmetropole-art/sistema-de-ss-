@@ -76,10 +76,10 @@ module.exports = function registerCpExcel(app,pool) {
    const ids=[...new Set(rows.map(r=>Number(r[0])))];
    const links=new Map();
    const expectedSS=new Map(rows.map(x=>[String(x[0]),String(x[1]||'').trim()]));
-   for(let i=0;i<ids.length;i+=1200) {
+   if(ids.length) {
     const r=await pool.query({text:`SELECT d.tsk_id,d.tss_id,d.tsk_accesstoken,l.loc_integrationid AS ss
        FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id
-       JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=ANY($1::bigint[])`,values:[ids.slice(i,i+1200)],query_timeout:15000});
+       JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=ANY($1::bigint[])`,values:[ids],query_timeout:6500});
     for(const item of r.rows){
      const token=String(item.tsk_accesstoken||'');
      if(Number(item.tss_id)!==50||!/^[A-Za-z0-9._~-]+$/.test(token))continue;

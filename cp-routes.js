@@ -63,6 +63,10 @@ async function mapaVeiculosFrotas(){
 const CACHE=new Map();
 const DATA_CACHE=new Map();
 const DATA_CACHE_TTL=5*60*1000;
+function setBounded(map,key,value,max=120){
+ map.delete(key);map.set(key,value);
+ while(map.size>max)map.delete(map.keys().next().value);
+}
 
 async function consultarLotes(valores,tamanho,consulta){
  const lotes=[]; for(let i=0;i<valores.length;i+=tamanho) lotes.push(valores.slice(i,i+tamanho));
@@ -148,7 +152,7 @@ async function buscarCamposTarefa(ids){
 app.get('/api/cp/veiculos',async(req,res)=>{try{res.json(await lerVeiculos())}catch(e){res.status(502).json({ok:false,error:'Consulta de frotas indisponivel.'})}});
 
 app.get('/api/cp/health',async(req,res)=>{
- try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V14 parcial' /* CP_V13_RELEASE */})}
+ try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V15 completa'})}
  catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -161,19 +165,21 @@ app.get('/api/cp/ss',async(req,res)=>{
  if(dias<0||dias>61)return res.status(400).json({ok:false,error:'Periodo maximo de 62 dias. Reduza as datas.'});
  // Para o período padrão de dois dias, 8 mil linhas são mais que suficientes.
  // O limite anterior de 30 mil gerava centenas de consultas extras e travava.
- const limite=Math.min(Math.max(Number(req.query.limite||350),1),350);
- // Paginação explícita: nunca esconder SS de meses movimentados no limite de 8.000.
+ const pedidoLimite=Number(req.query.limite||800);
+ const limite=Number.isSafeInteger(pedidoLimite)?Math.min(Math.max(pedidoLimite,1),1200):800;
+ // Páginas maiores evitam dezenas de chamadas sequenciais no navegador.
  const offset=Math.min(Math.max(Number(req.query.offset||0),0),200000);
  if(!Number.isSafeInteger(offset))return res.status(400).json({ok:false,error:'Offset invalido.'});
- const chave=`v14-parcial|${di}|${df}|${limite}|${offset}`;
- res.set('X-CP-Partial-Scope','criadas_no_periodo');
+ const chave=`v15-completo|${di}|${df}|${limite}|${offset}`;
  const fresh=req.query.refresh==='1';
  const lifeMs=df>=cpToday()?120000:900000;
  const maxStale=df>=cpToday()?48*3600000:14*86400000;
+ let fallbackCache=null;
  try{
    if(!fresh){
     const cached=DATA_CACHE.get(chave);
     if(cached && (Date.now()-cached.ts)<lifeMs){
+      DATA_CACHE.delete(chave);DATA_CACHE.set(chave,cached);
       res.set('X-Cache','MEMORY');
       res.set('Server-Timing','cp_memory;dur=0');
       res.set('X-CP-Truncated',cached.truncated?'1':'0');
@@ -181,47 +187,106 @@ app.get('/api/cp/ss',async(req,res)=>{
       if(cached.truncated)res.set('X-CP-Next-Offset',String(offset+limite));
       return res.json(cached.dados);
     }
-    const persistido=await cpCache.load('historico:'+chave,{maxAgeMs:lifeMs,maxStaleMs:maxStale});
+    if(cached && (Date.now()-cached.ts)<=maxStale){
+      DATA_CACHE.delete(chave);DATA_CACHE.set(chave,cached);
+      fallbackCache=cached;
+      res.set('X-Cache','STALE-MEMORY');res.set('X-CP-Stale','1');
+      res.set('X-CP-Cached-At',new Date(cached.ts).toISOString());
+      res.set('X-CP-Truncated',cached.truncated?'1':'0');
+      if(cached.truncated)res.set('X-CP-Next-Offset',String(offset+limite));
+      return res.json(cached.dados);
+    }
+    const persistido=await cpCache.load('historico:'+chave,{maxAgeMs:lifeMs,maxStaleMs:maxStale,timeoutMs:700});
     if(persistido){
-      DATA_CACHE.set(chave,{dados:persistido.payload.dados,truncated:persistido.payload.truncado,ts:Date.parse(persistido.at)});
-      res.set('X-Cache','PERSISTENT');
-      res.set('X-CP-Stale',persistido.stale?'1':'0');
-      res.set('X-CP-Cached-At',persistido.at);
-      res.set('X-CP-Truncated',persistido.payload.truncado?'1':'0');
-      if(persistido.payload.truncado)res.set('X-CP-Next-Offset',String(offset+limite));
-      return res.json(persistido.payload.dados);
+      fallbackCache={dados:persistido.payload.dados,truncated:persistido.payload.truncado,ts:Date.parse(persistido.at)};
+      if(persistido.stale){
+       setBounded(DATA_CACHE,chave,fallbackCache);
+       res.set('X-Cache','STALE-PERSISTENT');res.set('X-CP-Stale','1');
+       res.set('X-CP-Cached-At',persistido.at);
+       res.set('X-CP-Truncated',persistido.payload.truncado?'1':'0');
+       if(persistido.payload.truncado)res.set('X-CP-Next-Offset',String(offset+limite));
+       return res.json(persistido.payload.dados);
+      }
+      if(!persistido.stale){
+       setBounded(DATA_CACHE,chave,fallbackCache);
+       res.set('X-Cache','PERSISTENT');
+       res.set('X-CP-Cached-At',persistido.at);
+       res.set('X-CP-Truncated',persistido.payload.truncado?'1':'0');
+       if(persistido.payload.truncado)res.set('X-CP-Next-Offset',String(offset+limite));
+       return res.json(persistido.payload.dados);
+      }
     }
    }
-   // Período de execução: inclui SS iniciadas, concluídas ou que atravessam o mês.
-   // Datas da dbout_task (retorno operacional) prevalecem sobre task quando presentes.
-   // O COALESCE antigo selecionava apenas uma data e excluía encerramentos no mês.
+   // Seleciona tarefas por programação, início, fim ou execução que atravessa
+   // o período. A união de faixas permite que índices de cada data sejam usados.
    const sqlInicio=Date.now();
-   // Uma unica ida ao PostgreSQL: seleciona e pagina primeiro as tarefas,
-   // somente depois agrega os campos complementares da dbout_task/dbout_local.
-   // Remove a CTE MATERIALIZED de todas as tarefas, que forçava trabalho excessivo.
    const r=await pool.query({text:`
-/* CP_V14_FONTE_PARCIAL: filtro rapido pela criacao; nao cobre SS antigas movimentadas no periodo */
-WITH ids AS MATERIALIZED (
-  SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
-         t.tsk_scheduleinitialdatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour
-  FROM u45468.task t
-  WHERE t.tsk_insertdatehour >= $1::date
-    AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day')
-  ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC
+WITH candidatos AS MATERIALIZED (
+  SELECT tsk_id FROM u45468.dbout_task
+   WHERE tsk_realinitialdatehour >= $1::date AND tsk_realinitialdatehour < ($2::date + INTERVAL '1 day')
+  UNION ALL
+  SELECT tsk_id FROM u45468.dbout_task
+   WHERE tsk_realfinaldatehour >= $1::date AND tsk_realfinaldatehour < ($2::date + INTERVAL '1 day')
+  UNION ALL
+  SELECT tsk_id FROM u45468.dbout_task
+   WHERE tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour >= $1::date
+  UNION ALL
+  SELECT tsk_id FROM u45468.dbout_task
+   WHERE tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour IS NULL
+     AND UPPER(BTRIM(tsk_situation))='EM CAMPO'
+  UNION ALL
+  SELECT tsk_id FROM u45468.dbout_task
+   WHERE tsk_scheduleinitialdatehour >= $1::date AND tsk_scheduleinitialdatehour < ($2::date + INTERVAL '1 day')
+  UNION ALL
+  SELECT tsk_id FROM u45468.task
+   WHERE tsk_realinitialdatehour >= $1::date AND tsk_realinitialdatehour < ($2::date + INTERVAL '1 day')
+  UNION ALL
+  SELECT tsk_id FROM u45468.task
+   WHERE tsk_realfinaldatehour >= $1::date AND tsk_realfinaldatehour < ($2::date + INTERVAL '1 day')
+  UNION ALL
+  SELECT tsk_id FROM u45468.task
+   WHERE tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour >= $1::date
+  UNION ALL
+  SELECT tsk_id FROM u45468.task
+   WHERE tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour IS NULL
+     AND UPPER(BTRIM(tsk_situation))='EM CAMPO'
+  UNION ALL
+  SELECT tsk_id FROM u45468.task
+   WHERE tsk_scheduleinitialdatehour >= $1::date AND tsk_scheduleinitialdatehour < ($2::date + INTERVAL '1 day')
+  UNION ALL
+  SELECT tsk_id FROM u45468.task
+   WHERE tsk_insertdatehour >= $1::date AND tsk_insertdatehour < ($2::date + INTERVAL '1 day')
+), pagina_ids AS MATERIALIZED (
+  SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,
+    COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) AS programacao_real,
+    COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) AS inicio_real,
+    COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real,
+    COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour,
+             d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour,t.tsk_insertdatehour) AS data_referencia
+  FROM (SELECT DISTINCT tsk_id FROM candidatos) c
+  JOIN u45468.task t ON t.tsk_id=c.tsk_id
+  LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
+  WHERE
+    (COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) < ($2::date + INTERVAL '1 day')
+      AND (COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) >= $1::date
+        OR COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) IS NULL))
+    OR (COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) IS NULL
+      AND COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) >= $1::date
+      AND COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) < ($2::date + INTERVAL '1 day'))
+    OR (COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) IS NULL
+      AND COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) IS NULL
+      AND t.tsk_insertdatehour >= $1::date AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day'))
+  ORDER BY data_referencia ASC NULLS LAST,t.tsk_id ASC
   LIMIT $3 OFFSET $4
 ), pagina AS MATERIALIZED (
   SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,
     l.loc_city AS cidade,l.loc_neighborhood AS bairro,
     l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-    COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) AS programacao_real,
-    COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) AS inicio_real,
-    COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real,
-    COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour,
-             d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour,t.tsk_insertdatehour) AS data_referencia,
+    t.programacao_real,t.inicio_real,t.fim_real,t.data_referencia,
     a.age_name AS tecnico,tt.tty_description AS servico,
     d.tsk_situation AS t_situacao_campo,d.tss_id AS t_tss_id,
     d.e_tag AS t_tags,d.e_situacao AS t_status_integracao
-  FROM ids t
+  FROM pagina_ids t
   LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
   LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
   LEFT JOIN u45468.agent a ON a.age_id=t.age_id
@@ -245,7 +310,7 @@ SELECT p.*,
 FROM pagina p
 LEFT JOIN u45468.dbout_local dl ON dl.loc_id=p.loc_id
 ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
-`,values:[di,df,limite+1,offset],query_timeout:9500});
+`,values:[di,df,limite+1,offset],query_timeout:6500});
    const sqlMs=Date.now()-sqlInicio;
    const truncado=r.rows.length>limite;
    const linhas=r.rows.slice(0,limite);
@@ -305,11 +370,11 @@ ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
      };
    });
    const k={ok:true,total:dados.length,baixadas,rejeitadas,duplicadas,tempo_medio:hhmm(qtd?Math.round(soma/qtd):0)};
-   CACHE.set(chave,{...k,ts:Date.now()});
-   DATA_CACHE.set(chave,{dados,truncated:truncado,ts:Date.now()});
+   setBounded(CACHE,chave,{...k,ts:Date.now()});
+   setBounded(DATA_CACHE,chave,{dados,truncated:truncado,ts:Date.now()});
    // Persistencia permite resposta rapida mesmo em outro processo Vercel.
    // A escrita e aguardada somente quando o banco uMov ja foi consultado.
-   await Promise.race([cpCache.save('historico:'+chave,{dados,truncado}),new Promise(resolve=>setTimeout(resolve,1200))]);
+   await Promise.race([cpCache.save('historico:'+chave,{dados,truncado}),new Promise(resolve=>setTimeout(resolve,350))]);
    res.set('X-CP-Cached-At',new Date().toISOString());
    res.set('X-Cache','UMOV');
    res.set('Server-Timing',`cp_sql;dur=${sqlMs},cp_total;dur=${Date.now()-sqlInicio}`);
@@ -321,19 +386,19 @@ ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
    console.error('ERRO /api/cp/ss:',e.message);
    try{
     const memoria=DATA_CACHE.get(chave);
-    const salvo=Array.isArray(memoria?.dados)?null:await cpCache.load('historico:'+chave,{maxAgeMs:0,maxStaleMs:14*86400000});
-    const linhas=Array.isArray(memoria?.dados)?memoria.dados:salvo?.payload?.dados;
+    const salvo=fallbackCache?null:Array.isArray(memoria?.dados)?null:await cpCache.load('historico:'+chave,{maxAgeMs:0,maxStaleMs:14*86400000,timeoutMs:700});
+    const linhas=Array.isArray(memoria?.dados)?memoria.dados:fallbackCache?.dados||salvo?.payload?.dados;
     if(Array.isArray(linhas)){
-     const trunc=memoria?.truncated??salvo?.payload?.truncado??false;
+     const trunc=memoria?.truncated??fallbackCache?.truncated??salvo?.payload?.truncado??false;
      res.set('X-Cache','STALE-ON-ERROR');res.set('X-CP-Stale','1');
-     res.set('X-CP-Cached-At',new Date(memoria?.ts||salvo?.at||Date.now()).toISOString());
+     res.set('X-CP-Cached-At',new Date(memoria?.ts||fallbackCache?.ts||salvo?.at||Date.now()).toISOString());
      res.set('X-CP-Truncated',trunc?'1':'0');
      if(trunc)res.set('X-CP-Next-Offset',String(offset+limite));
      return res.json(linhas);
     }
    }catch(fallbackError){console.warn('Cache CP indisponivel:',fallbackError.message);}
    const timeout=/timeout|timed out|canceling statement/i.test(String(e.message||''));
-   res.status(timeout?504:500).json({ok:false,error:timeout?'A consulta ao uMov excedeu 15 segundos. Tente novamente.':'Falha na consulta ao uMov. Verifique a configuracao e as permissoes do banco.'});
+   res.status(timeout?504:500).json({ok:false,error:timeout?'A consulta ao uMov excedeu o limite de 6,5 segundos. Verifique o índice das datas de início e fim do uMov.':'Falha na consulta ao uMov. Verifique a configuracao e as permissoes do banco.'});
  }
 });
 
@@ -342,6 +407,7 @@ ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
 // Nao aplicar filtro de data: SS que continuam Em Campo podem ter sido abertas ha meses.
 const ATIVAS_CACHE={dados:null,ts:0};
 app.get('/api/cp/ativas',async(req,res)=>{
+ let activeFallback=null;
  try{
   const fresh=req.query.refresh==='1';
   if(!fresh){
@@ -350,13 +416,21 @@ app.get('/api/cp/ativas',async(req,res)=>{
     res.set('X-CP-Cached-At',new Date(ATIVAS_CACHE.ts).toISOString());
     return res.json(ATIVAS_CACHE.dados);
    }
-   const persistido=await cpCache.load('ativas_v14_parcial',{maxAgeMs:60000,maxStaleMs:48*3600000});
+   if(ATIVAS_CACHE.dados)activeFallback={dados:ATIVAS_CACHE.dados,at:new Date(ATIVAS_CACHE.ts).toISOString()};
+   const persistido=await cpCache.load('ativas_v15',{maxAgeMs:60000,maxStaleMs:48*3600000,timeoutMs:700});
    if(persistido?.payload.dados?.length===1){
     const dados=persistido.payload.dados[0];
-    ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.parse(persistido.at);
-    res.set('X-Cache','PERSISTENT');res.set('X-CP-Stale',persistido.stale?'1':'0');
-    res.set('X-CP-Cached-At',persistido.at);
-    return res.json(dados);
+    if(!activeFallback||Date.parse(persistido.at)>Date.parse(activeFallback.at))activeFallback={dados,at:persistido.at};
+    if(persistido.stale){
+     res.set('X-Cache','STALE-PERSISTENT');res.set('X-CP-Stale','1');
+     res.set('X-CP-Cached-At',persistido.at);
+     return res.json(dados);
+    }
+    if(!persistido.stale){
+     ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.parse(persistido.at);
+     res.set('X-Cache','PERSISTENT');res.set('X-CP-Cached-At',persistido.at);
+     return res.json(dados);
+    }
    }
   }
   const limite=1500;
@@ -402,7 +476,7 @@ LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.db_age_id,0),d.age_id)
 LEFT JOIN u45468.tasktype tt ON tt.tty_id=d.tty_id
 LEFT JOIN u45468.dbout_local dl ON dl.loc_id=d.loc_id
 ORDER BY d.tsk_id DESC
-`,values:[limite],query_timeout:9500});
+`,values:[limite],query_timeout:6500});
   const truncado=true; // dados parciais: amostra das ultimas tarefas
   const linhas=r.rows.slice(0,limite);
   const registros=linhas.map(x=>{
@@ -444,23 +518,23 @@ ORDER BY d.tsk_id DESC
   };
   const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,escopo:'amostra das ultimas 1500 tarefas',stats,registros};
   ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.now();
-  await Promise.race([cpCache.save('ativas_v14_parcial',{dados:[dados],truncado}),new Promise(resolve=>setTimeout(resolve,1200))]);
+  await Promise.race([cpCache.save('ativas_v15',{dados:[dados],truncado}),new Promise(resolve=>setTimeout(resolve,350))]);
   res.set('X-CP-Cached-At',new Date().toISOString());
   res.set('Cache-Control','no-store');res.set('X-Cache','UMOV');res.set('Server-Timing',`cp_ativas;dur=${Date.now()-inicioConsulta}`);res.json(dados);
  }catch(err){
   console.error('ERRO /api/cp/ativas:',err.message);
   try{
-   const persistido=ATIVAS_CACHE.dados?null:await cpCache.load('ativas_v14_parcial',{maxAgeMs:0,maxStaleMs:14*86400000});
-   const anterior=ATIVAS_CACHE.dados||persistido?.payload?.dados?.[0];
+   const persistido=activeFallback?null:await cpCache.load('ativas_v15',{maxAgeMs:0,maxStaleMs:14*86400000,timeoutMs:700});
+   const anterior=activeFallback?.dados||ATIVAS_CACHE.dados||persistido?.payload?.dados?.[0];
    if(anterior?.ok&&Array.isArray(anterior.registros)){
     res.set('X-Cache','STALE-ON-ERROR');res.set('X-CP-Stale','1');
-    res.set('X-CP-Cached-At',new Date(ATIVAS_CACHE.ts||persistido?.at||Date.now()).toISOString());
+    res.set('X-CP-Cached-At',new Date(activeFallback?.at||ATIVAS_CACHE.ts||persistido?.at||Date.now()).toISOString());
     return res.json(anterior);
    }
   }catch(fallbackError){console.warn('Cache CP ativas indisponivel:',fallbackError.message);}
   const timeout=/timeout|timed out|canceling statement/i.test(String(err.message||''));
   res.status(timeout?504:500).json({ok:false,error:timeout?
-    'Consulta atual das SS excedeu o tempo limite. Verifique indices e volume de tarefas.':
+    'Consulta atual das SS excedeu o limite de 6,5 segundos. Verifique os índices do uMov.':
     'Nao foi possivel consultar as situacoes atuais da dbout_task.'});
  }
 });
@@ -487,7 +561,7 @@ app.post('/api/cp/ss-gps',async(req,res)=>{
    ) g ON TRUE
    WHERE h.tsk_id=ANY($1::bigint[])
    ORDER BY h.tsk_id,h.hty_initialdatehour DESC NULLS LAST
-  `,values:[ids],query_timeout:12000});
+  `,values:[ids],query_timeout:6500});
   const seen=new Set();const rows=result.rows.filter(r=>{const k=String(r.tsk_id);if(seen.has(k))return false;seen.add(k);return true});
   if(GPS_CACHE.size>100)GPS_CACHE.clear();GPS_CACHE.set(key,{ts:Date.now(),rows});
   res.json(rows);
@@ -503,7 +577,7 @@ app.get('/api/cp/frotas-veiculos',async(req,res)=>{
 
 app.get('/api/cp/kpis-cache',(req,res)=>{
  const di=req.query.di||req.query.inicio||'',df=req.query.df||req.query.fim||'';
- const k=CACHE.get(`${di}|${df}|8000`);
+ const k=CACHE.get(`v15-completo|${di}|${df}|800|0`)||CACHE.get(`v15-completo|${di}|${df}|1200|0`);
  res.json(k||{ok:true,total:0,baixadas:0,rejeitadas:0,duplicadas:0,tempo_medio:'00:00'});
 });
 

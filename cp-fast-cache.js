@@ -17,7 +17,7 @@ function create(options={}) {
   return h;
  };
  function digest(value){return crypto.createHash('sha256').update('cp-cache-v10:'+value).digest('hex');}
- async function load(name,{maxAgeMs=120000,maxStaleMs=900000}={}) {
+ async function load(name,{maxAgeMs=120000,maxStaleMs=900000,timeoutMs=800}={}) {
   if(!enabled)return null;
   try {
    const hashed=digest(name);
@@ -25,7 +25,7 @@ function create(options={}) {
    u.searchParams.set('select','cached_at,payload_b64');
    u.searchParams.set('cache_key','eq.'+hashed);
    u.searchParams.set('limit','1');
-   const response=await fetch(u,{headers:headers(),signal:AbortSignal.timeout(/* CP_V12_CACHE_TIMEOUT */ 3000)});
+   const response=await fetch(u,{headers:headers(),signal:AbortSignal.timeout(timeoutMs)});
    if(!response.ok)throw Error('read:'+response.status);
    const rows=await response.json();
    const row=rows?.[0];
