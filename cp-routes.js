@@ -290,8 +290,9 @@ app.get('/api/cp/ativas',async(req,res)=>{
     LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
     LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
     LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-    WHERE d.tsk_situation IN ('Em Campo','Pendente de Campo','Pendente Campo',
-                              'EM CAMPO','PENDENTE DE CAMPO','PENDENTE CAMPO')
+    WHERE UPPER(BTRIM(d.tsk_situation)) = 'EM CAMPO'
+       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
+       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
     ORDER BY d.tsk_id DESC
     LIMIT $1
   `,values:[limite+1],query_timeout:18000});
