@@ -157,12 +157,13 @@ async function fetchAllCpRows(di,df,force=false){
  if(!force&&hit&&Date.now()-hit.ts<CP_PERIOD_TTL)return hit.result;
  if(cpPeriodPending.has(key))return cpPeriodPending.get(key);
  const promise=(async()=>{
-  const all=[],seen=new Set();let partial=false,stale=false,oldestAt=null;
+  const all=[],seen=new Set();let partial=false,stale=false,oldestAt=null,nextOffset=0;
   for(let page=0;page<30;page++){
-   const offset=page*8000;
+   /* CP_V14_FRONT_PARCIAL */ const offset=nextOffset;
    const response=await fetch(`/api/cp/ss?di=${encodeURIComponent(di)}&df=${encodeURIComponent(df)}&limite=8000&offset=${offset}${force?'&refresh=1':''}`,{cache:'no-store'});
    if(!response.ok)throw Error(`HTTP ${response.status}: ${await response.text()}`);
    if(response.headers.get('X-CP-Stale')==='1')stale=true;
+   if(response.headers.get('X-CP-Partial-Scope'))partial=true;
    const at=response.headers.get('X-CP-Cached-At');
    if(at&&(!oldestAt||Date.parse(at)<Date.parse(oldestAt)))oldestAt=at;
    const rows=await response.json();
@@ -170,7 +171,9 @@ async function fetchAllCpRows(di,df,force=false){
    for(const x of rows){const id=String(x.tsk_id||'');if(id&&!seen.has(id)){seen.add(id);all.push(x)}}
    const hasMore=response.headers.get('X-CP-Truncated')==='1';
    if(!hasMore)break;
-   if(!response.headers.get('X-CP-Next-Offset')){partial=true;break}
+   const next=Number(response.headers.get('X-CP-Next-Offset'));
+   if(!Number.isSafeInteger(next)||next<=offset){partial=true;break}
+   nextOffset=next;
    if(page===29)partial=true;
   }
   const result={rows:all,partial,stale,oldestAt};
@@ -289,7 +292,7 @@ function isProgramada(x){return classify(x)==='programada'}
 function isExecutando(x){return classify(x)==='campo'}
 let cpGpsRefreshTimer=null;
 function scheduleGpsRefresh(){clearTimeout(cpGpsRefreshTimer);cpGpsRefreshTimer=setTimeout(()=>{if(!mapLoading)void enrichGps(mapSource().filter(x=>mapEligible(x,true)))},400)}
-function render(){filtered=base.filter(passesSharedFilters);let total=filtered.length,campo=filtered.filter(x=>classify(x)==='campo').length,ret=filtered.filter(x=>classify(x)==='retorno').length,prog=filtered.filter(isProgramada).length,teams=new Set(filtered.filter(x=>classify(x)==='campo').map(x=>x.equipe).filter(Boolean)).size,percent=total?Math.round(ret/total*100):0;let pend=filtered.filter(isProgramada).length;let k=[['Retornadas de campo',cpHistoricoPendente?'…':ret],['Programadas',snapshotAtivasOk?prog:'—'],['Em campo',snapshotAtivasOk?campo:'—'],['Baixadas',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='baixada').length],['Rejeitadas',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length],['Duplicadas',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='duplicada').length]];$('kpis').innerHTML=k.map(([t,n])=>`<div class="kpi"><span>${t}</span><strong>${n}</strong></div>`).join('');const audit=$('cp-auditoria-ativas');if(audit){if(snapshotAtivasOk&&snapshotAtivasInfo){const st=snapshotAtivasInfo;const warn=st.truncado?' ATENÇÃO: limite atingido, valores parciais.':'';audit.textContent=`Consulta atual uMov (sem limite de datas): ${st.stats.total_status_em_campo} com status Em Campo + ${st.stats.total_status_pendente_campo} Pendente de Campo = ${st.stats.tarefas} registros; ${st.stats.com_inicio_sem_fim} iniciadas sem fim; ${st.stats.sem_inicio_com_equipe} sem início com equipe; ${st.stats.sem_inicio_sem_equipe} sem início/sem equipe; ${st.stats.com_fim} com fim. Indicadores amarelo e verde consideram APENAS as datas selecionadas e os filtros de município, equipe e situação. Os ${st.stats.tarefas} registros são o estoque atual, não a programação do período.${warn}`;audit.style.color=st.truncado?'#f6a34b':'';}else{audit.textContent='CONSULTA ATUAL INDISPONÍVEL: '+(snapshotAtivasErro||'não foi possível consultar a dbout_task')+'. Não considere os totais de Programadas/Em Campo como zero.';audit.style.color='#f04452';}}// V9: graficos por municipio e acompanhamento por equipe usam somente SS
+function render(){filtered=base.filter(passesSharedFilters);let total=filtered.length,campo=filtered.filter(x=>classify(x)==='campo').length,ret=filtered.filter(x=>classify(x)==='retorno').length,prog=filtered.filter(isProgramada).length,teams=new Set(filtered.filter(x=>classify(x)==='campo').map(x=>x.equipe).filter(Boolean)).size,percent=total?Math.round(ret/total*100):0;let pend=filtered.filter(isProgramada).length;let k=[['Retornadas · parcial',cpHistoricoPendente?'…':ret],['Programadas · amostra',snapshotAtivasOk?prog:'—'],['Em campo · amostra',snapshotAtivasOk?campo:'—'],['Baixadas · parcial',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='baixada').length],['Rejeitadas · parcial',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length],['Duplicadas · parcial',cpHistoricoPendente?'…':filtered.filter(x=>x.no_periodo&&integration(x)==='duplicada').length]];$('kpis').innerHTML=k.map(([t,n])=>`<div class="kpi"><span>${t}</span><strong>${n}</strong></div>`).join('');const audit=$('cp-auditoria-ativas');if(audit){if(snapshotAtivasOk&&snapshotAtivasInfo){const st=snapshotAtivasInfo;const warn=st.truncado?' ATENÇÃO: limite atingido, valores parciais.':'';audit.textContent=`Consulta atual uMov (sem limite de datas): ${st.stats.total_status_em_campo} com status Em Campo + ${st.stats.total_status_pendente_campo} Pendente de Campo = ${st.stats.tarefas} registros; ${st.stats.com_inicio_sem_fim} iniciadas sem fim; ${st.stats.sem_inicio_com_equipe} sem início com equipe; ${st.stats.sem_inicio_sem_equipe} sem início/sem equipe; ${st.stats.com_fim} com fim. Indicadores amarelo e verde consideram APENAS as datas selecionadas e os filtros de município, equipe e situação. Os ${st.stats.tarefas} registros são o estoque atual, não a programação do período.${warn}`;audit.style.color=st.truncado?'#f6a34b':'';}else{audit.textContent='CONSULTA ATUAL INDISPONÍVEL: '+(snapshotAtivasErro||'não foi possível consultar a dbout_task')+'. Não considere os totais de Programadas/Em Campo como zero.';audit.style.color='#f04452';}}// V9: graficos por municipio e acompanhamento por equipe usam somente SS
 // com movimentacao no intervalo (historico), ou com inicio/programacao no periodo.
 // O estoque atual de /api/cp/ativas NAO e um total de movimentacoes do periodo.
 const periodRows=filtered.filter(x=>x.no_periodo===true||isProgramada(x)||classify(x)==='campo');
@@ -485,7 +488,7 @@ async function load(force=false){
   $('indicador').className=snapshotAtivasOk&&!parcial&&!dadosAntigos?'ok':'muted';
   $('rodape').textContent=!snapshotAtivasOk?
     'Consulta atual das SS indisponível: os indicadores Programadas e Em Campo não podem ser confirmados. '+snapshotAtivasErro:
-    parcial?'Atenção: o limite de registros foi atingido. Totais parciais; confira a auditoria de situações atuais.':
+    parcial?'MODO DE CONTINGENCIA - DADOS PARCIAIS: historico limitado a SS criadas no periodo; SS antigas executadas hoje podem estar ausentes. Situacoes atuais sao amostra de 1500 tarefas, nao estoque completo. Nao utilize estes totais como medicao oficial.':
     'Todos os cartões respeitam o período selecionado. Programadas: programação no período, com equipe e sem início. Em Campo: início real no período, sem fim. Estoque atual de SS exibido somente para auditoria.';
  }catch(e){
   if(version!==cpLoadVersion)return;

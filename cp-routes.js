@@ -148,7 +148,7 @@ async function buscarCamposTarefa(ids){
 app.get('/api/cp/veiculos',async(req,res)=>{try{res.json(await lerVeiculos())}catch(e){res.status(502).json({ok:false,error:'Consulta de frotas indisponivel.'})}});
 
 app.get('/api/cp/health',async(req,res)=>{
- try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V13' /* CP_V13_RELEASE */})}
+ try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V14 parcial' /* CP_V13_RELEASE */})}
  catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -161,11 +161,12 @@ app.get('/api/cp/ss',async(req,res)=>{
  if(dias<0||dias>61)return res.status(400).json({ok:false,error:'Periodo maximo de 62 dias. Reduza as datas.'});
  // Para o período padrão de dois dias, 8 mil linhas são mais que suficientes.
  // O limite anterior de 30 mil gerava centenas de consultas extras e travava.
- const limite=Math.min(Math.max(Number(req.query.limite||8000),1),12000);
+ const limite=Math.min(Math.max(Number(req.query.limite||350),1),350);
  // Paginação explícita: nunca esconder SS de meses movimentados no limite de 8.000.
  const offset=Math.min(Math.max(Number(req.query.offset||0),0),200000);
  if(!Number.isSafeInteger(offset))return res.status(400).json({ok:false,error:'Offset invalido.'});
- const chave=`${di}|${df}|${limite}|${offset}`;
+ const chave=`v14-parcial|${di}|${df}|${limite}|${offset}`;
+ res.set('X-CP-Partial-Scope','criadas_no_periodo');
  const fresh=req.query.refresh==='1';
  const lifeMs=df>=cpToday()?120000:900000;
  const maxStale=df>=cpToday()?48*3600000:14*86400000;
@@ -199,81 +200,52 @@ app.get('/api/cp/ss',async(req,res)=>{
    // somente depois agrega os campos complementares da dbout_task/dbout_local.
    // Remove a CTE MATERIALIZED de todas as tarefas, que forçava trabalho excessivo.
    const r=await pool.query({text:`
-     WITH candidatas AS MATERIALIZED (
-       /* CP_V11B_FILTRAR_IDS_ANTES_DOS_JOINS */
-       SELECT tsk_id FROM u45468.dbout_task
-       WHERE (tsk_realinitialdatehour >= $1::date AND tsk_realinitialdatehour < ($2::date + INTERVAL '1 day'))
-          OR (tsk_realfinaldatehour >= $1::date AND tsk_realfinaldatehour < ($2::date + INTERVAL '1 day'))
-          OR (tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour >= ($2::date + INTERVAL '1 day'))
-          OR (tsk_scheduleinitialdatehour >= $1::date AND tsk_scheduleinitialdatehour < ($2::date + INTERVAL '1 day'))
-       UNION
-       SELECT tsk_id FROM u45468.task
-       WHERE (tsk_realinitialdatehour >= $1::date AND tsk_realinitialdatehour < ($2::date + INTERVAL '1 day'))
-          OR (tsk_realfinaldatehour >= $1::date AND tsk_realfinaldatehour < ($2::date + INTERVAL '1 day'))
-          OR (tsk_realinitialdatehour < $1::date AND tsk_realfinaldatehour >= ($2::date + INTERVAL '1 day'))
-          OR (tsk_scheduleinitialdatehour >= $1::date AND tsk_scheduleinitialdatehour < ($2::date + INTERVAL '1 day'))
-          OR (tsk_insertdatehour >= $1::date AND tsk_insertdatehour < ($2::date + INTERVAL '1 day'))
-     ), tarefas AS (
-       SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
-              COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) AS programacao_real,
-              COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) AS inicio_real,
-              COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real
-       FROM candidatas c
-       JOIN u45468.task t ON t.tsk_id=c.tsk_id
-       LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
-     ), elegiveis AS (
-       SELECT *,COALESCE(inicio_real,programacao_real,tsk_insertdatehour) AS data_referencia
-       FROM tarefas
-       WHERE
-         (inicio_real >= $1::date AND inicio_real < ($2::date + INTERVAL '1 day'))
-         OR (fim_real >= $1::date AND fim_real < ($2::date + INTERVAL '1 day'))
-         OR (inicio_real < $1::date AND fim_real >= ($2::date + INTERVAL '1 day'))
-         OR (inicio_real IS NULL AND programacao_real >= $1::date
-             AND programacao_real < ($2::date + INTERVAL '1 day'))
-         OR (inicio_real IS NULL AND programacao_real IS NULL
-             AND tsk_insertdatehour >= $1::date
-             AND tsk_insertdatehour < ($2::date + INTERVAL '1 day'))
-     ), pagina_ids AS MATERIALIZED (
-       /* CP_V12_PAGINAR_ANTES_DOS_JOINS */
-       SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,
-         t.data_referencia,t.programacao_real,t.inicio_real,t.fim_real
-       FROM elegiveis t
-       ORDER BY t.data_referencia ASC NULLS LAST,t.tsk_id ASC
-       LIMIT $3 OFFSET $4
-     ), pagina AS MATERIALIZED (
-       SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
-         l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-         t.data_referencia,t.programacao_real,t.inicio_real,t.fim_real,
-         a.age_name AS tecnico,tt.tty_description AS servico
-       FROM pagina_ids t
-       LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
-       LEFT JOIN u45468.agent a ON a.age_id=t.age_id
-       LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-     )
-     SELECT p.*,
-       dl.e_situacao AS s_situacao,
-       dl.e_servicoexecutadosiscom AS s_servico_executado_siscom,
-       dl.e_informacaoexecucaosiscom AS s_info_execucao_siscom,
-       dl.e_userbaixasiscom AS s_usuario_baixa_siscom,
-       dl.e_horariobaixasiscom AS s_horario_baixa_siscom,
-       dl.loc_description AS s_localizacao,
-       dl.e_localidade AS s_cidade_umov,
-       dl.e_bairro AS s_bairro_umov,
-       dl.e_reflocalizacao AS s_referencia_localizacao,
-       dl.loc_street AS s_logradouro_umov,
-       dl.loc_streetnumber AS s_numero_umov,
-       dl.loc_neighborhood AS s_bairro_sistema,
-       dl.loc_city AS s_cidade_sistema,
-       dl.loc_geoposition AS s_geoposicao,
-       dt.tsk_situation AS t_situacao_campo,
-       dt.tss_id AS t_tss_id,
-       dt.e_tag AS t_tags,
-       dt.e_situacao AS t_status_integracao
-     FROM pagina p
-     LEFT JOIN u45468.dbout_local dl ON dl.loc_id=p.loc_id
-     LEFT JOIN u45468.dbout_task dt ON dt.tsk_id=p.tsk_id
-     ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
-   `,values:[di,df,limite+1,offset],query_timeout:10000});
+/* CP_V14_FONTE_PARCIAL: filtro rapido pela criacao; nao cobre SS antigas movimentadas no periodo */
+WITH ids AS MATERIALIZED (
+  SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,
+         t.tsk_scheduleinitialdatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour
+  FROM u45468.task t
+  WHERE t.tsk_insertdatehour >= $1::date
+    AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day')
+  ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC
+  LIMIT $3 OFFSET $4
+), pagina AS MATERIALIZED (
+  SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,
+    l.loc_city AS cidade,l.loc_neighborhood AS bairro,
+    l.loc_street AS logradouro,l.loc_streetnumber AS numero,
+    COALESCE(d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour) AS programacao_real,
+    COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour) AS inicio_real,
+    COALESCE(d.tsk_realfinaldatehour,t.tsk_realfinaldatehour) AS fim_real,
+    COALESCE(d.tsk_realinitialdatehour,t.tsk_realinitialdatehour,
+             d.tsk_scheduleinitialdatehour,t.tsk_scheduleinitialdatehour,t.tsk_insertdatehour) AS data_referencia,
+    a.age_name AS tecnico,tt.tty_description AS servico,
+    d.tsk_situation AS t_situacao_campo,d.tss_id AS t_tss_id,
+    d.e_tag AS t_tags,d.e_situacao AS t_status_integracao
+  FROM ids t
+  LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
+  LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
+  LEFT JOIN u45468.agent a ON a.age_id=t.age_id
+  LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
+)
+SELECT p.*,
+  dl.e_situacao AS s_situacao,
+  dl.e_servicoexecutadosiscom AS s_servico_executado_siscom,
+  dl.e_informacaoexecucaosiscom AS s_info_execucao_siscom,
+  dl.e_userbaixasiscom AS s_usuario_baixa_siscom,
+  dl.e_horariobaixasiscom AS s_horario_baixa_siscom,
+  dl.loc_description AS s_localizacao,
+  dl.e_localidade AS s_cidade_umov,
+  dl.e_bairro AS s_bairro_umov,
+  dl.e_reflocalizacao AS s_referencia_localizacao,
+  dl.loc_street AS s_logradouro_umov,
+  dl.loc_streetnumber AS s_numero_umov,
+  dl.loc_neighborhood AS s_bairro_sistema,
+  dl.loc_city AS s_cidade_sistema,
+  dl.loc_geoposition AS s_geoposicao
+FROM pagina p
+LEFT JOIN u45468.dbout_local dl ON dl.loc_id=p.loc_id
+ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
+`,values:[di,df,limite+1,offset],query_timeout:9500});
    const sqlMs=Date.now()-sqlInicio;
    const truncado=r.rows.length>limite;
    const linhas=r.rows.slice(0,limite);
@@ -378,7 +350,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
     res.set('X-CP-Cached-At',new Date(ATIVAS_CACHE.ts).toISOString());
     return res.json(ATIVAS_CACHE.dados);
    }
-   const persistido=await cpCache.load('ativas',{maxAgeMs:60000,maxStaleMs:48*3600000});
+   const persistido=await cpCache.load('ativas_v14_parcial',{maxAgeMs:60000,maxStaleMs:48*3600000});
    if(persistido?.payload.dados?.length===1){
     const dados=persistido.payload.dados[0];
     ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.parse(persistido.at);
@@ -387,45 +359,51 @@ app.get('/api/cp/ativas',async(req,res)=>{
     return res.json(dados);
    }
   }
-  const limite=5000;
+  const limite=1500;
   const inicioConsulta=Date.now();
   const r=await pool.query({text:`
-    WITH base_ativas AS MATERIALIZED (
-      SELECT d.tsk_id,d.tsk_situation,d.tsk_scheduleinitialdatehour,d.tsk_realinitialdatehour,d.tsk_realfinaldatehour,d.e_situacao,d.age_id FROM u45468.dbout_task d
-      WHERE UPPER(BTRIM(d.tsk_situation)) = 'EM CAMPO'
-       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
-       OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
-      ORDER BY d.tsk_id DESC LIMIT $1
-    )
-    SELECT d.tsk_id, d.tsk_situation AS situacao_campo,
-           d.tsk_scheduleinitialdatehour AS programacao_real,
-           d.tsk_realinitialdatehour AS inicio_real,
-           d.tsk_realfinaldatehour AS fim_real,
-           d.e_situacao AS status_integracao,
-           t.loc_id, l.loc_integrationid AS ss,
-           l.loc_city AS cidade, l.loc_neighborhood AS bairro,
-           l.loc_street AS logradouro, l.loc_streetnumber AS numero,
-           a.age_name AS equipe, tt.tty_description AS servico,
-           dl.e_situacao AS s_situacao,
-           dl.e_localidade AS s_cidade_umov,
-           dl.e_bairro AS s_bairro_umov,
-           dl.loc_city AS s_cidade_sistema,
-           dl.loc_neighborhood AS s_bairro_sistema,
-           dl.loc_street AS s_logradouro_umov,
-           dl.loc_streetnumber AS s_numero_umov,
-           dl.loc_description AS s_localizacao,
-           dl.loc_geoposition AS s_geoposicao
-    FROM base_ativas d
-    LEFT JOIN u45468.task t ON t.tsk_id=d.tsk_id
-    LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
-    LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
-    LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-    LEFT JOIN u45468.dbout_local dl ON dl.loc_id=t.loc_id
-    
-    ORDER BY d.tsk_id DESC
-    LIMIT $1
-  `,values:[limite+1],query_timeout:10000});
-  const truncado=r.rows.length>limite;
+/* CP_V14_ATIVAS_PARCIAL: amostra recente; nao equivale ao estoque operacional completo */
+WITH recentes AS MATERIALIZED (
+  SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour
+  FROM u45468.task t
+  ORDER BY t.tsk_insertdatehour DESC NULLS LAST,t.tsk_id DESC
+  LIMIT $1
+), base_ativas AS MATERIALIZED (
+  SELECT r.*, d.tsk_situation,d.tsk_scheduleinitialdatehour,
+    d.tsk_realinitialdatehour,d.tsk_realfinaldatehour,
+    d.e_situacao,d.age_id AS db_age_id
+  FROM recentes r
+  JOIN u45468.dbout_task d ON d.tsk_id=r.tsk_id
+  WHERE UPPER(BTRIM(d.tsk_situation))='EM CAMPO'
+     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
+     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
+)
+SELECT d.tsk_id,d.tsk_situation AS situacao_campo,
+  d.tsk_scheduleinitialdatehour AS programacao_real,
+  d.tsk_realinitialdatehour AS inicio_real,
+  d.tsk_realfinaldatehour AS fim_real,
+  d.e_situacao AS status_integracao,
+  d.loc_id,l.loc_integrationid AS ss,
+  l.loc_city AS cidade,l.loc_neighborhood AS bairro,
+  l.loc_street AS logradouro,l.loc_streetnumber AS numero,
+  a.age_name AS equipe,tt.tty_description AS servico,
+  dl.e_situacao AS s_situacao,
+  dl.e_localidade AS s_cidade_umov,
+  dl.e_bairro AS s_bairro_umov,
+  dl.loc_city AS s_cidade_sistema,
+  dl.loc_neighborhood AS s_bairro_sistema,
+  dl.loc_street AS s_logradouro_umov,
+  dl.loc_streetnumber AS s_numero_umov,
+  dl.loc_description AS s_localizacao,
+  dl.loc_geoposition AS s_geoposicao
+FROM base_ativas d
+LEFT JOIN u45468.local l ON l.loc_id=d.loc_id
+LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.db_age_id,0),d.age_id)
+LEFT JOIN u45468.tasktype tt ON tt.tty_id=d.tty_id
+LEFT JOIN u45468.dbout_local dl ON dl.loc_id=d.loc_id
+ORDER BY d.tsk_id DESC
+`,values:[limite],query_timeout:9500});
+  const truncado=true; // dados parciais: amostra das ultimas tarefas
   const linhas=r.rows.slice(0,limite);
   const registros=linhas.map(x=>{
     const s={
@@ -464,15 +442,15 @@ app.get('/api/cp/ativas',async(req,res)=>{
     ss_distintas:new Set(registros.map(x=>x.ss).filter(Boolean)).size,
     tarefas:registros.length
   };
-  const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,stats,registros};
+  const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,escopo:'amostra das ultimas 1500 tarefas',stats,registros};
   ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.now();
-  await Promise.race([cpCache.save('ativas',{dados:[dados],truncado}),new Promise(resolve=>setTimeout(resolve,1200))]);
+  await Promise.race([cpCache.save('ativas_v14_parcial',{dados:[dados],truncado}),new Promise(resolve=>setTimeout(resolve,1200))]);
   res.set('X-CP-Cached-At',new Date().toISOString());
   res.set('Cache-Control','no-store');res.set('X-Cache','UMOV');res.set('Server-Timing',`cp_ativas;dur=${Date.now()-inicioConsulta}`);res.json(dados);
  }catch(err){
   console.error('ERRO /api/cp/ativas:',err.message);
   try{
-   const persistido=ATIVAS_CACHE.dados?null:await cpCache.load('ativas',{maxAgeMs:0,maxStaleMs:14*86400000});
+   const persistido=ATIVAS_CACHE.dados?null:await cpCache.load('ativas_v14_parcial',{maxAgeMs:0,maxStaleMs:14*86400000});
    const anterior=ATIVAS_CACHE.dados||persistido?.payload?.dados?.[0];
    if(anterior?.ok&&Array.isArray(anterior.registros)){
     res.set('X-Cache','STALE-ON-ERROR');res.set('X-CP-Stale','1');
