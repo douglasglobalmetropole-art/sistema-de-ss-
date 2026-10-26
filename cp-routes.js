@@ -4,6 +4,7 @@ const path=require('node:path');
 // Modulo da Central de Operacoes. Reaproveita a instancia e o pool do GLOBAL SS.
 // Backend adaptado do index.js original da Central; nenhum servidor ou pool duplicado.
 module.exports=function registrarCentralOperacoes(app,pool){
+  require('./cp-excel')(app,pool); // Exportacao Excel com links oficiais do uMov
   const SUPABASE_URL=process.env.SUPABASE_URL || 'https://vzdqjinzjdzvurnsuujb.supabase.co';
   const SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
   function supabaseHeaders(){
