@@ -157,11 +157,14 @@ async function fetchAllCpRows(di,df,force=false){
  if(!force&&hit&&Date.now()-hit.ts<CP_PERIOD_TTL)return hit.result;
  if(cpPeriodPending.has(key))return cpPeriodPending.get(key);
  const promise=(async()=>{
-  const all=[],seen=new Set();let partial=false;
+  const all=[],seen=new Set();let partial=false,stale=false,oldestAt=null;
   for(let page=0;page<30;page++){
    const offset=page*8000;
-   const response=await fetch(`/api/cp/ss?di=${encodeURIComponent(di)}&df=${encodeURIComponent(df)}&limite=8000&offset=${offset}`,{cache:'no-store'});
+   const response=await fetch(`/api/cp/ss?di=${encodeURIComponent(di)}&df=${encodeURIComponent(df)}&limite=8000&offset=${offset}${force?'&refresh=1':''}`,{cache:'no-store'});
    if(!response.ok)throw Error(`HTTP ${response.status}: ${await response.text()}`);
+   if(response.headers.get('X-CP-Stale')==='1')stale=true;
+   const at=response.headers.get('X-CP-Cached-At');
+   if(at&&(!oldestAt||Date.parse(at)<Date.parse(oldestAt)))oldestAt=at;
    const rows=await response.json();
    if(!Array.isArray(rows))throw Error(rows.error||'Resposta inesperada da API de SS');
    for(const x of rows){const id=String(x.tsk_id||'');if(id&&!seen.has(id)){seen.add(id);all.push(x)}}
@@ -170,7 +173,7 @@ async function fetchAllCpRows(di,df,force=false){
    if(!response.headers.get('X-CP-Next-Offset')){partial=true;break}
    if(page===29)partial=true;
   }
-  const result={rows:all,partial};
+  const result={rows:all,partial,stale,oldestAt};
   if(cpPeriodCache.size>8)cpPeriodCache.delete(cpPeriodCache.keys().next().value);
   cpPeriodCache.set(key,{ts:Date.now(),result});
   return result;
@@ -367,18 +370,70 @@ async function enrichGps(data){
   drawMap();
  }
 }
-let cpLoadVersion=0,cpHistoricoPendente=false;
+// Cache privado do navegador: IndexedDB, sem criar contas nem enviar chaves ao cliente.
+// Mantem um snapshot por intervalo, permitindo abrir /cp quase imediatamente apos a primeira consulta.
+const CP_IDB_NAME='global-ss-central-v10';
+const CP_IDB_STORE='periodos';
+function cpOpenDb(){
+ return new Promise((resolve,reject)=>{
+  if(!window.indexedDB)return reject(Error('IndexedDB indisponivel'));
+  const r=indexedDB.open(CP_IDB_NAME,1);
+  r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(CP_IDB_STORE))r.result.createObjectStore(CP_IDB_STORE,{keyPath:'key'})};
+  r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+ });
+}
+async function cpReadSnapshot(key){
+ try{
+  const db=await cpOpenDb();
+  return await new Promise(resolve=>{
+   const tx=db.transaction(CP_IDB_STORE,'readonly');
+   const req=tx.objectStore(CP_IDB_STORE).get(key);
+   req.onsuccess=()=>resolve(req.result||null);
+   req.onerror=()=>resolve(null);
+   tx.oncomplete=()=>db.close();tx.onerror=()=>db.close();
+  });
+ }catch{return null}
+}
+async function cpSaveSnapshot(key,data){
+ try{
+  const db=await cpOpenDb();
+  await new Promise(resolve=>{
+   const tx=db.transaction(CP_IDB_STORE,'readwrite');
+   tx.objectStore(CP_IDB_STORE).put({key,at:Date.now(),...data});
+   tx.oncomplete=resolve;tx.onerror=resolve;tx.onabort=resolve;
+  });
+  db.close();
+ }catch(e){console.warn('Nao foi possivel armazenar cache local:',e?.message||e)}
+}
+function cpCachedClock(t){return new Date(t).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}
+let cpLoadVersion=0,cpHistoricoPendente=false,cpVisibleKey='';
+const cpStaleRefreshOnce=new Set();
 async function load(force=false){
  const version=++cpLoadVersion;
  const t0=performance.now();
  const di=$('di').value,df=$('df').value;
- $('indicador').textContent='Consultando uMov: carregando situações atuais e histórico...';
- $('indicador').className='muted';
+ const key=di+'|'+df;
+ let cpNetworkShown=false;
+ if(cpVisibleKey!==key){base=[];cpVisibleKey='';}
  cpHistoricoPendente=true;
  snapshotAtivasOk=false;snapshotAtivasInfo=null;snapshotAtivasErro='';
+ $('indicador').textContent='Buscando dados em cache e atualização do uMov...';
+ $('indicador').className='muted';
+ if(!force)void cpReadSnapshot(key).then(snapshot=>{
+  if(version!==cpLoadVersion||cpNetworkShown||!snapshot||!Array.isArray(snapshot.rows))return;
+  // Snapshot local e uma previa, explicitamente identificada como cache.
+  if(Date.now()-snapshot.at>6*60*60*1000)return;
+  base=snapshot.rows;cpVisibleKey=key;
+  snapshotAtivasOk=!!snapshot.snapshotAtivasOk;
+  snapshotAtivasInfo=snapshot.snapshotAtivasInfo||null;
+  cpHistoricoPendente=false;
+  populate('cidade','cidade');populate('equipe','equipe');render();
+  $('indicador').textContent='Exibindo cache de '+cpCachedClock(snapshot.at)+' · atualizando uMov em paralelo...';
+  $('indicador').className='muted';
+ }).catch(()=>{});
  const historicoTask=fetchAllCpRows(di,df,force);
- const ativasTask=fetch('/api/cp/ativas',{cache:'no-store'}).then(async response=>({
-  ok:response.ok,status:response.status,data:response.ok?await response.json():null
+ const ativasTask=fetch('/api/cp/ativas'+(force?'?refresh=1':''),{cache:'no-store'}).then(async response=>({
+  ok:response.ok,status:response.status,stale:response.headers.get('X-CP-Stale')==='1',cachedAt:response.headers.get('X-CP-Cached-At'),data:response.ok?await response.json():null
  }));
  // Exibe as Programadas e Em Campo assim que a consulta leve estiver pronta,
  // sem aguardar a consulta histórica. Retornadas ficam como "..." até concluir.
@@ -386,6 +441,9 @@ async function load(force=false){
   if(version!==cpLoadVersion)return;
   if(atualResp.ok&&atualResp.data?.ok&&Array.isArray(atualResp.data.registros)&&atualResp.data.stats){
    snapshotAtivasOk=true;snapshotAtivasInfo=atualResp.data;
+   cpNetworkShown=true;
+   // Se ja exibimos um snapshot completo, nao trocamos por uma lista parcial.
+   if(base.some(x=>x.no_periodo))return;
    base=atualResp.data.registros.map(x=>({...x,snapshot_ativa:true}));
    populate('cidade','cidade');populate('equipe','equipe');render();
    $('indicador').textContent='Situações atuais carregadas · buscando histórico do período...';
@@ -395,7 +453,7 @@ async function load(force=false){
   const [historicoResult,ativasResult]=await Promise.allSettled([historicoTask,ativasTask]);
   if(version!==cpLoadVersion)return;
   if(historicoResult.status!=='fulfilled')throw historicoResult.reason;
-  const {rows:historico,partial:parcialHistorico}=historicoResult.value;
+  const {rows:historico,partial:parcialHistorico,stale:cacheHistoricoAntigo,oldestAt:cacheAt}=historicoResult.value;
   const map=new Map(historico.map(x=>[String(x.tsk_id),{...x,no_periodo:true}]));
   if(ativasResult.status==='fulfilled'){
    const ativaResp=ativasResult.value;
@@ -412,13 +470,22 @@ async function load(force=false){
    }else snapshotAtivasErro=`HTTP ${ativaResp.status}`;
   }else snapshotAtivasErro=String(ativasResult.reason?.message||ativasResult.reason);
   cpHistoricoPendente=false;
-  base=[...map.values()];
+  base=[...map.values()];cpVisibleKey=key;
+  cpNetworkShown=true;
+  void cpSaveSnapshot(key,{rows:base,snapshotAtivasOk,snapshotAtivasInfo});
   populate('cidade','cidade');populate('equipe','equipe');render();
   if(mapDateStart||mapDateEnd)void refreshMapData();
   const parcialAtivas=!!snapshotAtivasInfo?.truncado;
   const parcial=parcialHistorico||parcialAtivas;
-  $('indicador').textContent=`● Consulta ${((performance.now()-t0)/1000).toFixed(1)}s · ${historico.length} no período + ${snapshotAtivasInfo?.stats?.tarefas??'—'} SS atuais · atualizado às ${new Date().toLocaleTimeString('pt-BR')}${parcial?' · CONSULTA PARCIAL':''}${!snapshotAtivasOk?' · FALHA NA CONSULTA ATUAL':''}`;
-  $('indicador').className=snapshotAtivasOk&&!parcial?'ok':'error';
+  const ativasAntigas=ativasResult.status==='fulfilled'&&ativasResult.value.stale;
+  const dadosAntigos=cacheHistoricoAntigo||ativasAntigas;
+  const dataCache=cacheAt||ativasResult.value?.cachedAt;
+  $('indicador').textContent=`● Consulta ${((performance.now()-t0)/1000).toFixed(1)}s · ${historico.length} no período + ${snapshotAtivasInfo?.stats?.tarefas??'—'} SS atuais · ${dadosAntigos?'CACHE DESATUALIZADO de '+(dataCache?cpCachedClock(Date.parse(dataCache)):'horário anterior'):'atualizado às '+new Date().toLocaleTimeString('pt-BR')}${parcial?' · CONSULTA PARCIAL':''}${!snapshotAtivasOk?' · FALHA NA CONSULTA ATUAL':''}`;
+  $('indicador').className=snapshotAtivasOk&&!parcial&&!dadosAntigos?'ok':'muted';
+  if(dadosAntigos&&!force&&!cpStaleRefreshOnce.has(key)){
+   cpStaleRefreshOnce.add(key);
+   setTimeout(()=>{if(version===cpLoadVersion)void load(true)},600);
+  }
   $('rodape').textContent=!snapshotAtivasOk?
     'Consulta atual das SS indisponível: os indicadores Programadas e Em Campo não podem ser confirmados. '+snapshotAtivasErro:
     parcial?'Atenção: o limite de registros foi atingido. Totais parciais; confira a auditoria de situações atuais.':
@@ -426,7 +493,8 @@ async function load(force=false){
  }catch(e){
   if(version!==cpLoadVersion)return;
   cpHistoricoPendente=false;
-  $('indicador').textContent='Falha na consulta do histórico';$('indicador').className='error';
+  $('indicador').textContent=base.length?'Atualizacao indisponivel · exibindo ultimo cache armazenado':'Falha na consulta do historico';
+  $('indicador').className='error';
   $('rodape').textContent='Erro na API: '+e.message;console.error(e);
   render();
  }

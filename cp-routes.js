@@ -7,6 +7,8 @@ module.exports=function registrarCentralOperacoes(app,pool){
   require('./cp-excel')(app,pool); // Exportacao Excel com links oficiais do uMov
   const SUPABASE_URL=process.env.SUPABASE_URL || 'https://vzdqjinzjdzvurnsuujb.supabase.co';
   const SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
+  const cpCache=require('./cp-fast-cache').create({url:SUPABASE_URL,key:SUPABASE_SERVICE_ROLE_KEY,enabled:process.env.CP_PERSISTENT_CACHE_ENABLED!=='false'});
+  const cpToday=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'});
   function supabaseHeaders(){
     const h={apikey:SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'};
     if(/^eyJ/.test(SUPABASE_SERVICE_ROLE_KEY))h.Authorization=`Bearer ${SUPABASE_SERVICE_ROLE_KEY}`;
@@ -164,14 +166,30 @@ app.get('/api/cp/ss',async(req,res)=>{
  const offset=Math.min(Math.max(Number(req.query.offset||0),0),200000);
  if(!Number.isSafeInteger(offset))return res.status(400).json({ok:false,error:'Offset invalido.'});
  const chave=`${di}|${df}|${limite}|${offset}`;
+ const fresh=req.query.refresh==='1';
+ const lifeMs=df>=cpToday()?120000:900000;
+ const maxStale=df>=cpToday()?900000:7200000;
  try{
-   const cached=DATA_CACHE.get(chave);
-   if(cached && (Date.now()-cached.ts)<DATA_CACHE_TTL){
-     res.set('X-Cache','HIT');
-     res.set('Server-Timing','cp_cache;dur=0');
-     res.set('X-CP-Truncated',cached.truncated?'1':'0');
-     if(cached.truncated)res.set('X-CP-Next-Offset',String(offset+limite));
-     return res.json(cached.dados);
+   if(!fresh){
+    const cached=DATA_CACHE.get(chave);
+    if(cached && (Date.now()-cached.ts)<lifeMs){
+      res.set('X-Cache','MEMORY');
+      res.set('Server-Timing','cp_memory;dur=0');
+      res.set('X-CP-Truncated',cached.truncated?'1':'0');
+      res.set('X-CP-Cached-At',new Date(cached.ts).toISOString());
+      if(cached.truncated)res.set('X-CP-Next-Offset',String(offset+limite));
+      return res.json(cached.dados);
+    }
+    const persistido=await cpCache.load('historico:'+chave,{maxAgeMs:lifeMs,maxStaleMs:maxStale});
+    if(persistido){
+      DATA_CACHE.set(chave,{...persistido.payload,ts:Date.parse(persistido.at)});
+      res.set('X-Cache','PERSISTENT');
+      res.set('X-CP-Stale',persistido.stale?'1':'0');
+      res.set('X-CP-Cached-At',persistido.at);
+      res.set('X-CP-Truncated',persistido.payload.truncado?'1':'0');
+      if(persistido.payload.truncado)res.set('X-CP-Next-Offset',String(offset+limite));
+      return res.json(persistido.payload.dados);
+    }
    }
    // Período de execução: inclui SS iniciadas, concluídas ou que atravessam o mês.
    // Datas da dbout_task (retorno operacional) prevalecem sobre task quando presentes.
@@ -297,7 +315,11 @@ app.get('/api/cp/ss',async(req,res)=>{
    const k={ok:true,total:dados.length,baixadas,rejeitadas,duplicadas,tempo_medio:hhmm(qtd?Math.round(soma/qtd):0)};
    CACHE.set(chave,{...k,ts:Date.now()});
    DATA_CACHE.set(chave,{dados,truncated:truncado,ts:Date.now()});
-   res.set('X-Cache','MISS');
+   // Persistencia permite resposta rapida mesmo em outro processo Vercel.
+   // A escrita e aguardada somente quando o banco uMov ja foi consultado.
+   await cpCache.save('historico:'+chave,{dados,truncado});
+   res.set('X-CP-Cached-At',new Date().toISOString());
+   res.set('X-Cache','UMOV');
    res.set('Server-Timing',`cp_sql;dur=${sqlMs},cp_total;dur=${Date.now()-sqlInicio}`);
    res.set('X-CP-Truncated',truncado?'1':'0');
    if(truncado)res.set('X-CP-Next-Offset',String(offset+limite));
@@ -316,9 +338,21 @@ app.get('/api/cp/ss',async(req,res)=>{
 const ATIVAS_CACHE={dados:null,ts:0};
 app.get('/api/cp/ativas',async(req,res)=>{
  try{
-  if(ATIVAS_CACHE.dados && Date.now()-ATIVAS_CACHE.ts<60000){
-   res.set('Cache-Control','no-store');res.set('X-Cache','HIT');
-   return res.json(ATIVAS_CACHE.dados);
+  const fresh=req.query.refresh==='1';
+  if(!fresh){
+   if(ATIVAS_CACHE.dados && Date.now()-ATIVAS_CACHE.ts<60000){
+    res.set('Cache-Control','no-store');res.set('X-Cache','MEMORY');
+    res.set('X-CP-Cached-At',new Date(ATIVAS_CACHE.ts).toISOString());
+    return res.json(ATIVAS_CACHE.dados);
+   }
+   const persistido=await cpCache.load('ativas',{maxAgeMs:60000,maxStaleMs:300000});
+   if(persistido?.payload.dados?.length===1){
+    const dados=persistido.payload.dados[0];
+    ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.parse(persistido.at);
+    res.set('X-Cache','PERSISTENT');res.set('X-CP-Stale',persistido.stale?'1':'0');
+    res.set('X-CP-Cached-At',persistido.at);
+    return res.json(dados);
+   }
   }
   const limite=5000;
   const inicioConsulta=Date.now();
@@ -394,7 +428,9 @@ app.get('/api/cp/ativas',async(req,res)=>{
   };
   const dados={ok:true,fonte:'u45468.dbout_task',sem_filtro_data:true,truncado,stats,registros};
   ATIVAS_CACHE.dados=dados;ATIVAS_CACHE.ts=Date.now();
-  res.set('Cache-Control','no-store');res.set('X-Cache','MISS');res.set('Server-Timing',`cp_ativas;dur=${Date.now()-inicioConsulta}`);res.json(dados);
+  await cpCache.save('ativas',{dados:[dados],truncado});
+  res.set('X-CP-Cached-At',new Date().toISOString());
+  res.set('Cache-Control','no-store');res.set('X-Cache','UMOV');res.set('Server-Timing',`cp_ativas;dur=${Date.now()-inicioConsulta}`);res.json(dados);
  }catch(err){
   console.error('ERRO /api/cp/ativas:',err.message);
   const timeout=/timeout|timed out|canceling statement/i.test(String(err.message||''));
