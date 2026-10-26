@@ -152,7 +152,7 @@ async function buscarCamposTarefa(ids){
 app.get('/api/cp/veiculos',async(req,res)=>{try{res.json(await lerVeiculos())}catch(e){res.status(502).json({ok:false,error:'Consulta de frotas indisponivel.'})}});
 
 app.get('/api/cp/health',async(req,res)=>{
- try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V18 situacao-macro-gps'})}
+ try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V19 cards-macros-municipios'})}
  catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -283,14 +283,14 @@ WITH candidatos AS MATERIALIZED (
     l.loc_city AS cidade,l.loc_neighborhood AS bairro,
     l.loc_street AS logradouro,l.loc_streetnumber AS numero,
     t.programacao_real,t.inicio_real,t.fim_real,t.data_referencia,
-    a.age_name AS tecnico,tt.tty_description AS servico,
+    a.age_name AS tecnico,COALESCE(NULLIF(BTRIM(tt.tty_description),''),NULLIF(BTRIM(to_jsonb(d)->>'tty_description'),'')) AS servico,
     d.tsk_situation AS t_situacao_campo,d.tss_id AS t_tss_id,
     d.e_tag AS t_tags,d.e_situacao AS t_status_integracao
   FROM pagina_ids t
   LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
   LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
   LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
-  LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
+  LEFT JOIN u45468.tasktype tt ON tt.tty_id=COALESCE(NULLIF(t.tty_id,0), CASE WHEN (to_jsonb(d)->>'tty_id') ~ '^[0-9]+$' THEN (to_jsonb(d)->>'tty_id')::bigint END)
 )
 SELECT p.*,
   dl.e_situacao AS s_situacao,
@@ -460,7 +460,7 @@ SELECT d.tsk_id,d.tsk_situation AS situacao_campo,
   d.loc_id,l.loc_integrationid AS ss,
   l.loc_city AS cidade,l.loc_neighborhood AS bairro,
   l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-  a.age_name AS equipe,tt.tty_description AS servico,
+  a.age_name AS equipe,COALESCE(NULLIF(BTRIM(tt.tty_description),''),NULLIF(BTRIM(to_jsonb(d)->>'tty_description'),'')) AS servico,
   dl.e_situacao AS s_situacao,
   dl.e_localidade AS s_cidade_umov,
   dl.e_bairro AS s_bairro_umov,
@@ -473,7 +473,7 @@ SELECT d.tsk_id,d.tsk_situation AS situacao_campo,
 FROM base_ativas d
 LEFT JOIN u45468.local l ON l.loc_id=d.loc_id
 LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.db_age_id,0),d.age_id)
-LEFT JOIN u45468.tasktype tt ON tt.tty_id=d.tty_id
+LEFT JOIN u45468.tasktype tt ON tt.tty_id=COALESCE(NULLIF(d.tty_id,0),CASE WHEN (to_jsonb(d)->>'tty_id') ~ '^[0-9]+$' THEN (to_jsonb(d)->>'tty_id')::bigint END)
 LEFT JOIN u45468.dbout_local dl ON dl.loc_id=d.loc_id
 ORDER BY d.tsk_id DESC
 `,values:[limite],query_timeout:6500});

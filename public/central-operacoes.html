@@ -53,7 +53,27 @@ body.global-dark #map-expand{background:#1166bd;color:#fff;border-color:#3386d0}
 .multi-menu label:hover{background:#eef5fc}
 .multi-menu input[type=checkbox]{flex:none;min-width:0;width:15px;height:15px;margin:0;accent-color:#0b70c9}
 .multi-menu .all{font-weight:700;border-bottom:1px solid #dce8f2;margin-bottom:4px}
-<style>.mov-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}.mov-head h3{margin:0}.mov-tabs{display:flex;gap:5px}.mov-tabs button{background:#e8f1fa;border:1px solid #bed3e7;color:#175487;font-size:12px;font-weight:600;padding:7px 12px;border-radius:6px}.mov-tabs button.active{background:#0869bf;color:#fff;border-color:#0869bf}body.global-dark .mov-tabs button:not(.active){background:#17334f;color:#d9e9f8;border-color:#345b7e}</style><style>#execucao .cp-location-link{color:#0b6bb1;text-decoration:underline}body.global-dark #execucao .cp-location-link{color:#89c9ff}</style><style>.cp-back{display:inline-flex;align-items:center;padding:10px 12px;border:1px solid #c4d6e8;border-radius:7px;text-decoration:none;background:#eaf3ff;color:#07599d;font-weight:700;font-size:12px}.cp-back:hover{background:#d5e8fc}body.global-dark .cp-back{background:#1a3955;color:#cce9ff;border-color:#496b87}</style><style>@media(max-width:700px){.grid#kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.grid#kpis .kpi{min-width:0!important}#cp-auditoria-ativas{overflow-wrap:anywhere}}</style><style>#cp-export-excel{background:#13794f!important;border-color:#13794f!important;color:white!important;white-space:nowrap}#cp-export-excel:hover{background:#0b613e!important}#cp-export-excel:disabled{opacity:.65;cursor:wait}.mov-head .mov-tabs{align-items:center;flex-wrap:wrap}@media(max-width:600px){#cp-export-excel{width:100%;margin-top:4px}}</style></head><body><main><div class="top"><div><h1>GLOBAL METRÓPOLE | Central de Operações</h1><small>Notas em campo | Dados do uMov | V18</small></div><div><span id="indicador" class="muted">Aguardando consulta</span> <a class="cp-back" href="/" title="Voltar ao GLOBAL SS">← GLOBAL SS</a> <button id="reload">↻ Atualizar</button></div></div><div class="filters"><input type="date" id="di" title="Data inicial"><input type="date" id="df" title="Data final"><div class="multi-filter" id="wrap-cidade"><button type="button" class="multi-trigger" id="trigger-cidade" aria-expanded="false">Municípios: Todos ▾</button><div class="multi-menu" id="menu-cidade" hidden></div></div><div class="multi-filter" id="wrap-equipe"><button type="button" class="multi-trigger" id="trigger-equipe" aria-expanded="false">Equipes: Todos ▾</button><div class="multi-menu" id="menu-equipe" hidden></div></div><div class="multi-filter" id="wrap-situacao"><button type="button" class="multi-trigger" id="trigger-situacao" aria-expanded="false">Situação da SS: Todos ▾</button><div class="multi-menu" id="menu-situacao" hidden></div></div><div class="multi-filter" id="wrap-integracao"><button type="button" class="multi-trigger" id="trigger-integracao" aria-expanded="false">Integração: Todos ▾</button><div class="multi-menu" id="menu-integracao" hidden></div></div><input id="busca" placeholder="Pesquisar SS, rua ou serviço"></div><div class="grid" id="kpis"></div><p class="muted" id="cp-auditoria-ativas" style="font-size:12px;margin:8px 2px 3px;line-height:1.6" aria-live="polite">Consultando situacoes atuais da dbout_task...</p><p class="muted" style="font-size:12px;margin:6px 2px 0">Programadas (amarelo): SS sem início real, com equipe vinculada e situação Em Campo ou Pendente; se houver horário programado, ele deve estar no período selecionado. Pendentes sem horário também entram. Em campo (verde): SS realmente iniciadas, com data e hora de início no período e sem término, mesmo que o status textual seja Pendente. A localização/GPS é exibida quando disponível.</p><div class="layout"><section class="panel" id="map-panel"><div class="map-toolbar"><h3>Mapa operacional das SS</h3><div class="map-actions"><label>Situação <select id="map-mode"><option value="retorno">Retornadas</option><option value="campo">Notas em campo</option><option value="ambos">Ambas</option></select></label><label>De <input type="date" id="map-date-start"></label><label>Até <input type="date" id="map-date-end"></label><button type="button" id="map-reset-team">Todas as equipes</button><button type="button" id="map-expand" aria-label="Ampliar mapa" aria-pressed="false">⛶ Ampliar mapa</button></div></div><div class="map-workspace"><div class="map" id="map"></div><div class="map-team-sidebar"><strong>Equipes no mapa <span id="map-team-total"></span></strong><div id="map-team-list"></div></div></div><div class="map-status-legend" aria-label="Legenda dos marcadores"><span><i style="background:#15966c"></i> Executada</span><span><i style="background:#dc4b54"></i> Rejeitada</span><span><i style="background:#9461cf"></i> Duplicada</span><span><i style="background:#1976c9"></i> Sem classificação</span><span><i style="background:#8c98a8"></i> Sem coordenadas (não plotadas)</span></div><div class="map-legend" id="map-info" aria-live="polite">Somente coordenadas registradas no uMov são exibidas. SS sem GPS não recebem posição aproximada.</div></section><div class="right-stack"><section class="panel"><h3>Acompanhamento por equipe <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div class="scroll" id="equipes"></div></section><div class="chart-grid"><section class="panel"><h3>Situação operacional — mesmos totais dos cartões</h3><div id="chart-situacao"></div></section><section class="panel"><h3>SS por município <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div id="chart-cidades"></div></section></div></div></div><div class="bottom"><section class="panel"><div class="mov-head"><h3>Últimas movimentações / SS</h3><div class="mov-tabs" role="group" aria-label="Tipo de movimentação"><button type="button" id="tab-programadas" aria-pressed="false">Programadas</button><button type="button" id="tab-retornadas" class="active" aria-pressed="true">Retornadas</button><button type="button" id="cp-export-excel" title="Exportar todas as SS filtradas da aba ativa, com link do relatório original do uMov">⬇ Exportar Excel</button></div></div><div class="scroll" id="movimentos"></div></section><section class="panel"><h3>Notas em campo — iniciadas (data/hora e GPS disponível)</h3><div class="scroll" id="execucao"></div></section></div><p class="muted" id="rodape">Consulta integrada ao uMov pelo GLOBAL SS (/api/cp/ss). Integração classificada pelo status retornado pelo uMov; valores não reconhecidos aparecem como sem classificação.</p></main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+<style>.mov-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}.mov-head h3{margin:0}.mov-tabs{display:flex;gap:5px}.mov-tabs button{background:#e8f1fa;border:1px solid #bed3e7;color:#175487;font-size:12px;font-weight:600;padding:7px 12px;border-radius:6px}.mov-tabs button.active{background:#0869bf;color:#fff;border-color:#0869bf}body.global-dark .mov-tabs button:not(.active){background:#17334f;color:#d9e9f8;border-color:#345b7e}</style><style>#execucao .cp-location-link{color:#0b6bb1;text-decoration:underline}body.global-dark #execucao .cp-location-link{color:#89c9ff}</style><style>.cp-back{display:inline-flex;align-items:center;padding:10px 12px;border:1px solid #c4d6e8;border-radius:7px;text-decoration:none;background:#eaf3ff;color:#07599d;font-weight:700;font-size:12px}.cp-back:hover{background:#d5e8fc}body.global-dark .cp-back{background:#1a3955;color:#cce9ff;border-color:#496b87}</style><style>@media(max-width:700px){.grid#kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.grid#kpis .kpi{min-width:0!important}#cp-auditoria-ativas{overflow-wrap:anywhere}}</style><style>#cp-export-excel{background:#13794f!important;border-color:#13794f!important;color:white!important;white-space:nowrap}#cp-export-excel:hover{background:#0b613e!important}#cp-export-excel:disabled{opacity:.65;cursor:wait}.mov-head .mov-tabs{align-items:center;flex-wrap:wrap}@media(max-width:600px){#cp-export-excel{width:100%;margin-top:4px}}</style>
+<style id="cp-v19-cores-e-municipios">
+/* V19: KPI 2 = notas em campo (verde), KPI 3 = programadas (amarelo). */
+#kpis .kpi:nth-child(2){background:linear-gradient(110deg,#dff8ef,#f4fffb)!important;border-color:#c4eadb!important;color:#08634c!important}
+#kpis .kpi:nth-child(3){background:linear-gradient(110deg,#fff2d3,#fffaf0)!important;border-color:#fae8c2!important;color:#795500!important}
+#kpis .kpi:nth-child(2):before{background:linear-gradient(145deg,#10c4a1,#087a65)!important;box-shadow:0 4px 12px #00836b36!important}
+#kpis .kpi:nth-child(3):before{background:linear-gradient(145deg,#ffc83b,#ef9700)!important;box-shadow:0 4px 12px #d9930030!important}
+body.global-dark #kpis .kpi:nth-child(2){background:linear-gradient(115deg,#064c43,#0b322f)!important;border-color:#166c5a!important;color:#fff!important}
+body.global-dark #kpis .kpi:nth-child(3){background:linear-gradient(115deg,#42330d,#2c281a)!important;border-color:#66511b!important;color:#fff!important}
+#chart-cidades .city-stack{display:flex;flex-direction:column;justify-content:end;width:70%;height:100%;border-radius:5px 5px 0 0;overflow:hidden;min-height:3px}
+#chart-cidades .city-stack i{display:block;width:100%;min-height:0;flex-shrink:0}
+#chart-cidades .city-stack i.ret{background:#1479d1}
+#chart-cidades .city-stack i.campo{background:#00ad86}
+#chart-cidades .city-stack i.prog{background:#efac23}
+#chart-cidades .city-bars{height:150px}
+#chart-cidades .city-col{justify-content:flex-end}
+#chart-cidades .city-col small{font-size:9px;opacity:.8;text-align:center}
+#chart-cidades .city-legend{font-size:11px;display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+#chart-cidades .city-legend span:before{content:'';display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:2px;background:var(--city-color)}
+</style>
+</head><body><main><div class="top"><div><h1>GLOBAL METRÓPOLE | Central de Operações</h1><small>Notas em campo | Dados do uMov | V19 — Regras e macro corrigidas</small></div><div><span id="indicador" class="muted">Aguardando consulta</span> <a class="cp-back" href="/" title="Voltar ao GLOBAL SS">← GLOBAL SS</a> <button id="reload">↻ Atualizar</button></div></div><div class="filters"><input type="date" id="di" title="Data inicial"><input type="date" id="df" title="Data final"><div class="multi-filter" id="wrap-cidade"><button type="button" class="multi-trigger" id="trigger-cidade" aria-expanded="false">Municípios: Todos ▾</button><div class="multi-menu" id="menu-cidade" hidden></div></div><div class="multi-filter" id="wrap-equipe"><button type="button" class="multi-trigger" id="trigger-equipe" aria-expanded="false">Equipes: Todos ▾</button><div class="multi-menu" id="menu-equipe" hidden></div></div><div class="multi-filter" id="wrap-situacao"><button type="button" class="multi-trigger" id="trigger-situacao" aria-expanded="false">Situação da SS: Todos ▾</button><div class="multi-menu" id="menu-situacao" hidden></div></div><div class="multi-filter" id="wrap-integracao"><button type="button" class="multi-trigger" id="trigger-integracao" aria-expanded="false">Integração: Todos ▾</button><div class="multi-menu" id="menu-integracao" hidden></div></div><input id="busca" placeholder="Pesquisar SS, rua ou serviço"></div><div class="grid" id="kpis"></div><p class="muted" id="cp-auditoria-ativas" style="font-size:12px;margin:8px 2px 3px;line-height:1.6" aria-live="polite">Consultando situacoes atuais da dbout_task...</p><p class="muted" style="font-size:12px;margin:6px 2px 0">Programadas (amarelo): SS sem início real, com equipe vinculada e situação Em Campo ou Pendente; se houver horário programado, ele deve estar no período selecionado. Pendentes sem horário também entram. Em campo (verde): SS realmente iniciadas, com data e hora de início no período e sem término, mesmo que o status textual seja Pendente. A localização/GPS é exibida quando disponível.</p><div class="layout"><section class="panel" id="map-panel"><div class="map-toolbar"><h3>Mapa operacional das SS</h3><div class="map-actions"><label>Situação <select id="map-mode"><option value="retorno">Retornadas</option><option value="campo">Notas em campo</option><option value="ambos">Ambas</option></select></label><label>De <input type="date" id="map-date-start"></label><label>Até <input type="date" id="map-date-end"></label><button type="button" id="map-reset-team">Todas as equipes</button><button type="button" id="map-expand" aria-label="Ampliar mapa" aria-pressed="false">⛶ Ampliar mapa</button></div></div><div class="map-workspace"><div class="map" id="map"></div><div class="map-team-sidebar"><strong>Equipes no mapa <span id="map-team-total"></span></strong><div id="map-team-list"></div></div></div><div class="map-status-legend" aria-label="Legenda dos marcadores"><span><i style="background:#15966c"></i> Executada</span><span><i style="background:#dc4b54"></i> Rejeitada</span><span><i style="background:#9461cf"></i> Duplicada</span><span><i style="background:#1976c9"></i> Sem classificação</span><span><i style="background:#8c98a8"></i> Sem coordenadas (não plotadas)</span></div><div class="map-legend" id="map-info" aria-live="polite">Somente coordenadas registradas no uMov são exibidas. SS sem GPS não recebem posição aproximada.</div></section><div class="right-stack"><section class="panel"><h3>Acompanhamento por equipe <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div class="scroll" id="equipes"></div></section><div class="chart-grid"><section class="panel"><h3>Situação operacional — mesmos totais dos cartões</h3><div id="chart-situacao"></div></section><section class="panel"><h3>SS por município — mesmas situações dos cards <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div id="chart-cidades"></div></section></div></div></div><div class="bottom"><section class="panel"><div class="mov-head"><h3>Últimas movimentações / SS</h3><div class="mov-tabs" role="group" aria-label="Tipo de movimentação"><button type="button" id="tab-programadas" aria-pressed="false">Programadas</button><button type="button" id="tab-retornadas" class="active" aria-pressed="true">Retornadas</button><button type="button" id="cp-export-excel" title="Exportar todas as SS filtradas da aba ativa, com link do relatório original do uMov">⬇ Exportar Excel</button></div></div><div class="scroll" id="movimentos"></div></section><section class="panel"><h3>Notas em campo — iniciadas (data/hora e GPS disponível)</h3><div class="scroll" id="execucao"></div></section></div><p class="muted" id="rodape">Consulta integrada ao uMov pelo GLOBAL SS (/api/cp/ss). Integração classificada pelo status retornado pelo uMov; valores não reconhecidos aparecem como sem classificação.</p></main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let base=[],filtered=[];const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();const iso=d=>{const p=String(d||'').split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:''};// V17: Em campo exige início REAL com data e hora, não apenas situação textual.
 const hasStart=x=>{
  const raw=String(x.inicio_real_iso||'').trim();
@@ -78,19 +98,22 @@ const cpDateInFilter=(value,brValue)=>{
  return !!date&&!!di&&!!df&&date>=di&&date<=df;
 };
 const cpIsActiveSituation=s=>s.includes('em campo')||s.includes('pendente')||s.includes('aguardando');
-// V18 - prioridade: retornada > inicio real com hora > programada sem inicio e com equipe.
+// V19 - prioridade: retornada > inicio real com hora > programada sem inicio e com equipe.
 const classify=x=>{
- const s=norm(x.situacao_campo);
- if(hasEnd(x)||s.includes('retornada')||s.includes('retornado'))return x.snapshot_ativa?(x.no_periodo?'retorno':'outros'):'retorno';
- // Campo: não depende do texto 'Em Campo' ou 'Pendente', apenas da execução iniciada.
- if(hasStart(x))return cpDateInFilter(x.inicio_real_iso,x.inicio)?'campo':'outros';
- // Programada: há equipe, ainda sem início ou término, e status operacional apto.
- if(hasTeam(x)&&cpIsActiveSituation(s)){
-  if(hasSchedule(x))return cpDateInFilter(x.programacao_iso,x.programacao)?'programada':'outros';
-  // Pendente com equipe, mesmo sem programação horária, não deve desaparecer.
-  return 'programada';
+ const situacao=norm(x.situacao_campo);
+ // Exclusividade: termino registrado prevalece sobre qualquer status antigo.
+ if(hasEnd(x))return cpDateInFilter(x.fim_real_iso,x.fim)?'retorno':'outros';
+ if(situacao.includes('retornada')||situacao.includes('retornado')){
+   return x.no_periodo&&cpDateInFilter(x.data,x.data)?'retorno':'outros';
  }
- return'outros';
+ // Nota em campo: somente atividade REALMENTE iniciada, sem fim, no periodo.
+ if(hasStart(x))return cpDateInFilter(x.inicio_real_iso,x.inicio)?'campo':'outros';
+ // Programada: equipe real + situacao operacional + nenhum inicio real.
+ if(hasTeam(x)&&cpIsActiveSituation(situacao)){
+   if(hasSchedule(x))return cpDateInFilter(x.programacao_iso,x.programacao)?'programada':'outros';
+   return 'programada'; // pendente com equipe sem horario programado
+ }
+ return 'outros';
 };const integration=x=>{let s=norm(x.status_integracao||x.situacao||x.status_siscom||'');if(s.includes('rejeitad'))return'rejeitada';if(s.includes('duplicad'))return'duplicada';if(s.includes('baixad')||s.includes('encerrad'))return'baixada';return'pendente'};const hasTeam=x=>!!String(x.equipe||'').trim()&&!['sem equipe','nao informado','não informado','null','undefined'].includes(norm(x.equipe));const mobileState=x=>norm(x.status_mobile||x.situacao_mobile||x.status_envio_mobile||x.sincronizacao_mobile||x.status_sincronizacao||'');const pendingSend=x=>{if(!hasTeam(x)||classify(x)==='retorno'||classify(x)==='campo')return false;let st=mobileState(x);return !!st&&(/pendente|nao enviado|aguardando envio|nao sincroniz|aguardando sincroniz/.test(st))};const integrationLabel={baixada:'Baixada',rejeitada:'Rejeitada',duplicada:'Duplicada',pendente:'Sem classificação'};const label={campo:'Notas em campo',retorno:'Retornada de campo',programada:'Programada'};const cityCenters={'vitoria':[-20.3155,-40.3128],'serra':[-20.1286,-40.3078],'vila velha':[-20.3297,-40.2925],'cariacica':[-20.2632,-40.4165],'viana':[-20.3908,-40.4946],'fundao':[-19.9341,-40.4047],'aracruz':[-19.8201,-40.2764],'guarapari':[-20.6718,-40.4975],'anchieta':[-20.8057,-40.6450],'piuma':[-20.8334,-40.7276]};
 let leafletMap=null,mapLayer=null;
 let mapRecords=null,mapLoadVersion=0,mapLoading=false,mapError='',mapPartial=false;
@@ -303,10 +326,13 @@ function cpLocationCell(x){
  }
  return esc(descricao||x.geoposicao||'Não disponível');
 }
+function cpMacro(x){
+ return [x.macro,x.servico,x.macro_servico,x.descricao_macro].find(v=>v!==null&&v!==undefined&&String(v).trim())||'Não informado no uMov';
+}
 function renderExecution(){
  const rows=filtered.filter(isExecutando).slice(0,80);
  $('execucao').innerHTML=table(rows,[
-  ['SS',x=>esc(x.ss)],['Macro da SS',x=>esc(x.macro||x.servico||'Não informado')],['Equipe',x=>esc(x.equipe)],
+  ['SS',x=>esc(x.ss)],['Macro da SS',x=>esc(cpMacro(x))],['Equipe',x=>esc(x.equipe)],
   ['Data e hora de início',x=>esc(x.inicio||'Não informado')],
   ['Rua',x=>esc(x.rua)],['Localização (se disponível)',x=>cpLocationCell(x)],
   ['Integração',x=>`<span class="status ${integration(x)}">${integrationLabel[integration(x)]}</span>`]
@@ -314,14 +340,109 @@ function renderExecution(){
 }
 let cpGpsRefreshTimer=null;
 function scheduleGpsRefresh(){clearTimeout(cpGpsRefreshTimer);cpGpsRefreshTimer=setTimeout(()=>{if(!mapLoading&&!cpHistoricoPendente)void enrichGps(mapSource().filter(x=>mapEligible(x,true)))},400)}
-function render(){filtered=base.filter(passesSharedFilters);let total=filtered.length,campo=filtered.filter(x=>classify(x)==='campo').length,ret=filtered.filter(x=>classify(x)==='retorno').length,prog=filtered.filter(isProgramada).length,teams=new Set(filtered.filter(x=>classify(x)==='campo').map(x=>x.equipe).filter(Boolean)).size,percent=total?Math.round(ret/total*100):0;let pend=prog;const cpTotais={retornadas:ret,programadas:prog,campo:campo};const cpIntegracao={baixadas:filtered.filter(x=>x.no_periodo&&integration(x)==='baixada').length,rejeitadas:filtered.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length,duplicadas:filtered.filter(x=>x.no_periodo&&integration(x)==='duplicada').length};let k=[['Retornadas'+(cpHistoricoPendente?' · atualizando':''),cpTotais.retornadas],['Programadas'+(cpHistoricoPendente?' · atualizando':''),cpTotais.programadas],['Notas em campo'+(cpHistoricoPendente?' · atualizando':''),cpTotais.campo],['Baixadas'+(cpHistoricoPendente?' · atualizando':''),cpIntegracao.baixadas],['Rejeitadas'+(cpHistoricoPendente?' · atualizando':''),cpIntegracao.rejeitadas],['Duplicadas'+(cpHistoricoPendente?' · atualizando':''),cpIntegracao.duplicadas]];$('kpis').innerHTML=k.map(([t,n])=>`<div class="kpi"><span>${t}</span><strong>${n}</strong></div>`).join('');const audit=$('cp-auditoria-ativas');if(audit){if(snapshotAtivasOk&&snapshotAtivasInfo){const st=snapshotAtivasInfo;const warn=st.truncado?' ATENÇÃO: limite atingido, valores parciais.':'';audit.textContent=`Amostra da consulta atual uMov: ${st.stats.total_em_campo} notas em campo (início real, sem fim); ${st.stats.total_programadas} programadas (com equipe, sem início); ${st.stats.tarefas} SS retornadas da amostra, incluindo outros status; ${st.stats.com_fim} com fim. Programadas com horário respeitam o período; pendentes com equipe sem horário também aparecem. A consulta atual é parcial.${warn}`;audit.style.color=st.truncado?'#f6a34b':'';}else{audit.textContent='CONSULTA ATUAL INDISPONÍVEL: '+(snapshotAtivasErro||'não foi possível consultar a dbout_task')+'. Não considere os totais de Programadas/Em Campo como zero.';audit.style.color='#f04452';}}// V9: graficos por municipio e acompanhamento por equipe usam somente SS
-// com movimentacao no intervalo (historico), ou com inicio/programacao no periodo.
-// O estoque atual de /api/cp/ativas NAO e um total de movimentacoes do periodo.
-const periodRows=filtered.filter(x=>x.no_periodo===true||isProgramada(x)||classify(x)==='campo');
-document.querySelectorAll('.cp-period-label').forEach(el=>el.textContent=`(${($('di').value||'—').split('-').reverse().join('/')} a ${($('df').value||'—').split('-').reverse().join('/')})`);
-let teamRows=periodRows.filter(x=>String(x.equipe??'').trim()!=='' && !['sem equipe','nao informado','null','undefined'].includes(norm(x.equipe)));let grouped=teamRows.reduce((a,x)=>{(a[x.equipe]??=[]).push(x);return a;},{});const chartTotal=cpTotais.campo+cpTotais.retornadas+cpTotais.programadas;const pieValues=[cpTotais.campo,cpTotais.retornadas,cpTotais.programadas],pieColors=['#0dbd85','#12a77d','#e0a418'];let a=0;const stops=pieValues.map((v,i)=>{let start=a;a+=chartTotal?100*v/chartTotal:0;return `${pieColors[i]} ${start}% ${a}%`});$('chart-situacao').innerHTML=`<div class="donut-wrap"><div class="donut" style="background:conic-gradient(${chartTotal?stops.join(','):'#e0e9f3 0% 100%'})"><div class="donut-hole">${chartTotal}</div></div><div class="legend"><div><b style="background:#0dbd85"></b>Notas em campo: ${campo}</div><div><b style="background:#12a77d"></b>Retornadas: ${ret}</div><div><b style="background:#e0a418"></b>Programadas: ${pend}</div><div class="muted" style="font-size:10px;line-height:1.4;margin-top:5px">Mesmos totais dos 3 cartões de situação acima. Integração — Baixadas: ${cpIntegracao.baixadas} · Rejeitadas: ${cpIntegracao.rejeitadas} · Duplicadas: ${cpIntegracao.duplicadas}. São indicadores separados e podem se sobrepor.</div></div></div>`;let cityCounts=Object.entries(periodRows.reduce((o,x)=>{let c=x.cidade||'Não informado';o[c]=(o[c]||0)+1;return o},{})).sort((a,b)=>b[1]-a[1]).slice(0,7);let mx=Math.max(1,...cityCounts.map(x=>x[1]));$('chart-cidades').innerHTML=cityCounts.length?`<div class="city-bars">${cityCounts.map(([name,count])=>`<div class="city-col"><strong>${count}</strong><div class="barcol" style="height:${Math.max(3,100*count/mx)}%"></div><span title="${esc(name)}">${esc(name)}</span></div>`).join('')}</div>`:'<p class="empty">Sem dados para o período.</p>';const teamRanking=Object.entries(grouped).map(([name,arr])=>({name,received:arr.length,done:arr.filter(x=>classify(x)==='retorno').length,baixadas:arr.filter(x=>x.no_periodo&&integration(x)==='baixada').length,rejeitadas:arr.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length,duplicadas:arr.filter(x=>x.no_periodo&&integration(x)==='duplicada').length})).sort((a,b)=>b.done-a.done||((b.received?b.done/b.received:0)-(a.received?a.done/a.received:0))||b.received-a.received||a.name.localeCompare(b.name,'pt-BR'));
-$('equipes').innerHTML=teamRanking.length?`<table class="team-ranking"><thead><tr><th>#</th><th>Equipe</th><th style="text-align:center">Recebidas</th><th style="text-align:center">Retornadas</th><th style="text-align:center">Executadas</th><th style="text-align:center">Rejeitadas</th><th style="text-align:center">Duplicadas</th><th style="text-align:center">% Retorno</th><th>Progresso</th></tr></thead><tbody>${teamRanking.map((t,i)=>{const pct=t.received?Math.round(100*t.done/t.received):0;return `<tr><td><span class="rank ${i<3?'top':''}">${i+1}</span></td><td><div class="name" title="${esc(t.name)}">${esc(t.name)}</div></td><td class="number">${t.received}</td><td class="number">${t.done}</td><td class="number">${t.baixadas}</td><td class="number">${t.rejeitadas}</td><td class="number">${t.duplicadas}</td><td class="number pct">${pct}%</td><td class="progress"><div class="mini-bar"><i class="${pct===100?'complete':''}" style="width:${pct}%"></i></div></td></tr>`}).join('')}</tbody></table>`:'<p class="empty">Nenhuma SS com equipe vinculada nos dados consultados.</p>';const movimentosElegiveis=filtered.filter(x=>movementTab==='programadas'?isProgramada(x):classify(x)==='retorno');
-let sorted=[...movimentosElegiveis].sort((a,b)=>(iso(b.data)||'').localeCompare(iso(a.data)||''));$('movimentos').innerHTML=table(sorted.slice(0,80),[['Data',x=>esc(x.data)],['SS',x=>esc(x.ss)],['Equipe',x=>esc(x.equipe)],['Município',x=>esc(x.cidade)],['Macro da SS',x=>esc(x.macro||x.servico||x.macro_servico||x.descricao_macro||'Não informado')],['Duração',x=>esc(x.duracao||'—')],['Situação campo',x=>`<span class="status ${classify(x)}">${esc(x.situacao_campo||label[classify(x)])}</span>`],['Integração',x=>`<span class="status ${integration(x)}">${integrationLabel[integration(x)]}</span>`]]);renderExecution();drawMap();scheduleGpsRefresh()}
+function render(){
+ filtered=base.filter(passesSharedFilters);
+ // Fonte unica dos tres KPIs e de todos os graficos operacionais.
+ const situacoes=new Map(filtered.map(x=>[x.tsk_id,classify(x)]));
+ const situacaoDe=x=>situacoes.get(x.tsk_id)||classify(x);
+ const operacionais=filtered.filter(x=>['retorno','campo','programada'].includes(situacaoDe(x)));
+ const contagem={retorno:0,campo:0,programada:0};
+ for(const x of operacionais)contagem[situacaoDe(x)]++;
+ const cpTotais={retornadas:contagem.retorno,campo:contagem.campo,programadas:contagem.programada};
+ const cpIntegracao={
+  baixadas:filtered.filter(x=>x.no_periodo&&integration(x)==='baixada').length,
+  rejeitadas:filtered.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length,
+  duplicadas:filtered.filter(x=>x.no_periodo&&integration(x)==='duplicada').length
+ };
+ // Ordem solicitada: Retornadas, Notas em campo, Programadas.
+ const k=[
+  ['Retornadas de campo',cpTotais.retornadas],
+  ['Notas em campo',cpTotais.campo],
+  ['Programadas',cpTotais.programadas],
+  ['Baixadas',cpIntegracao.baixadas],
+  ['Rejeitadas',cpIntegracao.rejeitadas],
+  ['Duplicadas',cpIntegracao.duplicadas]
+ ];
+ $('kpis').innerHTML=k.map(([nome,numero])=>`<div class="kpi"><span>${nome}${cpHistoricoPendente?' · atualizando':''}</span><strong>${numero}</strong></div>`).join('');
+ const audit=$('cp-auditoria-ativas');
+ if(audit){
+  if(snapshotAtivasOk&&snapshotAtivasInfo){
+   const st=snapshotAtivasInfo,parcial=!!st.truncado;
+   audit.textContent=`Situação do período (cards): ${cpTotais.retornadas} retornadas, ${cpTotais.campo} notas em campo, ${cpTotais.programadas} programadas. Consulta de situação atual: amostra de ${st.stats?.tarefas??'—'} registros${parcial?' — PARCIAL (não é todo o estoque uMov)':''}. Data/hora de início real obrigatória para Notas em campo. GPS somente quando registrado.`;
+   audit.style.color=parcial?'#edab45':'';
+  }else{
+   audit.textContent=`Situação atual do uMov indisponível: ${snapshotAtivasErro||'consulta não confirmada'}. Dados do histórico podem ser parciais ou antigos.`;
+   audit.style.color='#f04452';
+  }
+ }
+ document.querySelectorAll('.cp-period-label').forEach(el=>el.textContent=`(${($('di').value||'—').split('-').reverse().join('/')} a ${($('df').value||'—').split('-').reverse().join('/')})`);
+ // Mesmo total numerico dos 3 cards superiores, inclusive com filtros ativos.
+ const chartTotal=operacionais.length;
+ const pieValues=[cpTotais.retornadas,cpTotais.campo,cpTotais.programadas];
+ const colors=['#1479d1','#00ad86','#efac23'];
+ let acumulado=0;
+ const segmentos=pieValues.map((value,i)=>{
+  const inicio=acumulado;acumulado+=chartTotal?value*100/chartTotal:0;
+  return `${colors[i]} ${inicio}% ${acumulado}%`;
+ });
+ $('chart-situacao').innerHTML=`<div class="donut-wrap"><div class="donut" style="background:conic-gradient(${chartTotal?segmentos.join(','):'#e0e9f3 0% 100%'})"><div class="donut-hole">${chartTotal}</div></div><div class="legend">
+ <div><b style="background:${colors[0]}"></b>Retornadas: ${cpTotais.retornadas}</div>
+ <div><b style="background:${colors[1]}"></b>Notas em campo: ${cpTotais.campo}</div>
+ <div><b style="background:${colors[2]}"></b>Programadas: ${cpTotais.programadas}</div>
+ <div class="muted" style="font-size:10px;line-height:1.5">Mesmas SS dos cartões; integração: ${cpIntegracao.baixadas} baixadas, ${cpIntegracao.rejeitadas} rejeitadas e ${cpIntegracao.duplicadas} duplicadas (indicadores independentes).</div></div></div>`;
+ // Municipios sao agregados APENAS com as mesmas SS dos cards.
+ const porCidade=new Map();
+ for(const x of operacionais){
+  const nome=String(x.cidade||'Não informado').trim()||'Não informado';
+  if(!porCidade.has(nome))porCidade.set(nome,{nome,total:0,retorno:0,campo:0,programada:0});
+  const v=porCidade.get(nome);v.total++;v[situacaoDe(x)]++;
+ }
+ const ordenadas=[...porCidade.values()].sort((a,b)=>b.total-a.total||a.nome.localeCompare(b.nome,'pt-BR'));
+ const exibidas=ordenadas.slice(0,7);
+ if(ordenadas.length>7){
+  const outras={nome:'Outros',total:0,retorno:0,campo:0,programada:0};
+  for(const c of ordenadas.slice(7))for(const k of ['total','retorno','campo','programada'])outras[k]+=c[k];
+  exibidas.push(outras);
+ }
+ const maximo=Math.max(1,...exibidas.map(x=>x.total));
+ $('chart-cidades').innerHTML=exibidas.length?
+  `<div class="city-bars">${exibidas.map(c=>{
+    const altura=Math.max(3,100*c.total/maximo);
+    const shares=[['retorno','ret'],['campo','campo'],['programada','prog']].filter(([k])=>c[k]>0).map(([k,classe])=>`<i class="${classe}" style="height:${c[k]*100/c.total}%" title="${esc(k)}: ${c[k]}"></i>`).join('');
+    return `<div class="city-col"><strong>${c.total}</strong><div class="city-stack" style="height:${altura}%" title="${esc(c.nome)}: ${c.retorno} retornadas, ${c.campo} em campo, ${c.programada} programadas">${shares}</div><span title="${esc(c.nome)}">${esc(c.nome)}</span></div>`;
+   }).join('')}</div><div class="city-legend"><span style="--city-color:#1479d1">Retornadas: ${cpTotais.retornadas}</span><span style="--city-color:#00ad86">Notas em campo: ${cpTotais.campo}</span><span style="--city-color:#efac23">Programadas: ${cpTotais.programadas}</span></div>`
+  :'<p class="empty">Nenhuma SS nas situações selecionadas.</p>';
+ // Equipes usam o mesmo conjunto operacional, com a mesma situacao de cada SS.
+ const grouped=new Map();
+ for(const x of operacionais){
+  if(!hasTeam(x))continue;
+  const nome=String(x.equipe).trim();
+  if(!grouped.has(nome))grouped.set(nome,[]);
+  grouped.get(nome).push(x);
+ }
+ const ranking=[...grouped.entries()].map(([nome,arr])=>({
+  nome,received:arr.length,done:arr.filter(x=>situacaoDe(x)==='retorno').length,
+  campo:arr.filter(x=>situacaoDe(x)==='campo').length,
+  baixadas:arr.filter(x=>x.no_periodo&&integration(x)==='baixada').length,
+  rejeitadas:arr.filter(x=>x.no_periodo&&integration(x)==='rejeitada').length,
+  duplicadas:arr.filter(x=>x.no_periodo&&integration(x)==='duplicada').length
+ })).sort((a,b)=>b.done-a.done||b.received-a.received||a.nome.localeCompare(b.nome,'pt-BR'));
+ $('equipes').innerHTML=ranking.length?
+  `<table class="team-ranking"><thead><tr><th>#</th><th>Equipe</th><th style="text-align:center">Recebidas</th><th style="text-align:center">Retornadas</th><th style="text-align:center">Notas em campo</th><th style="text-align:center">Baixadas</th><th style="text-align:center">Rejeitadas</th><th style="text-align:center">Duplicadas</th><th style="text-align:center">% Retorno</th><th>Progresso</th></tr></thead><tbody>${ranking.map((t,i)=>{
+    const pct=t.received?Math.round(100*t.done/t.received):0;
+    return `<tr><td><span class="rank ${i<3?'top':''}">${i+1}</span></td><td><div class="name" title="${esc(t.nome)}">${esc(t.nome)}</div></td><td class="number">${t.received}</td><td class="number">${t.done}</td><td class="number">${t.campo}</td><td class="number">${t.baixadas}</td><td class="number">${t.rejeitadas}</td><td class="number">${t.duplicadas}</td><td class="number pct">${pct}%</td><td class="progress"><div class="mini-bar"><i class="${pct===100?'complete':''}" style="width:${pct}%"></i></div></td></tr>`;
+   }).join('')}</tbody></table>`:'<p class="empty">Nenhuma SS com equipe vinculada nas situações dos cartões.</p>';
+ const movimentos=operacionais.filter(x=>movementTab==='programadas'?situacaoDe(x)==='programada':situacaoDe(x)==='retorno');
+ const sorted=[...movimentos].sort((a,b)=>(iso(b.data)||'').localeCompare(iso(a.data)||''));
+ $('movimentos').innerHTML=table(sorted.slice(0,80),[
+  ['Data',x=>esc(x.data)],['SS',x=>esc(x.ss)],['Equipe',x=>esc(x.equipe)],
+  ['Município',x=>esc(x.cidade)],['Macro da SS',x=>esc(cpMacro(x))],
+  ['Duração',x=>esc(x.duracao||'—')],
+  ['Situação campo',x=>`<span class="status ${situacaoDe(x)}">${esc(x.situacao_campo||label[situacaoDe(x)])}</span>`],
+  ['Integração',x=>`<span class="status ${integration(x)}">${integrationLabel[integration(x)]}</span>`]
+ ]);
+ renderExecution();drawMap();scheduleGpsRefresh();
+}
 
 // Excel real (.xlsx), exportando todas as movimentacoes que atendem aos filtros.
 // A API consulta os tokens somente no servidor e insere links reais na coluna SS.
@@ -336,7 +457,7 @@ async function exportarMovimentacoesExcel(){
    Number(x.tsk_id),String(x.ss||''),
    String((movementTab==='programadas'?(x.programacao||x.data):(x.fim||x.data))||''),
    String(x.equipe||''),String(x.cidade||''),String(x.bairro||''),String(x.rua||''),
-   String(x.macro||x.macro_servico||x.servico||''),String(x.duracao||''),
+   String(cpMacro(x)==='Não informado no uMov'?'':cpMacro(x)),String(x.duracao||''),
    String(x.situacao_campo||''),String(integrationLabel[integration(x)]||integration(x))
   ])};
   if(payload.rows.some(x=>!Number.isSafeInteger(x[0])||x[0]<=0))throw Error('Há SS sem ID de tarefa. Atualize a consulta antes de exportar.');
@@ -406,7 +527,7 @@ async function enrichGps(data){
 }
 // Cache privado do navegador: IndexedDB, sem criar contas nem enviar chaves ao cliente.
 // Mantem um snapshot por intervalo, permitindo abrir /cp quase imediatamente apos a primeira consulta.
-const CP_IDB_NAME='global-ss-central-v10';
+const CP_IDB_NAME='global-ss-central-v19';
 const CP_IDB_STORE='periodos';
 function cpOpenDb(){
  return new Promise((resolve,reject)=>{
@@ -440,6 +561,20 @@ async function cpSaveSnapshot(key,data){
  }catch(e){console.warn('Nao foi possivel armazenar cache local:',e?.message||e)}
 }
 function cpCachedClock(t){return new Date(t).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}
+// CP_V19_PRESERVAR_MACRO: dados atuais podem conter descricao vazia.
+// Nao descartar a macro oficial nem o endereco que ja vieram do historico.
+function cpMergeRows(historico,atual){
+ const merged={...(historico||{}),...(atual||{})};
+ for(const key of ['macro','servico','cidade','bairro','rua','equipe','localizacao','geoposicao','referencia_localizacao']){
+  if(merged[key]===null||merged[key]===undefined||String(merged[key]).trim()===''){
+   const anterior=historico?.[key];
+   if(anterior!==undefined&&anterior!==null&&String(anterior).trim())merged[key]=anterior;
+  }
+ }
+ if(!merged.macro&&merged.servico)merged.macro=merged.servico;
+ if(!merged.servico&&merged.macro)merged.servico=merged.macro;
+ return merged;
+}
 let cpLoadVersion=0,cpHistoricoPendente=false,cpVisibleKey='';
 const cpStaleRefreshOnce=new Set();
 async function load(force=false){
@@ -474,7 +609,7 @@ async function load(force=false){
   const acumulado=new Map(progress.rows.map(x=>[String(x.tsk_id),{...x,no_periodo:true}]));
   for(const x of base.filter(x=>x.snapshot_ativa)){
    const id=String(x.tsk_id||'');if(!id)continue;
-   acumulado.set(id,{...(acumulado.get(id)||{}),...x,snapshot_ativa:true});
+   acumulado.set(id,cpMergeRows(acumulado.get(id)||{}, {...x,snapshot_ativa:true}));
   }
   base=[...acumulado.values()];cpVisibleKey=key;cpNetworkShown=true;
   populate('cidade','cidade');populate('equipe','equipe');render();
@@ -512,7 +647,7 @@ async function load(force=false){
      for(const x of atual.registros){
       const id=String(x.tsk_id||'');if(!id)continue;
       const anterior=map.get(id)||{};
-      map.set(id,{...anterior,...x,snapshot_ativa:true});
+      map.set(id,cpMergeRows(anterior,{...x,snapshot_ativa:true}));
      }
     }else snapshotAtivasErro='Formato inesperado na consulta de situações atuais';
    }else snapshotAtivasErro=`HTTP ${ativaResp.status}`;
