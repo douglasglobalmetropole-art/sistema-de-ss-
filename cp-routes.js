@@ -449,8 +449,8 @@ WITH recentes AS MATERIALIZED (
   FROM recentes r
   JOIN u45468.dbout_task d ON d.tsk_id=r.tsk_id
   WHERE UPPER(BTRIM(d.tsk_situation))='EM CAMPO'
-     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%CAMPO%'
-     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%CAMPO%'
+     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'PENDENTE%'
+     OR UPPER(BTRIM(d.tsk_situation)) LIKE 'AGUARDANDO%'
 )
 SELECT d.tsk_id,d.tsk_situation AS situacao_campo,
   d.tsk_scheduleinitialdatehour AS programacao_real,
@@ -504,11 +504,15 @@ ORDER BY d.tsk_id DESC
       snapshot_ativa:true
     };
   });
-  const comEquipe=x=>!!String(x.equipe||'').trim();
+  const comEquipe=x=>!!String(x.equipe||'').trim()&&!['SEM EQUIPE','NAO INFORMADO','NÃO INFORMADO','NULL','UNDEFINED'].includes(norm(x.equipe));
+  const semInicioSemFim=x=>!x.inicio_real_iso&&!x.fim_real_iso;
+  const statusParaProgramar=x=>{const v=norm(x.situacao_campo);return v.includes('EM CAMPO')||v.includes('PENDENTE')||v.includes('AGUARDANDO')};
   const stats={
     total_status_em_campo:registros.filter(x=>norm(x.situacao_campo)==='EM CAMPO').length,
     total_status_pendente_campo:registros.filter(x=>norm(x.situacao_campo).includes('PENDENTE')).length,
     com_inicio_sem_fim:registros.filter(x=>x.inicio_real_iso&&!x.fim_real_iso).length,
+    total_em_campo:registros.filter(x=>x.inicio_real_iso&&!x.fim_real_iso).length,
+    total_programadas:registros.filter(x=>semInicioSemFim(x)&&comEquipe(x)&&statusParaProgramar(x)).length,
     sem_inicio_com_equipe:registros.filter(x=>!x.inicio_real_iso&&!x.fim_real_iso&&comEquipe(x)).length,
     sem_inicio_sem_equipe:registros.filter(x=>!x.inicio_real_iso&&!x.fim_real_iso&&!comEquipe(x)).length,
     com_fim:registros.filter(x=>!!x.fim_real_iso).length,
