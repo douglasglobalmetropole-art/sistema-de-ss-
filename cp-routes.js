@@ -152,7 +152,7 @@ async function buscarCamposTarefa(ids){
 app.get('/api/cp/veiculos',async(req,res)=>{try{res.json(await lerVeiculos())}catch(e){res.status(502).json({ok:false,error:'Consulta de frotas indisponivel.'})}});
 
 app.get('/api/cp/health',async(req,res)=>{
- try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V16 progressiva'})}
+ try{const r=await pool.query('SELECT current_database() db,now() agora');res.json({ok:true,conectado:true,cache_habilitado:cpCache.enabled,versao_cp:'V18 situacao-macro-gps'})}
  catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
@@ -289,7 +289,7 @@ WITH candidatos AS MATERIALIZED (
   FROM pagina_ids t
   LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
   LEFT JOIN u45468.local l ON l.loc_id=t.loc_id
-  LEFT JOIN u45468.agent a ON a.age_id=t.age_id
+  LEFT JOIN u45468.agent a ON a.age_id=COALESCE(NULLIF(d.age_id,0),t.age_id)
   LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
 )
 SELECT p.*,
@@ -350,7 +350,7 @@ ORDER BY p.data_referencia ASC NULLS LAST,p.tsk_id ASC
        rua:[s.logradouro_umov||x.logradouro,s.numero_umov||x.numero].filter(Boolean).join(', '),
        localizacao:s.localizacao||'', referencia_localizacao:s.referencia_localizacao||'', geoposicao:s.geoposicao||'',
 
-       servico:x.servico||'',
+       servico:x.servico||'',macro:x.servico||'',
        situacao_campo:tx.situacao_campo||'',
        tss_id:tx.tss_id||'',
        tags:tx.tags||'',
@@ -492,7 +492,7 @@ ORDER BY d.tsk_id DESC
       equipe:x.equipe||'',cidade:s.cidade_umov||s.cidade_sistema||x.cidade||'',
       bairro:s.bairro_umov||s.bairro_sistema||x.bairro||'',
       rua:[s.logradouro_umov||x.logradouro,s.numero_umov||x.numero].filter(Boolean).join(', '),
-      localizacao:s.localizacao||'',geoposicao:s.geoposicao||'',servico:x.servico||'',
+      localizacao:s.localizacao||'',geoposicao:s.geoposicao||'',servico:x.servico||'',macro:x.servico||'',
       situacao_campo:x.situacao_campo||'',
       status_integracao:x.status_integracao||'',status_siscom:s.situacao||'',
       situacao:s.situacao||'',
@@ -552,21 +552,32 @@ app.post('/api/cp/ss-gps',async(req,res)=>{
  if(hit&&Date.now()-hit.ts<300000)return res.json(hit.rows);
  try{
   const result=await pool.query({text:`
-   SELECT h.tsk_id, g.geo_latitude AS latitude, g.geo_longitude AS longitude,
-          g.geo_collecteddatehour AS horario_gps, h.hty_id
-   FROM u45468.history h
+   /* CP_V18_GPS_REAL: ultimos eventos com geoposicao registrada; nao sao rastreamento ao vivo */
+   SELECT req.tsk_id, point.latitude, point.longitude, point.horario_gps, point.hty_id
+   FROM unnest($1::bigint[]) AS req(tsk_id)
    JOIN LATERAL (
-     SELECT geo_latitude,geo_longitude,geo_collecteddatehour
-     FROM u45468.geocoordinate g
-     WHERE g.hty_id=h.hty_id
-       AND g.geo_latitude BETWEEN -22 AND -18
-       AND g.geo_longitude BETWEEN -42 AND -39
-     ORDER BY g.geo_collecteddatehour ASC LIMIT 1
-   ) g ON TRUE
-   WHERE h.tsk_id=ANY($1::bigint[])
-   ORDER BY h.tsk_id,h.hty_initialdatehour DESC NULLS LAST
+     SELECT g.geo_latitude AS latitude, g.geo_longitude AS longitude,
+            g.geo_collecteddatehour AS horario_gps, h.hty_id
+     FROM (
+       SELECT h.hty_id, h.hty_initialdatehour
+       FROM u45468.history h
+       WHERE h.tsk_id=req.tsk_id
+       ORDER BY h.hty_initialdatehour DESC NULLS LAST
+       LIMIT 50
+     ) h
+     JOIN LATERAL (
+       SELECT geo_latitude,geo_longitude,geo_collecteddatehour
+       FROM u45468.geocoordinate g
+       WHERE g.hty_id=h.hty_id
+         AND g.geo_latitude BETWEEN -22 AND -18
+         AND g.geo_longitude BETWEEN -42 AND -39
+       ORDER BY g.geo_collecteddatehour DESC NULLS LAST LIMIT 1
+     ) g ON TRUE
+     ORDER BY g.geo_collecteddatehour DESC NULLS LAST
+     LIMIT 1
+   ) point ON TRUE
   `,values:[ids],query_timeout:6500});
-  const seen=new Set();const rows=result.rows.filter(r=>{const k=String(r.tsk_id);if(seen.has(k))return false;seen.add(k);return true});
+  const rows=result.rows;
   if(GPS_CACHE.size>100)GPS_CACHE.clear();GPS_CACHE.set(key,{ts:Date.now(),rows});
   res.json(rows);
  }catch(e){console.error('GPS uMov:',e.message);res.status(503).json({error:'GPS indisponivel; consulta principal preservada.'})}
