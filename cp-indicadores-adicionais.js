@@ -85,81 +85,70 @@ module.exports = function registrarIndicadoresAdicionais(app, pool, { sbRequest 
     }
   });
 
+  // V29H: todas as equipes do cadastro do uMov neste schema, sem corte
+  // pelo cadastro de Frotas nem pela data selecionada no painel.
   app.get('/api/cp/equipes-sem-ss', async (_req, res) => {
-    const existente = getCache('equipes');
-    if (existente) return res.json(existente);
+    const existente = getCache('equipes-v29h-completo');
+    if (existente) return res.set('Cache-Control', 'no-store').json(existente);
     try {
-      // Cadastro de equipes com VEICULO ATIVO no Supabase (nao equivale a escala/presenca em servico).
-      const frota = await sbRequest('frotas_veiculos?select=status,equipe_umov&limit=1000', {signal: AbortSignal.timeout(5000)});
-      if (!Array.isArray(frota) || !frota.length) {
-        return res.json({ok: false, error: 'Cadastro de frota sem equipes disponiveis para conferencia.'});
-      }
-      const equipesFrota = new Map();
-      for (const v of frota) {
-        if (!ehAtivo(v.status)) continue;
-        for (const raw of String(v.equipe_umov || '').split('|')) {
-          const nome = raw.trim();
-          if (!nome) continue;
-          const codigo = codigoEquipe(nome);
-          const key = codigo ? '#' + codigo : normalizar(nome);
-          if (!equipesFrota.has(key)) equipesFrota.set(key, {nome, codigo});
-        }
-      }
-      if (!equipesFrota.size) return res.json({ok: false, error: 'Nenhuma equipe com veiculo ativo cadastrada.'});
-      const agentes = await pool.query({
-        text: `SELECT age_id, age_name FROM u45468.agent
-               WHERE age_name IS NOT NULL AND TRIM(age_name) <> ''
-               ORDER BY age_id DESC LIMIT 10000`,
-        query_timeout: 4500
+      // Uma unica consulta: universo integral de age_id + situacao atual de SS.
+      // Nao aplicamos LIMIT nem filtro de datas. Cada equipe sem registro de
+      // tarefa atual nas situacoes abaixo fica identificada como sem SS.
+      const resultado = await pool.query({
+        text: `SELECT a.age_id, a.age_name,
+                 (atribuida.age_id IS NOT NULL) AS possui_ss
+               FROM u45468.agent a
+               LEFT JOIN (
+                 SELECT DISTINCT age_id
+                 FROM u45468.dbout_task
+                 WHERE age_id IS NOT NULL
+                   AND tsk_situation IN ('Em Campo', 'Pendente de Envio para Campo')
+                   AND tsk_realfinaldatehour IS NULL
+               ) atribuida ON atribuida.age_id = a.age_id
+               WHERE a.age_name IS NOT NULL
+                 AND BTRIM(a.age_name) <> ''
+               ORDER BY a.age_name, a.age_id`,
+        query_timeout: 14500
       });
-      const porCodigo = new Map();
-      const porNome = new Map();
-      for (const a of agentes.rows) {
-        const name = normalizar(a.age_name);
-        const codigo = codigoEquipe(name);
-        if (codigo) {
-          if (!porCodigo.has(codigo)) porCodigo.set(codigo, []);
-          porCodigo.get(codigo).push(a);
+      const grupos = new Map();
+      for (const a of resultado.rows) {
+        const nome = String(a.age_name || '').trim();
+        if (!nome) continue;
+        const codigo = codigoEquipe(nome);
+        // Linhas historicas com mesmo numero de equipe formam uma unica equipe.
+        const chave = codigo ? `codigo:${codigo}` : `nome:${normalizar(nome)}`;
+        let g = grupos.get(chave);
+        if (!g) {
+          g = {nome, codigo, com_ss: false, ids: new Set()};
+          grupos.set(chave, g);
         }
-        if (!porNome.has(name)) porNome.set(name, []);
-        porNome.get(name).push(a);
+        // Se qualquer age_id da mesma equipe tiver SS aberta, NAO marcar sem SS.
+        g.com_ss = g.com_ss || a.possui_ss === true || a.possui_ss === 't';
+        g.ids.add(String(a.age_id));
       }
-      const verificadas = [], naoCorrespondentes = [];
-      for (const grupo of equipesFrota.values()) {
-        const matches = grupo.codigo ? (porCodigo.get(grupo.codigo) || []) : (porNome.get(normalizar(grupo.nome)) || []);
-        if (!matches.length) {naoCorrespondentes.push(grupo.nome); continue;}
-        verificadas.push({...grupo, agentIds: matches.map(x => Number(x.age_id)).filter(Number.isSafeInteger)});
-      }
-      const ids = [...new Set(verificadas.flatMap(x => x.agentIds))];
-      if (!ids.length) return res.json({ok: false, error: 'Nenhuma equipe do cadastro de frota corresponde a equipe do uMov.'});
-      // Uma equipe nao esta sem SS se QUALQUER agente vinculado tem SS ativa,
-      // independentemente da data de programacao ou filtro atual da tela.
-      const atribuidas = await pool.query({
-        text: `SELECT DISTINCT age_id FROM u45468.dbout_task
-               WHERE age_id = ANY($1::bigint[])
-                 AND tsk_situation IN ('Em Campo','Pendente de Envio para Campo')
-                 AND tsk_realfinaldatehour IS NULL`,
-        values: [ids], query_timeout: 10000
-      });
-      const comSS = new Set(atribuidas.rows.map(x => String(x.age_id)));
-      const semSS = verificadas.filter(x => !x.agentIds.some(id => comSS.has(String(id))));
-      const parcial = frota.length >= 1000 || agentes.rows.length >= 10000 || naoCorrespondentes.length > 0;
+      const ordenar = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR', {numeric:true});
+      const equipes = [...grupos.values()].map(g => ({
+        nome:g.nome, codigo:g.codigo, com_ss:g.com_ss
+      })).sort(ordenar);
+      const semSS = equipes.filter(g => !g.com_ss);
       const dados = {
-        ok: true, parcial,
-        total_cadastradas: equipesFrota.size,
-        total_verificadas: verificadas.length,
-        nao_identificadas: naoCorrespondentes.length,
+        ok: true, parcial: false,
+        total_cadastradas: equipes.length,
+        total_verificadas: equipes.length,
         total_sem_ss: semSS.length,
-        equipes_sem_ss: semSS.map(x => ({nome: x.nome, codigo: x.codigo})).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR')),
-        fonte: 'Equipes vinculadas a veiculos ativos no cadastro de Frotas; SS atuais no uMov',
-        observacao: 'Sem SS atribuida nao garante presenca na escala nem disponibilidade fisica.'
+        total_com_ss: equipes.length - semSS.length,
+        nao_identificadas: 0,
+        equipes_sem_ss: semSS,
+        equipes_todas: equipes,
+        fonte: 'u45468.agent (todos os cadastrados no schema uMov) + dbout_task (atribuicao atual)',
+        observacao: 'Sem SS atual nao comprova escala, presenca ou disponibilidade. O cadastro pode conter agentes inativos.'
       };
-      saveCache('equipes', dados);
-      res.set('Cache-Control', 'no-store').json(dados);
+      saveCache('equipes-v29h-completo', dados);
+      return res.set('Cache-Control', 'no-store').json(dados);
     } catch (e) {
-      console.warn('CP V29D - equipes sem SS:', e.message);
-      res.status(/timeout|timed out|canceling statement/i.test(String(e.message)) ? 504 : 500)
-        .json({ok: false, error: 'Consulta de equipes incompleta. Sem numero confirmado.'});
+      console.warn('CP V29H - cadastro integral equipes:', e.message);
+      return res.status(/timeout|timed out|canceling statement/i.test(String(e.message)) ? 504 : 500)
+        .json({ok: false, error: 'Nao foi possivel comparar todas as equipes cadastradas com as SS atuais do uMov.'});
     }
   });
 };
