@@ -4,6 +4,7 @@ const path=require('node:path');
 // Modulo da Central de Operacoes. Reaproveita a instancia e o pool do GLOBAL SS.
 // Backend adaptado do index.js original da Central; nenhum servidor ou pool duplicado.
 module.exports=function registrarCentralOperacoes(app,pool){
+  require('./cp-diagnostico-inicio')(app,pool); // CP_V28_DIAGNOSTICO_TEMPORARIO
   require('./cp-excel')(app,pool); // Exportacao Excel com links oficiais do uMov
   // CP_V24_MAPA_RASTREIO - fonte de rastreio protegida e independente das SS.
   require('./cp-tracking').registrar(app);
