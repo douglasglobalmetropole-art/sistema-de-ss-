@@ -724,16 +724,26 @@ function render(){
 
 // Excel real (.xlsx), exportando todas as movimentacoes que atendem aos filtros.
 // A API consulta os tokens somente no servidor e insere links reais na coluna SS.
+// CP_V26_EXPORT_SS_LINK_E_FIM_REAL
+function cpV26HoraReal(valor){
+ const raw=String(valor||'').trim();
+ if(!raw)return '';
+ if(/^\d{4}-\d{2}-\d{2}$/.test(raw))return raw.split('-').reverse().join('/')+' (hora nao registrada)';
+ const d=new Date(raw);
+ if(!Number.isFinite(d.getTime()))return '';
+ return new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(d).replace(',','');
+}
 async function exportarMovimentacoesExcel(){
  const btn=$('cp-export-excel');
- const linhas=(movementTab==='programadas'?cpProgramadasFiltradas():filtered.filter(x=>classify(x)==='retorno')).sort((a,b)=>(iso(b.data)||'').localeCompare(iso(a.data)||''));
+ const aba=movementTab;
+ const linhas=(aba==='programadas'?cpProgramadasFiltradas():filtered.filter(x=>classify(x)==='retorno')).sort((a,b)=>{const ref=x=>aba==='programadas'?(x.programacao_iso||x.programacao||''):(x.fim_real_iso||x.fim||'');return String(ref(b)).localeCompare(String(ref(a)));});
  if(!linhas.length){alert('Nenhuma SS na aba selecionada com os filtros atuais.');return;}
  if(linhas.length>10000){alert('Há mais de 10.000 SS. Reduza o período ou os filtros para exportar sem cortes.');return;}
  const prev=btn.textContent;btn.disabled=true;btn.textContent='Preparando Excel...';
  try{
-  const payload={tab:movementTab,periodo:{inicio:$('di').value,fim:$('df').value},rows:linhas.map(x=>[
+  const payload={tab:aba,periodo:{inicio:$('di').value,fim:$('df').value},rows:linhas.map(x=>[
    Number(x.tsk_id),String(x.ss||''),
-   String((movementTab==='programadas'?(x.programacao||x.data):(x.fim||x.data))||''),
+   String(aba==='programadas'?(x.programacao||cpV26HoraReal(x.programacao_iso)):(x.fim||cpV26HoraReal(x.fim_real_iso))||''),
    String(x.equipe||''),String(x.cidade||''),String(x.bairro||''),String(x.rua||''),
    String(cpMacro(x)==='Não informado no uMov'?'':cpMacro(x)),String(x.duracao||''),
    String(x.situacao_campo||''),String(integrationLabel[integration(x)]||integration(x))
@@ -751,7 +761,7 @@ async function exportarMovimentacoesExcel(){
   const blob=await response.blob();
   if(!blob.size||!String(response.headers.get('Content-Type')||'').includes('spreadsheetml'))throw Error('Servidor não retornou um Excel válido.');
   const url=URL.createObjectURL(blob),a=document.createElement('a');
-  const filename=`CENTRAL_SS_${movementTab.toUpperCase()}_${$('di').value}_${$('df').value}.xlsx`;
+  const filename=`CENTRAL_SS_${aba.toUpperCase()}_${aba==='programadas'?'STATUS_ATUAL':$('di').value+'_'+$('df').value}.xlsx`;
   a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),30000);
  }catch(err){alert('Não foi possível exportar o Excel: '+(err.message||err));}
