@@ -73,7 +73,14 @@ body.global-dark #kpis .kpi:nth-child(3){background:linear-gradient(115deg,#4233
 #chart-cidades .city-legend{font-size:11px;display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
 #chart-cidades .city-legend span:before{content:'';display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:2px;background:var(--city-color)}
 </style>
-<style id="CP_V21_LIMPEZA_TEXTOS">#cp-auditoria-ativas,#rodape{display:none!important}</style></head><body><main><div class="top"><div><h1>GLOBAL METRÓPOLE | Central de Operações</h1><small>Notas em campo | Dados do uMov</small></div><div><span id="indicador" class="muted">Aguardando consulta</span> <a class="cp-back" href="/" title="Voltar ao GLOBAL SS">← GLOBAL SS</a> <button id="reload">↻ Atualizar</button></div></div><div class="filters"><input type="date" id="di" title="Data inicial"><input type="date" id="df" title="Data final"><div class="multi-filter" id="wrap-cidade"><button type="button" class="multi-trigger" id="trigger-cidade" aria-expanded="false">Municípios: Todos ▾</button><div class="multi-menu" id="menu-cidade" hidden></div></div><div class="multi-filter" id="wrap-equipe"><button type="button" class="multi-trigger" id="trigger-equipe" aria-expanded="false">Equipes: Todos ▾</button><div class="multi-menu" id="menu-equipe" hidden></div></div><div class="multi-filter" id="wrap-situacao"><button type="button" class="multi-trigger" id="trigger-situacao" aria-expanded="false">Situação da SS: Todos ▾</button><div class="multi-menu" id="menu-situacao" hidden></div></div><div class="multi-filter" id="wrap-integracao"><button type="button" class="multi-trigger" id="trigger-integracao" aria-expanded="false">Integração: Todos ▾</button><div class="multi-menu" id="menu-integracao" hidden></div></div><input id="busca" placeholder="Pesquisar SS, rua ou serviço"></div><div class="grid" id="kpis"></div><p class="muted" id="cp-auditoria-ativas" style="font-size:12px;margin:8px 2px 3px;line-height:1.6" aria-live="polite">Consultando situacoes atuais da dbout_task...</p><div class="layout"><section class="panel" id="map-panel"><div class="map-toolbar"><h3>Mapa operacional das SS</h3><div class="map-actions"><label>Situação <select id="map-mode"><option value="retorno">Retornadas</option><option value="campo">Notas em campo</option><option value="ambos">Ambas</option></select></label><label>De <input type="date" id="map-date-start"></label><label>Até <input type="date" id="map-date-end"></label><button type="button" id="map-reset-team">Todas as equipes</button><button type="button" id="map-expand" aria-label="Ampliar mapa" aria-pressed="false">⛶ Ampliar mapa</button></div></div><div class="map-workspace"><div class="map" id="map"></div><div class="map-team-sidebar"><strong>Equipes no mapa <span id="map-team-total"></span></strong><div id="map-team-list"></div></div></div><div class="map-status-legend" aria-label="Legenda dos marcadores"><span><i style="background:#15966c"></i> Executada</span><span><i style="background:#dc4b54"></i> Rejeitada</span><span><i style="background:#9461cf"></i> Duplicada</span><span><i style="background:#1976c9"></i> Sem classificação</span><span><i style="background:#8c98a8"></i> Sem coordenadas (não plotadas)</span></div><div class="map-legend" id="map-info" aria-live="polite">Somente coordenadas registradas no uMov são exibidas. SS sem GPS não recebem posição aproximada.</div></section><div class="right-stack"><section class="panel"><h3>Acompanhamento por equipe <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div class="scroll" id="equipes"></div></section><div class="chart-grid"><section class="panel"><h3>Situacao operacional</h3><div id="chart-situacao"></div></section><section class="panel"><h3>SS por municipio <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div id="chart-cidades"></div></section></div></div></div><div class="bottom"><section class="panel"><div class="mov-head"><h3>Últimas movimentações / SS</h3><div class="mov-tabs" role="group" aria-label="Tipo de movimentação"><button type="button" id="tab-programadas" aria-pressed="false">Programadas</button><button type="button" id="tab-retornadas" class="active" aria-pressed="true">Retornadas</button><button type="button" id="cp-export-excel" title="Exportar todas as SS filtradas da aba ativa, com link do relatório original do uMov">⬇ Exportar Excel</button></div></div><div class="scroll" id="movimentos"></div></section><section class="panel"><h3>Notas em campo — iniciadas (data/hora e GPS disponível)</h3><div class="scroll" id="execucao"></div></section></div><p class="muted" id="rodape">Consulta integrada ao uMov pelo GLOBAL SS (/api/cp/ss). Integração classificada pelo status retornado pelo uMov; valores não reconhecidos aparecem como sem classificação.</p></main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+<style id="CP_V24_ESTILO_RASTREIO">
+#map-panel:not(.cp-track-mode) .cp-track-control{display:none!important}
+#map-panel.cp-track-mode .cp-date-filter,#map-panel.cp-track-mode .map-status-legend{display:none!important}
+#map-panel .cp-track-control{font-size:11px!important;max-width:185px;min-width:100px}
+#map-panel #cp-gps-import,#map-panel #cp-gps-refresh{background:#1274c7;color:white;border:1px solid #418cce;border-radius:6px;padding:8px;cursor:pointer}
+#map-panel #cp-gps-key{padding:7px;border-radius:6px;min-width:150px;background:#fff;color:#1d4565;border:1px solid #8099b4}
+body.global-dark #map-panel #cp-gps-key{background:#19374f!important;color:#eff7ff!important}
+</style><style id="CP_V21_LIMPEZA_TEXTOS">#cp-auditoria-ativas,#rodape{display:none!important}</style></head><body><main><div class="top"><div><h1>GLOBAL METRÓPOLE | Central de Operações</h1><small>Notas em campo | Dados do uMov</small></div><div><span id="indicador" class="muted">Aguardando consulta</span> <a class="cp-back" href="/" title="Voltar ao GLOBAL SS">← GLOBAL SS</a> <button id="reload">↻ Atualizar</button></div></div><div class="filters"><input type="date" id="di" title="Data inicial"><input type="date" id="df" title="Data final"><div class="multi-filter" id="wrap-cidade"><button type="button" class="multi-trigger" id="trigger-cidade" aria-expanded="false">Municípios: Todos ▾</button><div class="multi-menu" id="menu-cidade" hidden></div></div><div class="multi-filter" id="wrap-equipe"><button type="button" class="multi-trigger" id="trigger-equipe" aria-expanded="false">Equipes: Todos ▾</button><div class="multi-menu" id="menu-equipe" hidden></div></div><div class="multi-filter" id="wrap-situacao"><button type="button" class="multi-trigger" id="trigger-situacao" aria-expanded="false">Situação da SS: Todos ▾</button><div class="multi-menu" id="menu-situacao" hidden></div></div><div class="multi-filter" id="wrap-integracao"><button type="button" class="multi-trigger" id="trigger-integracao" aria-expanded="false">Integração: Todos ▾</button><div class="multi-menu" id="menu-integracao" hidden></div></div><input id="busca" placeholder="Pesquisar SS, rua ou serviço"></div><div class="grid" id="kpis"></div><p class="muted" id="cp-auditoria-ativas" style="font-size:12px;margin:8px 2px 3px;line-height:1.6" aria-live="polite">Consultando situacoes atuais da dbout_task...</p><div class="layout"><section class="panel" id="map-panel"><div class="map-toolbar"><h3>Mapa operacional das SS</h3><div class="map-actions"><label>Situação <select id="map-mode"><option value="retorno">Finalizadas</option><option value="campo">Iniciadas</option><option value="ambos">Iniciadas e finalizadas</option><option value="rastreamento">Rastreio de equipes (GPS)</option></select></label><label class="cp-date-filter">De <input type="date" id="map-date-start"></label><label class="cp-date-filter">Até <input type="date" id="map-date-end"></label><input type="password" class="cp-track-control" id="cp-gps-key" autocomplete="off" placeholder="Chave do rastreio" title="CP_GPS_VIEW_KEY configurada na Vercel"><button type="button" class="cp-track-control" id="cp-gps-refresh">Atualizar GPS</button><button type="button" class="cp-track-control" id="cp-gps-import">Importar JSON do uMov</button><input type="file" id="cp-gps-file" accept=".json,.txt,application/json,text/plain" hidden><button type="button" id="map-reset-team">Todas as equipes</button><button type="button" id="map-expand" aria-label="Ampliar mapa" aria-pressed="false">⛶ Ampliar mapa</button></div></div><div class="map-workspace"><div class="map" id="map"></div><div class="map-team-sidebar"><strong>Equipes no mapa <span id="map-team-total"></span></strong><div id="map-team-list"></div></div></div><div class="map-status-legend" aria-label="Legenda dos marcadores"><span><i style="background:#15966c"></i> Executada</span><span><i style="background:#dc4b54"></i> Rejeitada</span><span><i style="background:#9461cf"></i> Duplicada</span><span><i style="background:#1976c9"></i> Sem classificação</span><span><i style="background:#8c98a8"></i> Sem coordenadas (não plotadas)</span></div><div class="map-legend" id="map-info" aria-live="polite">Somente coordenadas registradas no uMov são exibidas. SS sem GPS não recebem posição aproximada.</div></section><div class="right-stack"><section class="panel"><h3>Acompanhamento por equipe <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div class="scroll" id="equipes"></div></section><div class="chart-grid"><section class="panel"><h3>Situacao operacional</h3><div id="chart-situacao"></div></section><section class="panel"><h3>SS por municipio <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div id="chart-cidades"></div></section></div></div></div><div class="bottom"><section class="panel"><div class="mov-head"><h3>Últimas movimentações / SS</h3><div class="mov-tabs" role="group" aria-label="Tipo de movimentação"><button type="button" id="tab-programadas" aria-pressed="false">Programadas</button><button type="button" id="tab-retornadas" class="active" aria-pressed="true">Retornadas</button><button type="button" id="cp-export-excel" title="Exportar todas as SS filtradas da aba ativa, com link do relatório original do uMov">⬇ Exportar Excel</button></div></div><div class="scroll" id="movimentos"></div></section><section class="panel"><h3>Notas em campo — iniciadas (data/hora e GPS disponível)</h3><div class="scroll" id="execucao"></div></section></div><p class="muted" id="rodape">Consulta integrada ao uMov pelo GLOBAL SS (/api/cp/ss). Integração classificada pelo status retornado pelo uMov; valores não reconhecidos aparecem como sem classificação.</p></main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let base=[],filtered=[];const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();const iso=d=>{const p=String(d||'').split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:''};// V17: Em campo exige início REAL com data e hora, não apenas situação textual.
 const hasStart=x=>{
  const raw=String(x.inicio_real_iso||'').trim();
@@ -162,7 +169,8 @@ function passesSharedFilters(x){
         (!q||norm([x.ss,x.rua,x.bairro,x.servico,x.equipe].join(' ')).includes(q));
 }
 function mapEligible(x,ignoreTeam=false){
- const status=classify(x);
+ if(mapMode==='rastreamento')return false;
+ const status=cpMapStatusAtual(x);
  if(mapMode==='retorno'&&status!=='retorno')return false;
  if(mapMode==='campo'&&status!=='campo')return false;
  if(mapMode==='ambos'&&status!=='retorno'&&status!=='campo')return false;
@@ -241,7 +249,14 @@ async function fetchAllCpRows(di,df,force=false,onProgress=null){
  try{return await promise}finally{cpPeriodPending.delete(key)}
 }
 function mapSource(){
- if(!mapDateStart&&!mapDateEnd)return filtered;
+ if(!mapDateStart&&!mapDateEnd){
+  const pos=new Map(filtered.filter(x=>x.tsk_id).map(x=>[String(x.tsk_id),x]));
+  if(mapMode==='campo'||mapMode==='ambos')for(const x of cpCampoStatusFiltradas()){
+   const id=String(x.tsk_id);if(!id)continue;
+   pos.set(id,{...(pos.get(id)||{}),...x,cp_status_execucao:true});
+  }
+  return [...pos.values()];
+ }
  if(!mapRecords)return [];
  // Mapas por data usam consulta própria, sem depender do intervalo dos KPIs.
  // Somente tarefas ativas com início no intervalo entram como Em Campo.
@@ -250,7 +265,11 @@ function mapSource(){
   if(!x.snapshot_ativa||classify(x)!=='campo')continue;
   const id=String(x.tsk_id||'');if(id&&!byId.has(id))byId.set(id,x);
  }
- return [...byId.values()].filter(passesSharedFilters);
+ if(mapMode==='campo'||mapMode==='ambos')for(const x of cpCampoStatusFiltradas()){
+   const id=String(x.tsk_id);if(!id)continue;
+   byId.set(id,{...(byId.get(id)||{}),...x,cp_status_execucao:true});
+ }
+ return [...byId.values()].filter(x=>x.cp_status_execucao?cpFiltrarStatusAtual(x,'campo'):passesSharedFilters(x));
 }
 async function refreshMapData(){
  const version=++mapLoadVersion;
@@ -268,9 +287,120 @@ async function refreshMapData(){
   drawMap();void enrichGps(mapSource().filter(x=>mapEligible(x,true)));
  }catch(e){if(version!==mapLoadVersion)return;mapLoading=false;mapError=e.message;mapRecords=[];drawMap()}
 }
-function drawMapTeams(items){const el=$('map-team-list');if(!el)return;const groups=new Map();for(const x of items){const name=String(x.equipe||'').trim();if(!name||['sem equipe','nao informado','null','undefined'].includes(norm(name)))continue;const g=groups.get(name)||{total:0,ret:0,campo:0};g.total++;if(classify(x)==='retorno')g.ret++;if(classify(x)==='campo')g.campo++;groups.set(name,g)}const rows=[...groups].sort((a,b)=>b[1].total-a[1].total||a[0].localeCompare(b[0],'pt-BR'));$('map-team-total').textContent=`(${rows.length})`;el.innerHTML=rows.length?rows.map(([name,g])=>`<button type="button" class="map-team-row ${name===mapSelectedTeam?'selected':''}" data-team="${esc(name)}"><span title="${esc(name)}">${esc(name)}</span><b>${g.total}</b><small>${g.ret} retornadas · ${g.campo} em campo</small></button>`).join(''):'<p class="empty">Nenhuma equipe no filtro.</p>';el.querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>{mapSelectedTeam=mapSelectedTeam===b.dataset.team?'':b.dataset.team;drawMap()});}
+function drawMapTeams(items){const el=$('map-team-list');if(!el)return;const groups=new Map();for(const x of items){const name=String(x.equipe||'').trim();if(!name||['sem equipe','nao informado','null','undefined'].includes(norm(name)))continue;const g=groups.get(name)||{total:0,ret:0,campo:0};g.total++;if(classify(x)==='retorno')g.ret++;if(cpMapStatusAtual(x)==='campo')g.campo++;groups.set(name,g)}const rows=[...groups].sort((a,b)=>b[1].total-a[1].total||a[0].localeCompare(b[0],'pt-BR'));$('map-team-total').textContent=`(${rows.length})`;el.innerHTML=rows.length?rows.map(([name,g])=>`<button type="button" class="map-team-row ${name===mapSelectedTeam?'selected':''}" data-team="${esc(name)}"><span title="${esc(name)}">${esc(name)}</span><b>${g.total}</b><small>${g.ret} retornadas · ${g.campo} em campo</small></button>`).join(''):'<p class="empty">Nenhuma equipe no filtro.</p>';el.querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>{mapSelectedTeam=mapSelectedTeam===b.dataset.team?'':b.dataset.team;drawMap()});}
+// CP_V24_MAPA_RASTREIO: rastreio de agentes e marcadores de SS separados.
+// Nao vincular GPS de uma pessoa a inicio de SS sem evento operacional confirmado.
+let cpTrackPositions=[],cpTrackError='',cpTrackSource='',cpTrackUpdatedAt='',cpTrackLoading=false;
+function cpTrackNormalize(raw){
+ const rows=Array.isArray(raw)?raw:Array.isArray(raw?.posicoes)?raw.posicoes:Array.isArray(raw?.data)?raw.data:[];
+ return rows.slice(0,2000).flatMap(x=>{
+  if(!x||typeof x!=='object')return [];
+  let lat=Number(x.latitude),lon=Number(x.longitude);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)){
+   const m=String(x.lastGeopositionSynced||'').match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+   if(!m)return [];lat=Number(m[1]);lon=Number(m[2]);
+  }
+  if(!(lat>=-35&&lat<=6&&lon>=-75&&lon<=-30))return [];
+  const name=String(x.name||'').trim();
+  const at=String(x.at||x.dateHourLastGeoposition||'').trim();
+  if(!name||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(at))return [];
+  return [{id:String(x.id||''),name,latitude:lat,longitude:lon,at}];
+ });
+}
+function cpTrackTime(at){
+ const s=String(at||'');
+ const iso=/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$/.test(s)?s+'-03:00':s;
+ const ms=Date.parse(iso);return Number.isFinite(ms)?ms:null;
+}
+function cpTrackHours(at){const ms=cpTrackTime(at);return ms===null?Infinity:Math.max(0,(Date.now()-ms)/3600000)}
+function cpTrackColor(hours){return hours<=5/60?'#0fbb80':hours<=.5?'#ef8a28':hours<=2?'#eab628':hours<=24?'#7187b1':'#7c8491'}
+function cpTrackAge(hours){return !Number.isFinite(hours)?'horário inválido':hours<=1/60?'agora há pouco':hours<1?'há '+Math.max(1,Math.round(hours*60))+' min':'há '+Math.round(hours)+' h'}
+function cpTrackTeamKey(v){return norm(v).replace(/^equipe\s+/,'').replace(/[^a-z0-9]+/g,' ').trim()}
+function cpTrackTeamSS(name,id){
+ const found=new Map();
+ const nome=cpTrackTeamKey(name);
+ for(const x of [...cpProgramadasStatus,...base]){
+  if(!x||!x.tsk_id||!x.equipe)continue;
+  // Priorizar ID, mas somente quando informado por uma fonte validada; nunca vincular so pelo prefixo numerico.
+  const matches=(x.agent_id&&String(x.agent_id)===String(id)) || (nome&&cpTrackTeamKey(x.equipe)===nome);
+  if(!matches)continue;
+  if(x.cp_programada_status||x.cp_origem_situacao_atual)found.set(String(x.tsk_id),x);
+ }
+ return [...found.values()];
+}
+function cpTrackMapDraw(){
+ if(!leafletMap)return;
+ const el=$('map-panel');if(el)el.classList.toggle('cp-track-mode',mapMode==='rastreamento');
+ mapLayer.clearLayers();
+ const drawn=cpTrackPositions.filter(x=>!mapSelectedTeam||cpTrackTeamKey(x.name)===cpTrackTeamKey(mapSelectedTeam));
+ const bounds=[];
+ for(const x of drawn){
+  const age=cpTrackHours(x.at), color=cpTrackColor(age);
+  const point=[x.latitude,x.longitude];
+  const marker=L.circleMarker(point,{radius:8,color:'#fff',weight:2,fillColor:color,fillOpacity:.95}).addTo(mapLayer);
+  const d=cpTrackTime(x.at);
+  const horario=d===null?'Data desconhecida':new Date(d).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'});
+  const ss=cpTrackTeamSS(x.name,x.id);
+  marker.bindPopup(`<b>${esc(x.name)}</b><br>Última posição: ${esc(horario)}<br>${esc(cpTrackAge(age))}<br>${ss.length?'SS atuais vinculadas: '+ss.length:'Sem SS vinculada por ID/nome exato'}<br><small>Posição da pessoa, não da execução da SS.</small>`);
+  bounds.push(point);
+ }
+ $('map-info').textContent=cpTrackLoading?'Consultando última posição das equipes...':cpTrackError?
+  cpTrackError:
+  `${drawn.length} equipes/pessoas com última posição · ${drawn.filter(x=>cpTrackHours(x.at)<=.5).length} com posição de até 30 min · Fonte: ${cpTrackSource||'ainda não selecionada'}. Posições históricas; não comprovam serviço iniciado.`;
+ if(bounds.length)leafletMap.fitBounds(bounds,{padding:[25,25],maxZoom:12});
+ else leafletMap.setView([-20.32,-40.36],10);
+}
+async function cpTrackFetch(){
+ if(cpTrackLoading)return;
+ const key=String($('cp-gps-key')?.value||'').trim();
+ if(!key){cpTrackError='Informe a chave do rastreio ou importe uma resposta JSON do uMov. Não envie a chave pelo chat.';drawMap();return}
+ cpTrackLoading=true;cpTrackError='';drawMap();
+ try{
+  const r=await fetch('/api/cp/rastreio-equipes',{
+   headers:{'X-CP-Tracking-Key':key,'Accept':'application/json'},
+   cache:'no-store',signal:AbortSignal.timeout(10500)
+  });
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(data.error||'GPS HTTP '+r.status);
+  cpTrackPositions=cpTrackNormalize(data.posicoes);
+  cpTrackSource='uMov (API)';cpTrackUpdatedAt=data.coletado_em||'';
+ }catch(e){cpTrackError=String(e.message||'Rastreio indisponível')}
+ finally{cpTrackLoading=false;drawMap()}
+}
+async function cpTrackImport(file){
+ if(!file)return;
+ if(file.size>1024*1024){cpTrackError='O JSON excede 1 MB.';drawMap();return}
+ try{
+  const json=JSON.parse(await file.text());
+  if(!Array.isArray(json)&&!Array.isArray(json?.data))throw Error('Arquivo JSON sem lista de posições');
+  cpTrackPositions=cpTrackNormalize(json);
+  cpTrackError='';cpTrackSource='arquivo local (não é atualização ao vivo)';cpTrackUpdatedAt='';
+ }catch(e){cpTrackError='Não foi possível importar JSON: '+e.message}
+ drawMap();
+}
+function cpMapStatusAtual(x){
+ if(x.cp_status_execucao===true || (x.cp_origem_situacao_atual && cpExecucaoConfirmada(x)))return 'campo';
+ return classify(x);
+}
+function cpMapSetModo(){
+ $('map-panel')?.classList.toggle('cp-track-mode',mapMode==='rastreamento');
+ if(mapMode==='rastreamento'){
+  drawMap();
+  if($('cp-gps-key')?.value)void cpTrackFetch();
+ }else{
+  drawMap();
+  void enrichGps(mapSource().filter(x=>mapEligible(x,true)));
+ }
+}
+if($('cp-gps-refresh'))$('cp-gps-refresh').onclick=()=>void cpTrackFetch();
+if($('cp-gps-file'))$('cp-gps-file').onchange=e=>{void cpTrackImport(e.target.files?.[0]);e.target.value=''};
+if($('cp-gps-import'))$('cp-gps-import').onclick=()=>$('cp-gps-file')?.click();
+setInterval(()=>{if(mapMode==='rastreamento'&&!document.hidden&&$('cp-gps-key')?.value)void cpTrackFetch()},60000);
+
 function drawMap(){
  initMap();if(!leafletMap)return;
+ $('map-panel')?.classList.toggle('cp-track-mode',mapMode==='rastreamento');
+ if(mapMode==='rastreamento'){cpTrackMapDraw();return}
  mapLayer.clearLayers();
  const candidates=mapSource().filter(x=>mapEligible(x,true));drawMapTeams(candidates);const selected=candidates.filter(x=>mapEligible(x));
  const groups={};let bounds=[],precise=0,missing=0;
@@ -278,10 +408,10 @@ function drawMap(){
    const pt=coords(x);
    if(!pt){(groups[x.cidade||'Sem município']??=[]).push(x);missing++;continue}
    precise++;
-   const stat=integration(x);
+   const stat=integration(x);const situacaoMapa=cpMapStatusAtual(x);
    const col=stat==='baixada'?'#15966c':stat==='rejeitada'?'#dc4b54':stat==='duplicada'?'#9461cf':'#1976c9';
    const marker=L.circleMarker(pt,{radius:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95}).addTo(mapLayer);
-   marker.bindPopup(`<b>SS ${esc(x.ss||'')}</b><br>${esc(x.rua||'Endereço não informado')}<br>${esc(x.bairro||'')} · ${esc(x.cidade||'')}<br>Equipe: ${esc(x.equipe||'Não informada')}<br>Serviço: ${esc(x.servico_executado_siscom||x.servico||'Não informado')}<br>Campo: ${esc(x.situacao_campo||'')}<br>Integração: ${esc(integrationLabel[stat]||'Sem classificação')}<br><small>GPS do histórico de execução quando disponível; caso contrário, coordenada cadastrada (verificar precisão).</small>`);
+   marker.bindPopup(`<b>SS ${esc(x.ss||'')}</b><br>${esc(x.rua||'Endereço não informado')}<br>${esc(x.bairro||'')} · ${esc(x.cidade||'')}<br>Equipe: ${esc(x.equipe||'Não informada')}<br>Serviço: ${esc(x.servico_executado_siscom||x.servico||'Não informado')}<br>Atividade: ${esc(situacaoMapa==='retorno'?'Finalizada':'Iniciada')}<br>Início: ${esc(x.inicio||'Não informado')}<br>Fim: ${esc(x.fim||'Não registrado')}<br>Campo: ${esc(x.situacao_campo||'')}<br>Integração: ${esc(integrationLabel[stat]||'Sem classificação')}<br><small>GPS do histórico de execução quando disponível; caso contrário, coordenada cadastrada (verificar precisão).</small>`);
    bounds.push(pt);
  }
  // Sem marcadores municipais ficticios: um municipio nao e a localizacao da SS.
@@ -968,7 +1098,7 @@ body.global-dark #kpis .kpi:nth-child(3) span{color:#fff1bd!important}
      requestAnimationFrame(()=>{leafletMap.invalidateSize({pan:false});setTimeout(()=>leafletMap.invalidateSize({pan:false}),180)});
    }
  }
- const mode=document.getElementById('map-mode'),from=document.getElementById('map-date-start'),to=document.getElementById('map-date-end');if(mode)mode.onchange=()=>{mapMode=mode.value;drawMap();void enrichGps(mapSource().filter(x=>mapEligible(x,true)))};if(from)from.onchange=()=>{mapDateStart=from.value;void refreshMapData()};if(to)to.onchange=()=>{mapDateEnd=to.value;void refreshMapData()};const reset=document.getElementById('map-reset-team');if(reset)reset.onclick=()=>{mapSelectedTeam='';drawMap()};
+ const mode=document.getElementById('map-mode'),from=document.getElementById('map-date-start'),to=document.getElementById('map-date-end');if(mode)mode.onchange=()=>{mapMode=mode.value;cpMapSetModo()};if(from)from.onchange=()=>{mapDateStart=from.value;void refreshMapData()};if(to)to.onchange=()=>{mapDateEnd=to.value;void refreshMapData()};const reset=document.getElementById('map-reset-team');if(reset)reset.onclick=()=>{mapSelectedTeam='';drawMap()};
  button.addEventListener('click',()=>toggle());
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('map-expanded'))toggle(false)});
 })();

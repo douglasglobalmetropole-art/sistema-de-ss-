@@ -5,6 +5,8 @@ const path=require('node:path');
 // Backend adaptado do index.js original da Central; nenhum servidor ou pool duplicado.
 module.exports=function registrarCentralOperacoes(app,pool){
   require('./cp-excel')(app,pool); // Exportacao Excel com links oficiais do uMov
+  // CP_V24_MAPA_RASTREIO - fonte de rastreio protegida e independente das SS.
+  require('./cp-tracking').registrar(app);
   const SUPABASE_URL=process.env.SUPABASE_URL || 'https://vzdqjinzjdzvurnsuujb.supabase.co';
   const SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
   const cpCache=require('./cp-fast-cache').create({url:SUPABASE_URL,key:SUPABASE_SERVICE_ROLE_KEY,enabled:process.env.CP_PERSISTENT_CACHE_ENABLED!=='false'});
@@ -509,7 +511,7 @@ app.get('/api/cp/programadas-status',async(req,res)=>{
       const tipo=tmap.get(String(t.tty_id))||{};
       const data=d.tsk_scheduleinitialdatehour||t.tsk_scheduleinitialdatehour||t.tsk_insertdatehour;
       return {
-        tsk_id:d.tsk_id,ss:loc.loc_integrationid||'',equipe:Number(agenteId)>0?(agent.age_name||('Equipe '+agenteId)):'',
+        tsk_id:d.tsk_id,agent_id:String(agenteId||''),ss:loc.loc_integrationid||'',equipe:Number(agenteId)>0?(agent.age_name||('Equipe '+agenteId)):'',
         cidade:loc.loc_city||'',bairro:loc.loc_neighborhood||'',
         rua:[loc.loc_street,loc.loc_streetnumber].filter(Boolean).join(', '),
         macro:tipo.tty_description||'',servico:tipo.tty_description||'',
