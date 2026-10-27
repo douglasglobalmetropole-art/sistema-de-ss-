@@ -63,6 +63,63 @@ function workbook(rows, tab, periodo, links) {
  ];
  return makeZip(entries);
 }
+// CP_V27_LINKS_SEM_BLOQUEAR_EXCEL
+// Consulta os metadados de relatorio em lotes, SEM JOIN volumoso entre views.
+// Nenhuma excecao da consulta opcional deve impedir a exportacao dos dados.
+async function cpV27Links(pool, ids, expectedSS){
+ const links=new Map();
+ const deadline=Date.now()+4600;
+ const batchSize=180;
+ let checked=0,failed=0;
+ const query=async(text,values,ms)=>pool.query({text,values,query_timeout:Math.min(ms,Math.max(350,deadline-Date.now()))});
+ for(let pos=0;pos<ids.length;pos+=batchSize){
+  if(Date.now()>=deadline){failed+=ids.length-pos;break}
+  const batch=ids.slice(pos,pos+batchSize);
+  try{
+   // A tabela task e consultada primeiro; colunas opcionais sao lidas via JSON.
+   const t=await query(`SELECT t.tsk_id,t.loc_id,
+     NULLIF(to_jsonb(t)->>'tss_id','') AS tss_id,
+     NULLIF(to_jsonb(t)->>'tsk_accesstoken','') AS tsk_accesstoken
+     FROM u45468.task t WHERE t.tsk_id=ANY($1::bigint[])`,[batch],1700);
+   const taskRows=t.rows||[];
+   const locations=[...new Set(taskRows.map(x=>Number(x.loc_id)).filter(x=>Number.isSafeInteger(x)&&x>0))];
+   // So usamos links de tarefas com numero da SS confirmado pelo uMov.
+   const localMap=new Map();
+   if(locations.length){
+    const l=await query(`SELECT loc_id,loc_integrationid FROM u45468.local
+      WHERE loc_id=ANY($1::bigint[])`,[locations],1100);
+    for(const x of l.rows||[])localMap.set(String(x.loc_id),String(x.loc_integrationid||'').trim());
+   }
+   // Se task nao trouxer o tipo/token, busca em dbout_task, SEM JOIN com local.
+   const missing=taskRows.filter(x=>Number(x.tss_id)!==50||!x.tsk_accesstoken).map(x=>x.tsk_id);
+   const fallback=new Map();
+   if(missing.length&&Date.now()<deadline){
+    try{
+     const d=await query(`SELECT d.tsk_id,
+        NULLIF(to_jsonb(d)->>'tss_id','') AS tss_id,
+        NULLIF(to_jsonb(d)->>'tsk_accesstoken','') AS tsk_accesstoken
+        FROM u45468.dbout_task d WHERE d.tsk_id=ANY($1::bigint[])`,[missing],1700);
+     for(const x of d.rows||[])fallback.set(String(x.tsk_id),x);
+    }catch(e){failed+=missing.length;console.warn('CP V27: dbout_task indisponivel para links:',e.code||e.message)}
+   }
+   for(const tsk of taskRows){
+    const id=String(tsk.tsk_id);
+    if(expectedSS.get(id)!==localMap.get(String(tsk.loc_id)))continue;
+    const d=fallback.get(id)||{};
+    const type=Number(tsk.tss_id||d.tss_id);
+    const token=String(tsk.tsk_accesstoken||d.tsk_accesstoken||'');
+    if(type!==50||!/^[A-Za-z0-9._~-]+$/.test(token))continue;
+    links.set(id,`https://${REPORT_HOST}/CenterWeb/report/schedule/${id}/${token}`);
+   }
+   checked+=batch.length;
+  }catch(e){
+   failed+=batch.length;
+   console.warn('CP V27: lote de links indisponivel, Excel preservado:',e.code||e.message);
+  }
+ }
+ return {links,partial:failed>0||checked<ids.length,checked,failed};
+}
+
 module.exports = function registerCpExcel(app,pool) {
  app.post('/api/cp/exportar-movimentacoes',require('express').raw({type:'application/octet-stream',limit:'1mb',inflate:false}),async(req,res)=>{
   try {
@@ -78,21 +135,15 @@ module.exports = function registerCpExcel(app,pool) {
    const ids=[...new Set(rows.map(r=>Number(r[0])))];
    const links=new Map();
    const expectedSS=new Map(rows.map(x=>[String(x[0]),String(x[1]||'').trim()]));
-   if(ids.length) {
-    const r=await pool.query({text:`SELECT t.tsk_id,
-         COALESCE(NULLIF(to_jsonb(t)->>'tss_id',''), NULLIF(to_jsonb(d)->>'tss_id','')) AS tss_id,
-         COALESCE(NULLIF(to_jsonb(t)->>'tsk_accesstoken',''), NULLIF(to_jsonb(d)->>'tsk_accesstoken','')) AS tsk_accesstoken,
-         l.loc_integrationid AS ss
-       FROM u45468.task t
-       LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
-       JOIN u45468.local l ON l.loc_id=t.loc_id WHERE t.tsk_id=ANY($1::bigint[])`,values:[ids],query_timeout:6500});
-    for(const item of r.rows){
-     const token=String(item.tsk_accesstoken||'');
-     if(Number(item.tss_id)!==50||!/^[A-Za-z0-9._~-]+$/.test(token))continue;
-     const id=String(item.tsk_id);
-     // Evita link de outra SS quando o navegador tem dados desatualizados.
-     if(expectedSS.get(id)!==String(item.ss||'').trim())continue;
-     links.set(id,`https://${REPORT_HOST}/CenterWeb/report/schedule/${id}/${token}`);
+   let linkStatus={partial:false,checked:0,failed:0};
+   if(ids.length){
+    try{
+     linkStatus=await cpV27Links(pool,ids,expectedSS);
+     for(const [id,url] of linkStatus.links)links.set(id,url);
+    }catch(e){
+     // Protecao final: mesmo em erro inesperado, o Excel ainda e gerado.
+     linkStatus={partial:true,checked:0,failed:ids.length};
+     console.warn('CP V27: hyperlinks indisponiveis:',e.code||e.message);
     }
    }
    const arquivo=workbook(rows,obj.tab,obj.periodo||{},links);
@@ -100,9 +151,9 @@ module.exports = function registerCpExcel(app,pool) {
    const df=String(obj.periodo?.fim||'').replace(/[^0-9-]/g,'').slice(0,10);
    res.set('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
    res.set('Content-Disposition',`attachment; filename="CENTRAL_SS_${obj.tab.toUpperCase()}_${obj.tab==='programadas'?'STATUS_ATUAL':(di||'DATA')+'_'+(df||'DATA')}.xlsx"`);
-   res.set('Cache-Control','no-store');res.set('X-CP-Relatorios-Disponiveis',String(links.size));
+   res.set('Cache-Control','no-store');res.set('X-CP-Relatorios-Disponiveis',String(links.size));res.set('X-CP-Links-Partial',linkStatus.partial?'1':'0');
    res.send(arquivo);
   }catch(e){console.error('CP exportar Excel:',e.message);if(!res.headersSent)res.status(502).json({ok:false,error:'Falha ao gerar Excel. Verifique a consulta de relatorios uMov.'});}
  });
 };
-module.exports._test={workbook,makeZip};
+module.exports._test={workbook,makeZip,cpV27Links};
