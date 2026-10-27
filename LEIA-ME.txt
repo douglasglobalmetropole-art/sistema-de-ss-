@@ -1,5 +1,0 @@
-SITE VERCEL: substituir server.js e public/index.html no projeto global-ss, publicar pelo GitHub.
-WORKER VPN: substituir somente worker.js na pasta SISCOM-GATEWAY, fazendo backup e reiniciando uma única instância.
-O HTTP 400 passa a apresentar diagnostico_validacao quando a API enviar mensagem segura.
-Ao detectar job duplicado, consulta tentativa anterior sem reenviar POST.
-NÃO repita a baixa da SS 10/26-060101-01 para testar.
