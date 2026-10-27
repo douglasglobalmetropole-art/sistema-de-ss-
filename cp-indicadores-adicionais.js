@@ -54,48 +54,48 @@ module.exports = function registrarIndicadoresAdicionais(app, pool, { sbRequest 
     }
   });
 
-  // CP V29F: cadastro integral de equipes do banco uMov deste contrato.
-  // O filtro nao deve depender das SS retornadas no periodo.
-  app.get('/api/cp/equipes-cadastro', async (_req, res) => {
-    const anterior = getCache('cadastro_equipes');
-    if (anterior) return res.json(anterior);
-    try {
-      const resultado = await pool.query({
-        text: `SELECT age_id, age_name
-               FROM u45468.agent
-               WHERE age_name IS NOT NULL AND BTRIM(age_name) <> ''
-               ORDER BY age_name, age_id`,
-        query_timeout: 9500
+  // V29I: pessoas/equipes operacionais ATIVAS. Cadastrados administrativos
+  // (programadores, medicao, master etc.) nao sao equipes operacionais.
+  const v29iStatusPermitidos = new Set(['S', 'SIM', 'A', 'ATIVO', 'ACTIVE', 'T', 'TRUE', 'Y', 'YES', '1']);
+  const v29iNormalizar = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+  const v29iColunasAtivo = ['age_active','age_status','age_situation','age_enabled','age_isactive','age_is_active'];
+  const v29iColunasLogin = ['age_login','age_username','age_userlogin','age_user_name','age_user','age_loginname','age_userid'];
+  let v29iCacheUniverso = null;
+  let v29iCacheEm = 0;
+  let v29iPromise = null;
+  function v29iPrimeiraColuna(existentes, preferencias) {
+    return preferencias.find(x => existentes.has(x)) || '';
+  }
+  function v29iEquipeOperacional(nome, login) {
+    const n = v29iNormalizar(nome), l = v29iNormalizar(login);
+    // Nao considerar usuarios sem identificacao operacional; codigos 001/002
+    // da lista fornecida sao acessos de programadores, nao equipes de campo.
+    const m = n.match(/^(?:EQUIPE\s*)?(\d{3,4})(?!\d)(?:\s*[-–.]|\s|$)/);
+    if (!m || Number(m[1]) < 100) return false;
+    if (/(?:^|[.\-_])PROG|^PROG|PROGRAMADOR|PROGRAMACAO|MEDICAO|MASTER|ADMIN|SUPORTE|TESTE/.test(l)) return false;
+    if (/PROGRAMADOR|PROGRAMACAO|MEDICAO|MASTER|ADMINISTRATIVO|SUPORTE|TESTE/.test(n)) return false;
+    return true;
+  }
+  async function v29iUniversoEquipes(force = false) {
+    if (!force && v29iCacheUniverso && Date.now() - v29iCacheEm < 90000) return v29iCacheUniverso;
+    if (v29iPromise) return v29iPromise;
+    v29iPromise = (async () => {
+      // Descoberta controlada: nao presumir nomes de campos do uMov.
+      const info = await pool.query({
+        text: `SELECT column_name FROM information_schema.columns
+               WHERE table_schema = 'u45468' AND table_name = 'agent'`,
+        query_timeout: 6000
       });
-      const nomes = new Set();
-      for (const row of resultado.rows) {
-        const nome = String(row.age_name || '').trim();
-        if (nome) nomes.add(nome);
-      }
-      const equipes = [...nomes].sort((a,b) => a.localeCompare(b,'pt-BR', {numeric:true})).map(nome => ({nome}));
-      const dados = {ok:true, total:equipes.length, equipes,
-        fonte:'u45468.agent (cadastro de equipes/agentes do banco uMov configurado para este contrato)',
-        observacao:'Inclui cadastrados sem SS no periodo; cadastro pode conter inativos se o uMov os mantiver.'};
-      saveCache('cadastro_equipes', dados);
-      res.set('Cache-Control','no-store').json(dados);
-    } catch(e) {
-      console.warn('CP V29F - cadastro de equipes:', e.message);
-      res.status(/timeout|timed out|canceling statement/i.test(String(e.message)) ? 504 : 500)
-        .json({ok:false,error:'Nao foi possivel obter o cadastro completo de equipes no uMov.'});
-    }
-  });
-
-  // V29H: todas as equipes do cadastro do uMov neste schema, sem corte
-  // pelo cadastro de Frotas nem pela data selecionada no painel.
-  app.get('/api/cp/equipes-sem-ss', async (_req, res) => {
-    const existente = getCache('equipes-v29h-completo');
-    if (existente) return res.set('Cache-Control', 'no-store').json(existente);
-    try {
-      // Uma unica consulta: universo integral de age_id + situacao atual de SS.
-      // Nao aplicamos LIMIT nem filtro de datas. Cada equipe sem registro de
-      // tarefa atual nas situacoes abaixo fica identificada como sem SS.
+      const cols = new Set(info.rows.map(r => String(r.column_name || '').toLowerCase()));
+      const status = v29iPrimeiraColuna(cols, v29iColunasAtivo);
+      const login = v29iPrimeiraColuna(cols, v29iColunasLogin);
+      if (!cols.has('age_id') || !cols.has('age_name')) throw Error('Colunas basicas do cadastro uMov indisponiveis.');
+      if (!status) throw Error('Nao identifiquei a coluna de ATIVO em u45468.agent. Execute DIAGNOSTICO_ATIVOS_V29I.sql no pgAdmin; o painel nao estimara equipes ativas.');
+      const statusExpression = `UPPER(BTRIM(a."${status}"::text))`;
+      const loginExpression = login ? `a."${login}"::text` : `NULL::text`;
       const resultado = await pool.query({
-        text: `SELECT a.age_id, a.age_name,
+        text: `SELECT a.age_id, a.age_name, ${loginExpression} AS login,
+                 ${statusExpression} AS status_ativo,
                  (atribuida.age_id IS NOT NULL) AS possui_ss
                FROM u45468.agent a
                LEFT JOIN (
@@ -108,47 +108,75 @@ module.exports = function registrarIndicadoresAdicionais(app, pool, { sbRequest 
                WHERE a.age_name IS NOT NULL
                  AND BTRIM(a.age_name) <> ''
                ORDER BY a.age_name, a.age_id`,
-        query_timeout: 14500
+        query_timeout: 17000
       });
+      const bruto = resultado.rows || [];
+      const diferentesStatus = [...new Set(bruto.map(a => v29iNormalizar(a.status_ativo)))];
+      // Falhar explicitamente se o uMov usar uma codificacao desconhecida.
+      // Nunca apresentar inativos como equipes disponiveis por engano.
+      if (bruto.length > 0 && !diferentesStatus.some(s => v29iStatusPermitidos.has(s))) {
+        throw Error('Campo ' + status + ' nao apresentou valor ativo reconhecido; confira codigos no DIAGNOSTICO_ATIVOS_V29I.sql.');
+      }
       const grupos = new Map();
-      for (const a of resultado.rows) {
+      for (const a of bruto) {
+        if (!v29iStatusPermitidos.has(v29iNormalizar(a.status_ativo))) continue;
         const nome = String(a.age_name || '').trim();
-        if (!nome) continue;
-        const codigo = codigoEquipe(nome);
-        // Linhas historicas com mesmo numero de equipe formam uma unica equipe.
-        const chave = codigo ? `codigo:${codigo}` : `nome:${normalizar(nome)}`;
+        const acesso = String(a.login || '').trim();
+        if (!v29iEquipeOperacional(nome, acesso)) continue;
+        // Identificador do uMov, nao numero impresso no nome: 201 em
+        // Guarapari e 201 em Vila Velha sao equipes DIFERENTES.
+        const chave = acesso ? `login:${v29iNormalizar(acesso)}` : `id:${a.age_id}`;
         let g = grupos.get(chave);
         if (!g) {
-          g = {nome, codigo, com_ss: false, ids: new Set()};
-          grupos.set(chave, g);
+          g = {nome, login: acesso, com_ss:false, ids:[]};
+          grupos.set(chave,g);
         }
-        // Se qualquer age_id da mesma equipe tiver SS aberta, NAO marcar sem SS.
         g.com_ss = g.com_ss || a.possui_ss === true || a.possui_ss === 't';
-        g.ids.add(String(a.age_id));
+        g.ids.push(String(a.age_id));
       }
-      const ordenar = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR', {numeric:true});
-      const equipes = [...grupos.values()].map(g => ({
-        nome:g.nome, codigo:g.codigo, com_ss:g.com_ss
-      })).sort(ordenar);
-      const semSS = equipes.filter(g => !g.com_ss);
+      const equipes = [...grupos.values()]
+        .map(g=>({nome:g.nome, login:g.login, com_ss:g.com_ss}))
+        .sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR',{numeric:true}));
+      const semSS = equipes.filter(e => !e.com_ss);
       const dados = {
-        ok: true, parcial: false,
-        total_cadastradas: equipes.length,
-        total_verificadas: equipes.length,
-        total_sem_ss: semSS.length,
-        total_com_ss: equipes.length - semSS.length,
-        nao_identificadas: 0,
-        equipes_sem_ss: semSS,
-        equipes_todas: equipes,
-        fonte: 'u45468.agent (todos os cadastrados no schema uMov) + dbout_task (atribuicao atual)',
-        observacao: 'Sem SS atual nao comprova escala, presenca ou disponibilidade. O cadastro pode conter agentes inativos.'
+        ok:true, parcial:false, universo:'equipes_operacionais_ativas',
+        total_cadastradas:equipes.length, total_verificadas:equipes.length,
+        total_sem_ss:semSS.length, total_com_ss:equipes.length-semSS.length,
+        nao_identificadas:0, equipes_sem_ss:semSS, equipes_todas:equipes,
+        coluna_ativo:status, coluna_login:login || null,
+        fonte:'u45468.agent (somente ATIVOS, nomes de equipe, excluidos acessos administrativos) + dbout_task (atribuicao atual)',
+        observacao:'Sem SS atribuida nao comprova disponibilidade ou presenca em escala. Numeros de equipe repetidos permanecem distintos por usuario/login.'
       };
-      saveCache('equipes-v29h-completo', dados);
-      return res.set('Cache-Control', 'no-store').json(dados);
-    } catch (e) {
-      console.warn('CP V29H - cadastro integral equipes:', e.message);
-      return res.status(/timeout|timed out|canceling statement/i.test(String(e.message)) ? 504 : 500)
-        .json({ok: false, error: 'Nao foi possivel comparar todas as equipes cadastradas com as SS atuais do uMov.'});
+      v29iCacheUniverso = dados;
+      v29iCacheEm = Date.now();
+      return dados;
+    })();
+    try { return await v29iPromise; }
+    finally { v29iPromise = null; }
+  }
+
+  app.get('/api/cp/equipes-cadastro', async (_req,res) => {
+    try {
+      const dados = await v29iUniversoEquipes();
+      const equipes = dados.equipes_todas.map(e => ({nome:e.nome, login:e.login}));
+      res.set('Cache-Control','no-store').json({ok:true,total:equipes.length,equipes,
+        fonte:dados.fonte,observacao:dados.observacao});
+    } catch(e) {
+      console.warn('CP V29I - cadastro operacional ativo:',e.message);
+      res.status(/timeout|timed out|canceling statement/i.test(String(e.message)) ? 504 : 503)
+        .json({ok:false,error:'Nao foi possivel validar equipes operacionais ativas: '+e.message});
     }
   });
+
+  app.get('/api/cp/equipes-sem-ss', async (_req,res) => {
+    try {
+      const dados = await v29iUniversoEquipes();
+      res.set('Cache-Control','no-store').json(dados);
+    } catch(e) {
+      console.warn('CP V29I - equipes sem SS:',e.message);
+      res.status(/timeout|timed out|canceling statement/i.test(String(e.message)) ? 504 : 503)
+        .json({ok:false,error:'Nao foi possivel validar equipes operacionais ativas: '+e.message});
+    }
+  });
+
 };
