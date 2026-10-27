@@ -110,7 +110,7 @@ const classify=x=>{
  if(hasStart(x))return cpDateInFilter(x.inicio_real_iso,x.inicio)?'campo':'outros';
  // Programada: equipe real + situacao operacional + nenhum inicio real.
  if(hasTeam(x)&&cpIsActiveSituation(situacao)){
-   if(hasSchedule(x))return cpDateInFilter(x.programacao_iso,x.programacao)?'programada':'outros';
+   /* CP_V21_PROGRAMADAS_STATUS_SEM_DATA : com equipe e status operacional, nao filtrar pela data de programacao. */
    return 'programada'; // pendente com equipe sem horario programado
  }
  return 'outros';
