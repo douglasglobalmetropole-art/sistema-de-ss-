@@ -342,13 +342,28 @@ let movementTab='retornadas';
 // CP_V22_PROGRAMADAS_Umov_SEM_DATA: programadas = status ATUAL no uMov + equipe,
 // sempre independente do filtro de datas. Nao e a amostra /api/cp/ativas.
 let cpProgramadasStatus=[],cpProgramadasEstado='carregando',cpProgramadasAtualizado=0,cpProgramadasPromise=null;
-function cpProgramadasFiltradas(){
+// CP_V23_EXECUCAO_STATUS_GPS: as mesmas tarefas por status alimentam categorias mutuamente exclusivas.
+// Um endereco cadastrado nao e evidência de inicio de execucao.
+function cpInicioRealConfirmado(x){
+ return hasStart(x)||/^\d{4}-\d{2}-\d{2}$/.test(String(x.inicio_real_iso||''));
+}
+function cpExecucaoConfirmada(x){
+ return !hasEnd(x)&&(cpInicioRealConfirmado(x)||x.cp_gps_execucao_confirmado===true);
+}
+function cpFiltrarStatusAtual(x,tipo){
  const ci=filterChoices.cidade,eq=filterChoices.equipe,st=filterChoices.situacao,
        inte=filterChoices.integracao,q=norm($('busca').value);
- return cpProgramadasStatus.filter(x=>
-   (!ci.size||ci.has(x.cidade))&&(!eq.size||eq.has(x.equipe))&&
-   (!st.size||st.has('programada'))&&(!inte.size||inte.has(integration(x)))&&
-   (!q||norm([x.ss,x.rua,x.bairro,x.macro,x.servico,x.equipe].join(' ')).includes(q)));
+ return (!ci.size||ci.has(x.cidade))&&(!eq.size||eq.has(x.equipe))&&
+   (!st.size||st.has(tipo))&&(!inte.size||inte.has(integration(x)))&&
+   (!q||norm([x.ss,x.rua,x.bairro,x.macro,x.servico,x.equipe].join(' ')).includes(q));
+}
+function cpProgramadasFiltradas(){
+ return cpProgramadasStatus.filter(x=>!cpExecucaoConfirmada(x)&&!hasEnd(x)&&hasTeam(x)&&
+   cpIsActiveSituation(norm(x.situacao_campo))&&cpFiltrarStatusAtual(x,'programada'));
+}
+function cpCampoStatusFiltradas(){
+ return cpProgramadasStatus.filter(x=>cpExecucaoConfirmada(x)&&
+   cpIsActiveSituation(norm(x.situacao_campo))&&cpFiltrarStatusAtual(x,'campo'));
 }
 async function cpAtualizarProgramadas(force=false){
  if(cpProgramadasPromise)return cpProgramadasPromise;
@@ -382,6 +397,7 @@ async function cpAtualizarProgramadas(force=false){
   }
   if(!terminou){cpProgramadasEstado='parcial';console.warn('Varredura de Programadas ainda parcial; limite de seguranca atingido.');}
   cpProgramadasAtualizado=Date.now();render();
+  void cpConsultarGpsExecucao();
  })().catch(err=>{
   console.warn('Consulta independente de Programadas:',err.message);
   cpProgramadasEstado=cpProgramadasStatus.length?'parcial':'indisponivel';
@@ -389,6 +405,46 @@ async function cpAtualizarProgramadas(force=false){
  }).finally(()=>{cpProgramadasPromise=null});
  cpProgramadasPromise=processo;
  return processo;
+}
+
+
+// CP_V23_EXECUCAO_STATUS_GPS: GPS de historico da tarefa nao equivale a posicao ao vivo.
+// Sem inicio real, so conta como evidencia de campo se for uma coleta recente e valida.
+const cpCampoGpsConsultados=new Map();let cpCampoGpsRodando=false;
+async function cpConsultarGpsExecucao(){
+ if(cpCampoGpsRodando)return;
+ cpCampoGpsRodando=true;
+ try{
+  const agora=Date.now(),limiteAmostra=120;
+  const candidatos=cpProgramadasStatus.filter(x=>!hasEnd(x)&&cpIsActiveSituation(norm(x.situacao_campo))&&
+      !coords(x)&&Number.isSafeInteger(Number(x.tsk_id))&&
+      (!cpCampoGpsConsultados.has(String(x.tsk_id))||agora-cpCampoGpsConsultados.get(String(x.tsk_id))>5*60*1000))
+     .sort((a,b)=>Number(cpInicioRealConfirmado(a))-Number(cpInicioRealConfirmado(b))).slice(0,limiteAmostra);
+  for(let i=0;i<candidatos.length;i+=40){
+   const lote=candidatos.slice(i,i+40);
+   for(const x of lote)cpCampoGpsConsultados.set(String(x.tsk_id),agora);
+   try{
+    const response=await fetch('/api/cp/ss-gps',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({task_ids:lote.map(x=>Number(x.tsk_id))}),
+      cache:'no-store',signal:AbortSignal.timeout(8000)
+    });
+    if(!response.ok)throw Error('GPS HTTP '+response.status);
+    const dados=await response.json();
+    const porId=new Map((Array.isArray(dados)?dados:[]).map(g=>[String(g.tsk_id),g]));
+    for(const x of lote){
+      const gps=porId.get(String(x.tsk_id));if(!gps)continue;
+      const lat=Number(gps.latitude),lon=Number(gps.longitude);
+      if(!(lat>=-35&&lat<=6&&lon>=-75&&lon<=-30))continue;
+      x.latitude=lat;x.longitude=lon;x.horario_gps=gps.horario_gps||null;
+      const horario=Date.parse(String(gps.horario_gps||''));
+      if(!cpInicioRealConfirmado(x)&&Number.isFinite(horario)&&horario<=agora&&agora-horario<=72*3600000)
+        x.cp_gps_execucao_confirmado=true;
+    }
+    render();
+   }catch(erro){console.warn('GPS opcional das notas em campo:',erro.message)}
+  }
+ }finally{cpCampoGpsRodando=false}
 }
 
 function isProgramada(x){return classify(x)==='programada'}
@@ -405,10 +461,18 @@ function cpMacro(x){
  return [x.macro,x.servico,x.macro_servico,x.descricao_macro].find(v=>v!==null&&v!==undefined&&String(v).trim())||'Não informado no uMov';
 }
 function renderExecution(){
- const rows=filtered.filter(isExecutando).slice(0,80);
+ // CP_V23_EXECUCAO_STATUS_GPS: executar em outra data nao deixa de ser nota em campo.
+ const porId=new Map(filtered.filter(isExecutando).map(x=>[String(x.tsk_id),x]));
+ const retornadas=new Set(filtered.filter(x=>classify(x)==='retorno').map(x=>String(x.tsk_id)));
+ for(const x of cpCampoStatusFiltradas()){
+  const id=String(x.tsk_id);if(retornadas.has(id))continue;
+  porId.set(id,{...(porId.get(id)||{}),...x,cp_status_execucao:true});
+ }
+ const rows=[...porId.values()].sort((a,b)=>
+   String(b.inicio_real_iso||b.horario_gps||'').localeCompare(String(a.inicio_real_iso||a.horario_gps||''))).slice(0,80);
  $('execucao').innerHTML=table(rows,[
   ['SS',x=>esc(x.ss)],['Macro da SS',x=>esc(cpMacro(x))],['Equipe',x=>esc(x.equipe)],
-  ['Data e hora de início',x=>esc(x.inicio||'Não informado')],
+  ['Início real / GPS registrado',x=>esc(/^\d{4}-\d{2}-\d{2}$/.test(String(x.inicio_real_iso||''))?x.inicio_real_iso.split('-').reverse().join('/')+' (hora não registrada)':(x.inicio||(x.cp_gps_execucao_confirmado?'GPS: '+new Date(x.horario_gps).toLocaleString('pt-BR')+' (sem início real)':'Não registrado'))) ],
   ['Rua',x=>esc(x.rua)],['Localização (se disponível)',x=>cpLocationCell(x)],
   ['Integração',x=>`<span class="status ${integration(x)}">${integrationLabel[integration(x)]}</span>`]
  ]);
@@ -419,11 +483,17 @@ function render(){
  filtered=base.filter(passesSharedFilters);
  // Fonte unica dos tres KPIs e de todos os graficos operacionais.
  const situacoes=new Map(filtered.map(x=>[x.tsk_id,classify(x)]));
- const situacaoDe=x=>x.cp_programada_status?'programada':(situacoes.get(x.tsk_id)||classify(x));
- // Historico preservado para Retornadas/Notas em campo; Programadas recebe dados
- // exclusivos de status e equipe, sem data, sem depender da amostra de 200 SS.
- const operacionais=filtered.filter(x=>['retorno','campo'].includes(situacaoDe(x)))
-   .concat(cpProgramadasFiltradas());
+ const situacaoDe=x=>x.cp_status_execucao?'campo':x.cp_programada_status?'programada':(situacoes.get(x.tsk_id)||classify(x));
+ // CP_V23_EXECUCAO_STATUS_GPS: uma SS iniciada nao pode aparecer ao mesmo tempo em Programadas.
+ // O status atual independe das datas; retornos historicos preservam as datas.
+ const porId=new Map();
+ for(const x of filtered.filter(x=>['retorno','campo'].includes(situacaoDe(x))))porId.set(String(x.tsk_id),x);
+ for(const x of cpCampoStatusFiltradas()){
+   const id=String(x.tsk_id),anterior=porId.get(id);
+   if(anterior&&situacaoDe(anterior)==='retorno')continue;
+   porId.set(id,{...(anterior||{}),...x,cp_status_execucao:true});
+ }
+ const operacionais=[...porId.values()].concat(cpProgramadasFiltradas().filter(x=>!porId.has(String(x.tsk_id))));
  const contagem={retorno:0,campo:0,programada:0};
  for(const x of operacionais)contagem[situacaoDe(x)]++;
  const cpTotais={retornadas:contagem.retorno,campo:contagem.campo,programadas:contagem.programada};

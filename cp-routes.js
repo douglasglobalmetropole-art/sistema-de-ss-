@@ -477,9 +477,11 @@ app.get('/api/cp/programadas-status',async(req,res)=>{
     const temMais=pagina.length>limite;
     const cursorProximo=temMais?String(pagina[limite-1].tsk_id):null;
     const taskMap=new Map(tarefas.map(x=>[String(x.tsk_id),x]));
+    // CP_V23_EXECUCAO_STATUS_GPS: manter Em Campo/Pendente mesmo sem equipe, quando houver inicio real.
+    // O filtro de equipe das Programadas continua no frontend.
     const selecionadas=comStatus.filter(d=>{
       const t=taskMap.get(String(d.tsk_id));
-      return !!t && Number(d.age_id||t.age_id)>0;
+      return !!t && (Number(d.age_id||t.age_id)>0 || !!(d.tsk_realinitialdatehour||t.tsk_realinitialdatehour));
     });
     const locaisIDs=[...new Set(selecionadas.map(d=>Number(taskMap.get(String(d.tsk_id))?.loc_id)).filter(Number.isSafeInteger))];
     const agentesIDs=[...new Set(selecionadas.map(d=>Number(d.age_id||taskMap.get(String(d.tsk_id))?.age_id)).filter(Number.isSafeInteger))];
@@ -507,7 +509,7 @@ app.get('/api/cp/programadas-status',async(req,res)=>{
       const tipo=tmap.get(String(t.tty_id))||{};
       const data=d.tsk_scheduleinitialdatehour||t.tsk_scheduleinitialdatehour||t.tsk_insertdatehour;
       return {
-        tsk_id:d.tsk_id,ss:loc.loc_integrationid||'',equipe:agent.age_name||('Equipe '+agenteId),
+        tsk_id:d.tsk_id,ss:loc.loc_integrationid||'',equipe:Number(agenteId)>0?(agent.age_name||('Equipe '+agenteId)):'',
         cidade:loc.loc_city||'',bairro:loc.loc_neighborhood||'',
         rua:[loc.loc_street,loc.loc_streetnumber].filter(Boolean).join(', '),
         macro:tipo.tty_description||'',servico:tipo.tty_description||'',
@@ -518,7 +520,7 @@ app.get('/api/cp/programadas-status',async(req,res)=>{
         programacao:brDT(data),inicio:brDT(d.tsk_realinitialdatehour||t.tsk_realinitialdatehour),
         fim:brDT(d.tsk_realfinaldatehour||t.tsk_realfinaldatehour),
         data:brDate(data),no_periodo:false,
-        cp_programada_status:true
+        cp_programada_status:true,cp_origem_situacao_atual:true
       }
     });
     res.set('Cache-Control','no-store');
