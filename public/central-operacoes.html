@@ -211,7 +211,7 @@ async function fetchAllCpRows(di,df,force=false,onProgress=null){
    for(let page=0;page<50;page++){
     const offset=nextOffset;let response,rows;
     try{
-     response=await fetch(`/api/cp/ss?di=${encodeURIComponent(di)}&df=${encodeURIComponent(df)}&limite=200&offset=${offset}&modo=${modo}${force?'&refresh=1':''}`,{cache:'no-store',signal:AbortSignal.timeout(14500)});
+     response=await fetch(`/api/cp/ss?di=${encodeURIComponent(di)}&df=${encodeURIComponent(df)}&limite=200&offset=${offset}&modo=${modo}${force?'&refresh=1':''}`,{cache:'no-store',signal:AbortSignal.timeout(28000)});
      if(!response.ok)throw Error(`HTTP ${response.status}: ${await response.text()}`);
      rows=await response.json();
      if(!Array.isArray(rows))throw Error('Resposta inesperada da API de SS');
@@ -221,7 +221,15 @@ async function fetchAllCpRows(di,df,force=false,onProgress=null){
       console.warn('Complemento por movimentacao indisponivel, dados incompletos:',e.message);
       break;
      }
-     throw e;
+     // Se a API principal falhar, nao derrubar o dashboard inteiro:
+     // manter os registros ja recebidos ou o snapshot local existente.
+     partial=true;
+     console.error('Consulta principal CP indisponivel:',e.message);
+     if(porId.size===0 && Array.isArray(base) && base.length){
+      for(const antigo of base){if(antigo && antigo.tsk_id)porId.set(String(antigo.tsk_id),antigo)}
+      stale=true;
+     }
+     break;
     }
     if(response.headers.get('X-CP-Partial')==='1')partial=true;
     if(response.headers.get('X-CP-Stale')==='1')stale=true;
@@ -244,6 +252,7 @@ async function fetchAllCpRows(di,df,force=false,onProgress=null){
   // Complemento baseado na ultima atividade nao garante capturar SS antigas sem
   // nova movimentacao; por isso a fonte e sempre marcada como cobertura parcial.
   partial=true;
+  if(!porId.size)throw new Error('API CP indisponivel e nenhum cache de SS disponivel. Verifique /api/cp/health e a aba Network.');
   const result={rows:[...porId.values()],partial,stale,oldestAt};
   if(cpPeriodCache.size>8)cpPeriodCache.delete(cpPeriodCache.keys().next().value);
   cpPeriodCache.set(key,{ts:Date.now(),result});
