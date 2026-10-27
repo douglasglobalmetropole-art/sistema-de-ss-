@@ -24,6 +24,7 @@ module.exports=function registrarCentralOperacoes(app,pool){
     return r.json();
   }
 
+  require('./cp-indicadores-adicionais')(app,pool,{sbRequest});
   app.get(['/cp','/cp/'],(_req,res)=>{
     res.set('Cache-Control','no-store');
     res.sendFile(path.join(__dirname,'public','central-operacoes.html'));

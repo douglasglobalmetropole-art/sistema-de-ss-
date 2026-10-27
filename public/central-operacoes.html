@@ -646,10 +646,10 @@ function cpRenderV29(rows,ranking){
  const valid=(filtered||[]).filter(x=>{const v=cpV29Exec(x);return v&&(!range||(v.b>=range.a&&v.b<=range.b));});
  const avg=valid.length?valid.reduce((sum,x)=>sum+(cpV29Exec(x).b-cpV29Exec(x).a)/60000,0)/valid.length:null;
  const cards=$('kpis').querySelectorAll('.kpi');
- if(cards[5]){cards[5].querySelector('strong').textContent='—';cards[5].title='Sem cadastro completo das equipes ativas, não é possível confirmar quem está sem SS.';}
- if(cards[6]){cards[6].querySelector('strong').textContent=avg===null?'—':`${avg.toLocaleString('pt-BR',{maximumFractionDigits:1})} min`;cards[6].title=avg===null?'Sem execuções com horários reais válidos no período.':`Média calculada sobre ${valid.length} SS finalizadas com início e fim válidos.`;}
+ if(cards[5]){cards[5].querySelector('strong').textContent='…';cards[5].title='Consultando cadastro de equipes com frota ativa e atribuicoes do uMov.';}
+ if(cards[6]){cards[6].querySelector('strong').textContent=avg===null?'…':`${avg.toLocaleString('pt-BR',{maximumFractionDigits:1})} min`;cards[6].title=avg===null?'Consultando tempo medio oficial no uMov.':`Estimativa provisoria sobre ${valid.length} SS carregadas; sera substituida pela consulta completa.`;}
  const available=$('cp-available-list');
- if(available)available.innerHTML='<p class="empty">Aguardando cadastro completo de equipes ativas para identificar equipes sem SS com segurança. Não confundir equipe sem execução no período com equipe disponível.</p>';
+ if(available)available.innerHTML='<p class="empty">Consultando cadastro de equipes e SS atuais no uMov...</p>';
  const target=$('cp-heatmap');if(!target||!range)return;
  const weekStart=new Date(range.a);weekStart.setDate(weekStart.getDate()-(weekStart.getDay()+6)%7);weekStart.setHours(0,0,0,0);
  const weekEnd=new Date(range.b);weekEnd.setDate(weekEnd.getDate()+(7-weekEnd.getDay())%7);weekEnd.setHours(0,0,0,0);
@@ -712,7 +712,7 @@ function render(){
   ['Equipes sem SS', '—'],
   ['Tempo médio de execução', '—']
  ];
- $('kpis').innerHTML=k.map(([nome,numero])=>`<div class="kpi"><span>${nome}${cpHistoricoPendente?' · atualizando':''}</span><strong>${numero}</strong></div>`).join('');
+ $('kpis').innerHTML=k.map(([nome,numero],i)=>`<div class="kpi" data-kpi="${['retornadas','programadas','baixadas','rejeitadas','duplicadas','semss','tempo'][i]}"><span>${nome}${cpHistoricoPendente?' · atualizando':''}</span><strong>${numero}</strong></div>`).join('');
  const audit=$('cp-auditoria-ativas');
  if(audit){
   if(snapshotAtivasOk&&snapshotAtivasInfo){
@@ -790,7 +790,7 @@ function render(){
   ['Situação campo',x=>`<span class="status ${situacaoDe(x)}">${esc(x.situacao_campo||label[situacaoDe(x)])}</span>`],
   ['Integração',x=>`<span class="status ${integration(x)}">${integrationLabel[integration(x)]}</span>`]
  ]);
- cpRenderV29(operacionais,ranking);drawMap();scheduleGpsRefresh();
+ cpRenderV29(operacionais,ranking);if(window.cpV29D)window.cpV29D.render();drawMap();scheduleGpsRefresh();
 }
 
 // Excel real (.xlsx), exportando todas as movimentacoes que atendem aos filtros.
@@ -1183,4 +1183,109 @@ body.global-dark #kpis .kpi:nth-child(3) span{color:#fff1bd!important}
  button.addEventListener('click',()=>toggle());
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('map-expanded'))toggle(false)});
 })();
-</script></body></html>
+</script>
+<style id="CP_V29D_CORES_POR_TIPO">
+/* V29D: paleta fixada pelo TIPO, nao pela posicao. Ordem atual: retornadas, programadas, baixadas, rejeitadas, duplicadas, sem SS, tempo. */
+#kpis .kpi[data-kpi="retornadas"]{--kpi-ink:#1579d2;--kpi-bg1:#e4f1ff;--kpi-bg2:#f6faff;--kpi-border:#b4d8fa;--kpi-dark1:#073b6e;--kpi-dark2:#0b294a;--kpi-icon1:#1694ff;--kpi-icon2:#075dc3}
+#kpis .kpi[data-kpi="programadas"]{--kpi-ink:#bd8200;--kpi-bg1:#fff0c5;--kpi-bg2:#fffae8;--kpi-border:#f0ca69;--kpi-dark1:#503a0e;--kpi-dark2:#30270e;--kpi-icon1:#ffd04b;--kpi-icon2:#e79b00}
+#kpis .kpi[data-kpi="baixadas"]{--kpi-ink:#1374c9;--kpi-bg1:#dfedff;--kpi-bg2:#f5faff;--kpi-border:#b3d5f9;--kpi-dark1:#0a4277;--kpi-dark2:#0d2949;--kpi-icon1:#278ef5;--kpi-icon2:#0a55c0}
+#kpis .kpi[data-kpi="rejeitadas"]{--kpi-ink:#d63a51;--kpi-bg1:#ffe3e8;--kpi-bg2:#fff7f9;--kpi-border:#f2beca;--kpi-dark1:#502431;--kpi-dark2:#2d202c;--kpi-icon1:#fa6679;--kpi-icon2:#d52e49}
+#kpis .kpi[data-kpi="duplicadas"]{--kpi-ink:#7244cc;--kpi-bg1:#eee6ff;--kpi-bg2:#faf7ff;--kpi-border:#d5c3fa;--kpi-dark1:#38276c;--kpi-dark2:#242044;--kpi-icon1:#9e78fb;--kpi-icon2:#633ad3}
+#kpis .kpi[data-kpi="semss"]{--kpi-ink:#078ca8;--kpi-bg1:#dff5fc;--kpi-bg2:#f3fcff;--kpi-border:#a5deee;--kpi-dark1:#103c53;--kpi-dark2:#122e43;--kpi-icon1:#16bcdf;--kpi-icon2:#077aab}
+#kpis .kpi[data-kpi="tempo"]{--kpi-ink:#ad7415;--kpi-bg1:#fff0d7;--kpi-bg2:#fffaf1;--kpi-border:#edcd8b;--kpi-dark1:#4e381b;--kpi-dark2:#352915;--kpi-icon1:#eac05f;--kpi-icon2:#a87919}
+body:not(.global-dark) #kpis .kpi[data-kpi]{background:linear-gradient(110deg,var(--kpi-bg1),var(--kpi-bg2))!important;border:1px solid var(--kpi-border)!important}
+body:not(.global-dark) #kpis .kpi[data-kpi] strong{color:var(--kpi-ink)!important}
+body:not(.global-dark) #kpis .kpi[data-kpi] span{color:#244c70!important}
+body.global-dark #kpis .kpi[data-kpi]{background:linear-gradient(115deg,var(--kpi-dark1),var(--kpi-dark2))!important;border:1px solid var(--kpi-border)!important;border-color:color-mix(in srgb,var(--kpi-ink) 55%,#1b3955)!important}
+body.global-dark #kpis .kpi[data-kpi] strong{color:color-mix(in srgb,var(--kpi-ink) 75%,white)!important}
+body.global-dark #kpis .kpi[data-kpi] span{color:#e2f0fc!important}
+#kpis .kpi[data-kpi]:before{background:linear-gradient(145deg,var(--kpi-icon1),var(--kpi-icon2))!important;color:white!important;box-shadow:0 4px 11px #001a273b!important}
+#kpis .kpi[data-kpi="retornadas"]:before{content:'▤'!important}
+#kpis .kpi[data-kpi="programadas"]:before{content:'▣'!important}
+#kpis .kpi[data-kpi="baixadas"]:before{content:'✓'!important}
+#kpis .kpi[data-kpi="rejeitadas"]:before{content:'!'!important}
+#kpis .kpi[data-kpi="duplicadas"]:before{content:'▢'!important}
+#kpis .kpi[data-kpi="semss"]:before{content:'♙'!important}
+#kpis .kpi[data-kpi="tempo"]:before{content:'◷'!important}
+/* Legenda e cores do grafico seguem o mesmo padrao dos indicadores. */
+#chart-cidades .city-stack i.ret{background:#167bd1!important}
+#chart-cidades .city-stack i.campo{background:#13a886!important}
+#chart-cidades .city-stack i.prog{background:#eeb32b!important}
+#cp-available-list{font-size:12px}
+#cp-available-list .cp-roster-meta{color:#8ebbd3;padding:4px 0 11px;line-height:1.6}
+#cp-available-list .cp-roster-line{display:flex;justify-content:space-between;gap:8px;padding:8px 4px;border-bottom:1px solid #2b4b60}
+#cp-available-list .cp-roster-line b{color:#5bd0ed;white-space:nowrap}
+body:not(.global-dark) #cp-available-list .cp-roster-meta{color:#3c617e}
+body:not(.global-dark) #cp-available-list .cp-roster-line{border-color:#d9e5f0}
+body:not(.global-dark) #cp-available-list .cp-roster-line b{color:#087ba1}
+</style>
+
+<script id="CP_V29D_INDICADORES_ASSINCRONOS">
+(function(){
+ const $=id=>document.getElementById(id);
+ const h=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const state={equipes:null,tempo:null,erroEquipes:'',erroTempo:'',di:'',df:'',ultimaEquipe:0};
+ const dataPeriodo=()=>[$('di')?.value||'', $('df')?.value||''];
+ const ctrl={
+  render(){
+   const sem=$('kpis')?.querySelector('[data-kpi="semss"]');
+   const tm=$('kpis')?.querySelector('[data-kpi="tempo"]');
+   const lista=$('cp-available-list');
+   if(sem){
+    const val=sem.querySelector('strong');
+    if(state.equipes?.ok){
+     val.textContent=String(state.equipes.total_sem_ss)+(state.equipes.parcial?'+':'');
+     sem.title=state.equipes.total_sem_ss+' equipes sem SS atribuida entre '+state.equipes.total_verificadas+' conferidas com veiculo ativo no cadastro Frotas.'+(state.equipes.parcial?' Cadastro incompleto.':'');
+    }else{val.textContent=state.erroEquipes?'—':'…';sem.title=state.erroEquipes||'Consultando cadastro de equipes.';}
+   }
+   if(tm){
+    const val=tm.querySelector('strong');
+    if(state.tempo?.ok){
+     const m=state.tempo.tempo_medio_minutos;
+     val.textContent=m==null?'—':m.toLocaleString('pt-BR',{maximumFractionDigits:1})+' min';
+     tm.title=m==null?'Nenhuma SS finalizada com duracao valida no periodo.':`Media de ${state.tempo.total_ss_finalizadas} SS finalizadas com duracao valida no intervalo selecionado.`;
+    }else if(state.erroTempo){
+     // Preserva a estimativa baseada em linhas ja carregadas, se existir.
+     if(val.textContent==='…')val.textContent='—';
+     tm.title=state.erroTempo;
+    }
+   }
+   if(lista){
+    if(state.equipes?.ok){
+     const e=state.equipes;
+     const aviso=`${e.total_verificadas} equipes conferidas de ${e.total_cadastradas} no cadastro de veiculos ativos.${e.nao_identificadas?' '+e.nao_identificadas+' sem correspondencia no uMov.':''}${e.parcial?' Resultado parcial.':''} Sem SS nao comprova disponibilidade na escala.`;
+     const rows=e.equipes_sem_ss||[];
+     lista.innerHTML='<div class="cp-roster-meta">'+h(aviso)+'</div>'+(rows.length?rows.map(x=>'<div class="cp-roster-line"><span>'+h(x.nome)+'</span><b>Sem SS</b></div>').join(''):'<p class="empty">Nenhuma das equipes conferidas esta sem SS atribuida.</p>');
+    }else lista.innerHTML='<p class="empty">'+h(state.erroEquipes||'Consultando equipes cadastradas e suas SS atuais...')+'</p>';
+   }
+  },
+  async equipes(force=false){
+   if(state.equipes && !force && Date.now()-state.ultimaEquipe<90000)return;
+   try{
+    const r=await fetch('/api/cp/equipes-sem-ss',{cache:'no-store',signal:AbortSignal.timeout(18000)});
+    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Cadastro de equipes nao confirmado');
+    state.equipes=j;state.erroEquipes='';state.ultimaEquipe=Date.now();
+   }catch(e){state.erroEquipes='Equipes sem SS: '+e.message;state.equipes=null;}
+   this.render();
+  },
+  async tempo(){
+   const [di,df]=dataPeriodo();if(!di||!df)return;
+   state.di=di;state.df=df;state.tempo=null;state.erroTempo='';
+   try{
+    const r=await fetch('/api/cp/tempo-medio?di='+encodeURIComponent(di)+'&df='+encodeURIComponent(df),{cache:'no-store',signal:AbortSignal.timeout(12000)});
+    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Tempo medio indisponivel');
+    if(state.di!==di||state.df!==df)return;
+    state.tempo=j;
+   }catch(e){if(state.di!==di||state.df!==df)return;state.erroTempo='Tempo medio oficial indisponivel: '+e.message;}
+   this.render();
+  },
+  atualizar(force=false){void this.equipes(force);void this.tempo();}
+ };
+ window.cpV29D=ctrl;
+ ['di','df'].forEach(id=>$(id)?.addEventListener('change',()=>ctrl.tempo()));
+ const reload=$('reload');if(reload){const original=reload.onclick;reload.onclick=function(e){ctrl.atualizar(true);return original?.call(this,e);};}
+ // Consulta independente: uma falha destes KPIs nunca interrompe o mapa nem as tabelas.
+ ctrl.render();setTimeout(()=>ctrl.atualizar(false),200);
+})();
+</script>
+</body></html>
