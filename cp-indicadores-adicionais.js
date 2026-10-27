@@ -54,6 +54,37 @@ module.exports = function registrarIndicadoresAdicionais(app, pool, { sbRequest 
     }
   });
 
+  // CP V29F: cadastro integral de equipes do banco uMov deste contrato.
+  // O filtro nao deve depender das SS retornadas no periodo.
+  app.get('/api/cp/equipes-cadastro', async (_req, res) => {
+    const anterior = getCache('cadastro_equipes');
+    if (anterior) return res.json(anterior);
+    try {
+      const resultado = await pool.query({
+        text: `SELECT age_id, age_name
+               FROM u45468.agent
+               WHERE age_name IS NOT NULL AND BTRIM(age_name) <> ''
+               ORDER BY age_name, age_id`,
+        query_timeout: 9500
+      });
+      const nomes = new Set();
+      for (const row of resultado.rows) {
+        const nome = String(row.age_name || '').trim();
+        if (nome) nomes.add(nome);
+      }
+      const equipes = [...nomes].sort((a,b) => a.localeCompare(b,'pt-BR', {numeric:true})).map(nome => ({nome}));
+      const dados = {ok:true, total:equipes.length, equipes,
+        fonte:'u45468.agent (cadastro de equipes/agentes do banco uMov configurado para este contrato)',
+        observacao:'Inclui cadastrados sem SS no periodo; cadastro pode conter inativos se o uMov os mantiver.'};
+      saveCache('cadastro_equipes', dados);
+      res.set('Cache-Control','no-store').json(dados);
+    } catch(e) {
+      console.warn('CP V29F - cadastro de equipes:', e.message);
+      res.status(/timeout|timed out|canceling statement/i.test(String(e.message)) ? 504 : 500)
+        .json({ok:false,error:'Nao foi possivel obter o cadastro completo de equipes no uMov.'});
+    }
+  });
+
   app.get('/api/cp/equipes-sem-ss', async (_req, res) => {
     const existente = getCache('equipes');
     if (existente) return res.json(existente);
