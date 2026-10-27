@@ -338,6 +338,59 @@ function table(rows, columns){
 }
 let snapshotAtivasOk=false,snapshotAtivasInfo=null,snapshotAtivasErro='';
 let movementTab='retornadas';
+
+// CP_V22_PROGRAMADAS_Umov_SEM_DATA: programadas = status ATUAL no uMov + equipe,
+// sempre independente do filtro de datas. Nao e a amostra /api/cp/ativas.
+let cpProgramadasStatus=[],cpProgramadasEstado='carregando',cpProgramadasAtualizado=0,cpProgramadasPromise=null;
+function cpProgramadasFiltradas(){
+ const ci=filterChoices.cidade,eq=filterChoices.equipe,st=filterChoices.situacao,
+       inte=filterChoices.integracao,q=norm($('busca').value);
+ return cpProgramadasStatus.filter(x=>
+   (!ci.size||ci.has(x.cidade))&&(!eq.size||eq.has(x.equipe))&&
+   (!st.size||st.has('programada'))&&(!inte.size||inte.has(integration(x)))&&
+   (!q||norm([x.ss,x.rua,x.bairro,x.macro,x.servico,x.equipe].join(' ')).includes(q)));
+}
+async function cpAtualizarProgramadas(force=false){
+ if(cpProgramadasPromise)return cpProgramadasPromise;
+ if(!force&&cpProgramadasEstado==='completo'&&Date.now()-cpProgramadasAtualizado<4*60*1000)return;
+ const anterior=cpProgramadasStatus;
+ cpProgramadasEstado=anterior.length?'atualizando':'carregando';
+ const processo=(async()=>{
+  let modo='situacao',cursor='9223372036854775807',linhas=new Map(),terminou=false;
+  // Mais de 200 por pagina nao significa 200 SS ao todo.
+  // A varredura reserva limite de seguranca contra sobrecarga do uMov.
+  for(let pagina=0;pagina<150;pagina++){
+   let resposta=await fetch('/api/cp/programadas-status?modo='+modo+'&limite=200&cursor='+cursor,
+       {cache:'no-store',signal:AbortSignal.timeout(9000)});
+   if(!resposta.ok){
+     let erro={};try{erro=await resposta.json()}catch{}
+     if(modo==='situacao'&&erro.fallback==='varredura'){
+       modo='varredura';cursor='9223372036854775807';linhas=new Map();
+       cpProgramadasEstado='carregando';continue;
+     }
+     throw Error(erro.error||('HTTP '+resposta.status));
+   }
+   const dados=await resposta.json();
+   if(!dados.ok||!Array.isArray(dados.registros))throw Error('Resposta invalida de Programadas');
+   for(const x of dados.registros)if(x.tsk_id)linhas.set(String(x.tsk_id),x);
+   cpProgramadasStatus=[...linhas.values()];
+   cpProgramadasEstado=dados.tem_mais?'parcial':'completo';
+   render();
+   if(!dados.tem_mais){terminou=true;break}
+   if(!dados.proximo_cursor||dados.proximo_cursor===cursor)throw Error('Cursor de Programadas repetido');
+   cursor=dados.proximo_cursor;
+  }
+  if(!terminou){cpProgramadasEstado='parcial';console.warn('Varredura de Programadas ainda parcial; limite de seguranca atingido.');}
+  cpProgramadasAtualizado=Date.now();render();
+ })().catch(err=>{
+  console.warn('Consulta independente de Programadas:',err.message);
+  cpProgramadasEstado=cpProgramadasStatus.length?'parcial':'indisponivel';
+  render();
+ }).finally(()=>{cpProgramadasPromise=null});
+ cpProgramadasPromise=processo;
+ return processo;
+}
+
 function isProgramada(x){return classify(x)==='programada'}
 function isExecutando(x){return classify(x)==='campo'}
 function cpLocationCell(x){
@@ -366,8 +419,11 @@ function render(){
  filtered=base.filter(passesSharedFilters);
  // Fonte unica dos tres KPIs e de todos os graficos operacionais.
  const situacoes=new Map(filtered.map(x=>[x.tsk_id,classify(x)]));
- const situacaoDe=x=>situacoes.get(x.tsk_id)||classify(x);
- const operacionais=filtered.filter(x=>['retorno','campo','programada'].includes(situacaoDe(x)));
+ const situacaoDe=x=>x.cp_programada_status?'programada':(situacoes.get(x.tsk_id)||classify(x));
+ // Historico preservado para Retornadas/Notas em campo; Programadas recebe dados
+ // exclusivos de status e equipe, sem data, sem depender da amostra de 200 SS.
+ const operacionais=filtered.filter(x=>['retorno','campo'].includes(situacaoDe(x)))
+   .concat(cpProgramadasFiltradas());
  const contagem={retorno:0,campo:0,programada:0};
  for(const x of operacionais)contagem[situacaoDe(x)]++;
  const cpTotais={retornadas:contagem.retorno,campo:contagem.campo,programadas:contagem.programada};
@@ -380,7 +436,7 @@ function render(){
  const k=[
   ['Retornadas de campo',cpTotais.retornadas],
   ['Notas em campo',cpTotais.campo],
-  ['Programadas',cpTotais.programadas],
+  ['Programadas',cpProgramadasEstado==='indisponivel'?'—':cpProgramadasEstado==='carregando'?'…':String(cpTotais.programadas)+(cpProgramadasEstado==='parcial'?'+':'')],
   ['Baixadas',cpIntegracao.baixadas],
   ['Rejeitadas',cpIntegracao.rejeitadas],
   ['Duplicadas',cpIntegracao.duplicadas]
@@ -470,7 +526,7 @@ function render(){
 // A API consulta os tokens somente no servidor e insere links reais na coluna SS.
 async function exportarMovimentacoesExcel(){
  const btn=$('cp-export-excel');
- const linhas=filtered.filter(x=>movementTab==='programadas'?isProgramada(x):classify(x)==='retorno').sort((a,b)=>(iso(b.data)||'').localeCompare(iso(a.data)||''));
+ const linhas=(movementTab==='programadas'?cpProgramadasFiltradas():filtered.filter(x=>classify(x)==='retorno')).sort((a,b)=>(iso(b.data)||'').localeCompare(iso(a.data)||''));
  if(!linhas.length){alert('Nenhuma SS na aba selecionada com os filtros atuais.');return;}
  if(linhas.length>10000){alert('Há mais de 10.000 SS. Reduza o período ou os filtros para exportar sem cortes.');return;}
  const prev=btn.textContent;btn.disabled=true;btn.textContent='Preparando Excel...';
@@ -604,6 +660,8 @@ async function load(force=false){
  const t0=performance.now();
  const di=$('di').value,df=$('df').value;
  const key=di+'|'+df;
+ // Atualiza Programadas por status independentemente de di/df.
+ void cpAtualizarProgramadas(force);
  let cpNetworkShown=false;
  if(cpVisibleKey!==key){base=[];cpVisibleKey='';}
  cpHistoricoPendente=true;

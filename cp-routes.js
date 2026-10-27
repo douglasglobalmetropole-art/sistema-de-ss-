@@ -416,6 +416,126 @@ app.get('/api/cp/ss',async(req,res)=>{
 });
 
 
+
+// CP_V22_PROGRAMADAS_Umov_SEM_DATA: fonte exclusiva do card Programadas.
+// Sem filtro temporal: situacao oficial atual no dbout_task, com equipe vinculada.
+// "Notas em campo" e "Retornadas" continuam usando as rotas anteriores.
+app.get('/api/cp/programadas-status',async(req,res)=>{
+  const modo=req.query.modo==='varredura'?'varredura':'situacao';
+  const qtd=Number(req.query.limite||200);
+  const limite=Number.isSafeInteger(qtd)?Math.max(1,Math.min(qtd,250)):200;
+  const cursorRaw=String(req.query.cursor||'9223372036854775807');
+  if(!/^\d{1,19}$/.test(cursorRaw))return res.status(400).json({ok:false,error:'Cursor invalido.'});
+  const cursor=BigInt(cursorRaw);
+  if(cursor<=0n||cursor>9223372036854775807n)return res.status(400).json({ok:false,error:'Cursor fora do intervalo.'});
+  const statusOk=v=>{const s=norm(v);return s==='EM CAMPO'||s==='PENDENTE DE ENVIO PARA CAMPO'};
+  let etapa='status';
+  try{
+    let pagina=[],tarefas=[],comStatus=[];
+    if(modo==='situacao'){
+      // Um indice por situacao/tsk_id no banco de origem acelera esta consulta.
+      const r=await pool.query({text:
+        `SELECT d.tsk_id,d.age_id,d.tsk_situation,d.tsk_scheduleinitialdatehour,
+           d.tsk_realinitialdatehour,d.tsk_realfinaldatehour,d.e_situacao
+         FROM u45468.dbout_task d
+         WHERE d.tsk_id < $1::bigint
+           AND (UPPER(BTRIM(d.tsk_situation))='EM CAMPO'
+             OR UPPER(BTRIM(d.tsk_situation))='PENDENTE DE ENVIO PARA CAMPO')
+         ORDER BY d.tsk_id DESC LIMIT $2`,
+         values:[cursorRaw,limite+1],query_timeout:4200});
+      pagina=r.rows;
+      comStatus=pagina.slice(0,limite);
+      etapa='task';
+      if(comStatus.length){
+        const r2=await pool.query({text:
+          `SELECT tsk_id,loc_id,age_id,tty_id,tsk_insertdatehour,
+            tsk_scheduleinitialdatehour,tsk_realinitialdatehour,tsk_realfinaldatehour
+           FROM u45468.task WHERE tsk_id=ANY($1::bigint[])`,
+          values:[comStatus.map(x=>x.tsk_id)],query_timeout:2400});
+        tarefas=r2.rows;
+      }
+    }else{
+      // Fallback exato, sem periodo: varre chaves de task progressivamente,
+      // evitando filtro de situacao sobre a view grande dbout_task.
+      const r=await pool.query({text:
+        `SELECT tsk_id,loc_id,age_id,tty_id,tsk_insertdatehour,
+          tsk_scheduleinitialdatehour,tsk_realinitialdatehour,tsk_realfinaldatehour
+         FROM u45468.task WHERE tsk_id < $1::bigint ORDER BY tsk_id DESC LIMIT $2`,
+        values:[cursorRaw,limite+1],query_timeout:3000});
+      pagina=r.rows;
+      tarefas=pagina.slice(0,limite);
+      etapa='status-do-lote';
+      if(tarefas.length){
+        const d=await pool.query({text:
+          `SELECT tsk_id,age_id,tsk_situation,tsk_scheduleinitialdatehour,
+              tsk_realinitialdatehour,tsk_realfinaldatehour,e_situacao
+           FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])`,
+          values:[tarefas.map(t=>t.tsk_id)],query_timeout:2600});
+        comStatus=d.rows.filter(x=>statusOk(x.tsk_situation));
+      }
+    }
+    const temMais=pagina.length>limite;
+    const cursorProximo=temMais?String(pagina[limite-1].tsk_id):null;
+    const taskMap=new Map(tarefas.map(x=>[String(x.tsk_id),x]));
+    const selecionadas=comStatus.filter(d=>{
+      const t=taskMap.get(String(d.tsk_id));
+      return !!t && Number(d.age_id||t.age_id)>0;
+    });
+    const locaisIDs=[...new Set(selecionadas.map(d=>Number(taskMap.get(String(d.tsk_id))?.loc_id)).filter(Number.isSafeInteger))];
+    const agentesIDs=[...new Set(selecionadas.map(d=>Number(d.age_id||taskMap.get(String(d.tsk_id))?.age_id)).filter(Number.isSafeInteger))];
+    const tiposIDs=[...new Set(selecionadas.map(d=>Number(taskMap.get(String(d.tsk_id))?.tty_id)).filter(Number.isSafeInteger))];
+    let complementosParciais=false;
+    async function complementar(sql,ids,ms){
+      if(!ids.length)return [];
+      try{return (await pool.query({text:sql,values:[ids],query_timeout:ms})).rows}
+      catch(e){complementosParciais=true;console.warn('V22 complemento:',e.message);return []}
+    }
+    etapa='complementos';
+    const [locais,agentes,tipos]=await Promise.all([
+      complementar('SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local WHERE loc_id=ANY($1::bigint[])',locaisIDs,1800),
+      complementar('SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])',agentesIDs,1800),
+      complementar('SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])',tiposIDs,1800)
+    ]);
+    const lmap=new Map(locais.map(v=>[String(v.loc_id),v]));
+    const amap=new Map(agentes.map(v=>[String(v.age_id),v]));
+    const tmap=new Map(tipos.map(v=>[String(v.tty_id),v]));
+    const registros=selecionadas.map(d=>{
+      const t=taskMap.get(String(d.tsk_id));
+      const loc=lmap.get(String(t.loc_id))||{};
+      const agenteId=d.age_id||t.age_id;
+      const agent=amap.get(String(agenteId))||{};
+      const tipo=tmap.get(String(t.tty_id))||{};
+      const data=d.tsk_scheduleinitialdatehour||t.tsk_scheduleinitialdatehour||t.tsk_insertdatehour;
+      return {
+        tsk_id:d.tsk_id,ss:loc.loc_integrationid||'',equipe:agent.age_name||('Equipe '+agenteId),
+        cidade:loc.loc_city||'',bairro:loc.loc_neighborhood||'',
+        rua:[loc.loc_street,loc.loc_streetnumber].filter(Boolean).join(', '),
+        macro:tipo.tty_description||'',servico:tipo.tty_description||'',
+        situacao_campo:d.tsk_situation||'',status_integracao:d.e_situacao||'',
+        programacao_iso:d.tsk_scheduleinitialdatehour||t.tsk_scheduleinitialdatehour||null,
+        inicio_real_iso:d.tsk_realinitialdatehour||t.tsk_realinitialdatehour||null,
+        fim_real_iso:d.tsk_realfinaldatehour||t.tsk_realfinaldatehour||null,
+        programacao:brDT(data),inicio:brDT(d.tsk_realinitialdatehour||t.tsk_realinitialdatehour),
+        fim:brDT(d.tsk_realfinaldatehour||t.tsk_realfinaldatehour),
+        data:brDate(data),no_periodo:false,
+        cp_programada_status:true
+      }
+    });
+    res.set('Cache-Control','no-store');
+    res.set('X-CP-Programadas-Source',modo);
+    if(complementosParciais)res.set('X-CP-Enrichment-Partial','1');
+    return res.json({ok:true,modo,registros,tem_mais:temMais,proximo_cursor:cursorProximo,
+      complemento_parcial:complementosParciais,completo:!temMais});
+  }catch(e){
+    console.error('CP_V22 programadas /'+modo+' etapa '+etapa+':',e.message);
+    // O cliente pode trocar a busca por status pela varredura de IDs.
+    const falhaTempo=/timeout|timed out|canceling statement/i.test(String(e.message||''));
+    res.status(falhaTempo?504:500).json({ok:false,modo,etapa,
+       fallback:modo==='situacao'?'varredura':null,
+       error:falhaTempo?'Tempo limite da consulta de Programadas no uMov':'Falha na consulta de Programadas do uMov'});
+  }
+});
+
 // Fonte oficial para os indicadores OPERACIONAIS: situacao e datas da dbout_task.
 // Nao aplicar filtro de data: SS que continuam Em Campo podem ter sido abertas ha meses.
 const ATIVAS_CACHE={dados:null,ts:0};
