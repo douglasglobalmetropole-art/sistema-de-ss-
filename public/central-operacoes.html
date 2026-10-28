@@ -133,7 +133,25 @@ body.global-dark #map-panel #cp-gps-key{background:#19374f!important;color:#eff7
 #cp-available-list .cp-roster-assigned{color:#9ab9cb!important}
 body:not(.global-dark) #cp-available-list .cp-roster-switch{background:#fff}
 </style>
-</head><body><main><div class="top"><div><h1>GLOBAL METRÓPOLE | Central de Operações</h1><small>Dados do uMov | Monitoramento operacional</small></div><div><span id="indicador" class="muted">Aguardando consulta</span> <a class="cp-back" href="/" title="Voltar ao GLOBAL SS">← GLOBAL SS</a> <button id="reload">↻ Atualizar</button></div></div><div class="filters"><input type="date" id="di" title="Data inicial"><input type="date" id="df" title="Data final"><div class="multi-filter" id="wrap-cidade"><button type="button" class="multi-trigger" id="trigger-cidade" aria-expanded="false">Municípios: Todos ▾</button><div class="multi-menu" id="menu-cidade" hidden></div></div><div class="multi-filter" id="wrap-equipe"><button type="button" class="multi-trigger" id="trigger-equipe" aria-expanded="false">Equipes: Todos ▾</button><div class="multi-menu" id="menu-equipe" hidden></div></div><div class="multi-filter" id="wrap-situacao"><button type="button" class="multi-trigger" id="trigger-situacao" aria-expanded="false">Situação da SS: Todos ▾</button><div class="multi-menu" id="menu-situacao" hidden></div></div><div class="multi-filter" id="wrap-integracao"><button type="button" class="multi-trigger" id="trigger-integracao" aria-expanded="false">Integração: Todos ▾</button><div class="multi-menu" id="menu-integracao" hidden></div></div><input id="busca" placeholder="Pesquisar SS, rua ou serviço"></div><div class="grid" id="kpis"></div><p class="muted" id="cp-auditoria-ativas" style="font-size:12px;margin:8px 2px 3px;line-height:1.6" aria-live="polite">Consultando situacoes atuais da dbout_task...</p><div class="layout"><section class="panel" id="map-panel"><div class="map-toolbar"><h3>Mapa operacional das SS</h3><div class="map-actions"><label>Situação <select id="map-mode"><option value="retorno">Finalizadas</option><option value="campo">Iniciadas</option><option value="ambos">Iniciadas e finalizadas</option><option value="rastreamento">Rastreio de equipes (GPS)</option></select></label><label class="cp-date-filter">De <input type="date" id="map-date-start"></label><label class="cp-date-filter">Até <input type="date" id="map-date-end"></label><input type="password" class="cp-track-control" id="cp-gps-key" autocomplete="off" placeholder="Chave do rastreio" title="CP_GPS_VIEW_KEY configurada na Vercel"><button type="button" class="cp-track-control" id="cp-gps-refresh">Atualizar GPS</button><button type="button" class="cp-track-control" id="cp-gps-import">Importar JSON do uMov</button><input type="file" id="cp-gps-file" accept=".json,.txt,application/json,text/plain" hidden><button type="button" id="map-reset-team">Todas as equipes</button><button type="button" id="map-expand" aria-label="Ampliar mapa" aria-pressed="false">⛶ Ampliar mapa</button></div></div><div class="map-workspace"><div class="map" id="map"></div><div class="map-team-sidebar"><strong>Equipes no mapa <span id="map-team-total"></span></strong><div id="map-team-list"></div></div></div><div class="map-status-legend" aria-label="Legenda dos marcadores"><span><i style="background:#15966c"></i> Executada</span><span><i style="background:#dc4b54"></i> Rejeitada</span><span><i style="background:#9461cf"></i> Duplicada</span><span><i style="background:#1976c9"></i> Sem classificação</span><span><i style="background:#8c98a8"></i> Sem coordenadas (não plotadas)</span></div><div class="map-legend" id="map-info" aria-live="polite">Somente coordenadas registradas no uMov são exibidas. SS sem GPS não recebem posição aproximada.</div></section><div class="right-stack"><section class="panel"><h3>Acompanhamento por equipe <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div class="scroll" id="equipes"></div></section><div class="cp-right-bottom"><section class="panel"><h3>SS por município <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div id="chart-cidades"></div></section><section class="panel cp-heat-panel"><h3>Mapa de calor — Inícios reais por dia e hora <small id="cp-heat-period"></small></h3><div id="cp-heatmap"></div></section></div></div></div><div class="bottom"><section class="panel"><div class="mov-head"><h3>Últimas movimentações / SS</h3><div class="mov-tabs" role="group" aria-label="Tipo de movimentação"><button type="button" id="tab-programadas" aria-pressed="false">Programadas</button><button type="button" id="tab-retornadas" class="active" aria-pressed="true">Retornadas</button><button type="button" id="cp-export-excel" title="Exportar todas as SS filtradas da aba ativa, com link do relatório original do uMov">⬇ Exportar Excel</button></div></div><div class="scroll" id="movimentos"></div></section><section class="panel cp-available-panel" id="cp-available-panel"><h3>Equipes sem SS atribuída</h3><div class="scroll" id="cp-available-list" aria-live="polite"><p class="empty">Conferindo somente equipes operacionais ATIVAS do uMov...</p></div></section></div><!-- Compatibilidade V29C: o gráfico foi retirado da tela, mas permanece como alvo interno do renderizador. -->
+<style id="CP_V29J_ESTILO_CROSSFILTER">
+.cp-cross-state{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:7px 2px 8px;padding:9px 12px;background:#102d44;border:1px solid #2d5874;border-radius:9px;font-size:12px;color:#c6e2f4}
+.cp-cross-state[hidden]{display:none!important}
+.cp-cross-state button{background:#1a5278;border:1px solid #3995c8;border-radius:20px;padding:5px 10px;color:#f2fbff;font-size:12px;cursor:pointer}
+.cp-cross-state button.cp-cross-reset{background:transparent;border-color:#7194aa;color:#f0d19b}
+#kpis .kpi[data-kpi]{cursor:pointer;transition:filter .15s ease,box-shadow .15s ease,outline .15s ease}
+#kpis .kpi[data-kpi]:hover{filter:brightness(1.15)}
+#kpis .kpi.cp-cross-active{outline:2px solid #63d4ff!important;outline-offset:-2px;box-shadow:0 0 0 2px #123d58,0 0 16px #25bdf866!important}
+#equipes tbody tr[data-cp-team],#chart-cidades [data-cp-city]:not([data-cp-city=""]),#cp-available-list [data-cp-team]{cursor:pointer}
+#equipes tbody tr[data-cp-team]:hover,#cp-available-list [data-cp-team]:hover{background:#17618a44!important}
+#equipes tbody tr.cp-cross-active,#cp-available-list [data-cp-team].cp-cross-active{background:#187fa44c!important}
+#chart-cidades .city-col.cp-cross-active{outline:2px solid #55dcff;outline-offset:2px;border-radius:4px}
+#cp-heatmap .cp-heat-cell.cp-cross-active-heat{outline:2px solid #fff!important;outline-offset:-2px;box-shadow:0 0 7px #e0efff88}
+body:not(.global-dark) .cp-cross-state{background:#eaf4fb;color:#164668}
+body:not(.global-dark) .cp-cross-state button{background:#d5eafe;color:#0e4e87;border-color:#7bb5e0}
+body:not(.global-dark) .cp-cross-state button.cp-cross-reset{background:#fff;color:#8a531d;border-color:#c5d9e5}
+</style>
+
+</head><body><main><div class="top"><div><h1>GLOBAL METRÓPOLE | Central de Operações</h1><small>Dados do uMov | Monitoramento operacional</small></div><div><span id="indicador" class="muted">Aguardando consulta</span> <a class="cp-back" href="/" title="Voltar ao GLOBAL SS">← GLOBAL SS</a> <button id="reload">↻ Atualizar</button></div></div><div class="filters"><input type="date" id="di" title="Data inicial"><input type="date" id="df" title="Data final"><div class="multi-filter" id="wrap-cidade"><button type="button" class="multi-trigger" id="trigger-cidade" aria-expanded="false">Municípios: Todos ▾</button><div class="multi-menu" id="menu-cidade" hidden></div></div><div class="multi-filter" id="wrap-equipe"><button type="button" class="multi-trigger" id="trigger-equipe" aria-expanded="false">Equipes: Todos ▾</button><div class="multi-menu" id="menu-equipe" hidden></div></div><div class="multi-filter" id="wrap-situacao"><button type="button" class="multi-trigger" id="trigger-situacao" aria-expanded="false">Situação da SS: Todos ▾</button><div class="multi-menu" id="menu-situacao" hidden></div></div><div class="multi-filter" id="wrap-integracao"><button type="button" class="multi-trigger" id="trigger-integracao" aria-expanded="false">Integração: Todos ▾</button><div class="multi-menu" id="menu-integracao" hidden></div></div><input id="busca" placeholder="Pesquisar SS, rua ou serviço"></div><div id="cp-cross-state" class="cp-cross-state" hidden></div><div class="grid" id="kpis"></div><p class="muted" id="cp-auditoria-ativas" style="font-size:12px;margin:8px 2px 3px;line-height:1.6" aria-live="polite">Consultando situacoes atuais da dbout_task...</p><div class="layout"><section class="panel" id="map-panel"><div class="map-toolbar"><h3>Mapa operacional das SS</h3><div class="map-actions"><label>Situação <select id="map-mode"><option value="retorno">Finalizadas</option><option value="campo">Iniciadas</option><option value="ambos">Iniciadas e finalizadas</option><option value="programadas">Programadas (GPS quando disponível)</option><option value="rastreamento">Rastreio de equipes (GPS)</option></select></label><label class="cp-date-filter">De <input type="date" id="map-date-start"></label><label class="cp-date-filter">Até <input type="date" id="map-date-end"></label><input type="password" class="cp-track-control" id="cp-gps-key" autocomplete="off" placeholder="Chave do rastreio" title="CP_GPS_VIEW_KEY configurada na Vercel"><button type="button" class="cp-track-control" id="cp-gps-refresh">Atualizar GPS</button><button type="button" class="cp-track-control" id="cp-gps-import">Importar JSON do uMov</button><input type="file" id="cp-gps-file" accept=".json,.txt,application/json,text/plain" hidden><button type="button" id="map-reset-team">Todas as equipes</button><button type="button" id="map-expand" aria-label="Ampliar mapa" aria-pressed="false">⛶ Ampliar mapa</button></div></div><div class="map-workspace"><div class="map" id="map"></div><div class="map-team-sidebar"><strong>Equipes no mapa <span id="map-team-total"></span></strong><div id="map-team-list"></div></div></div><div class="map-status-legend" aria-label="Legenda dos marcadores"><span><i style="background:#15966c"></i> Executada</span><span><i style="background:#dc4b54"></i> Rejeitada</span><span><i style="background:#9461cf"></i> Duplicada</span><span><i style="background:#1976c9"></i> Sem classificação</span><span><i style="background:#eeb32b"></i> Programada</span><span><i style="background:#8c98a8"></i> Sem coordenadas (não plotadas)</span></div><div class="map-legend" id="map-info" aria-live="polite">Somente coordenadas registradas no uMov são exibidas. SS sem GPS não recebem posição aproximada.</div></section><div class="right-stack"><section class="panel"><h3>Acompanhamento por equipe <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div class="scroll" id="equipes"></div></section><div class="cp-right-bottom"><section class="panel"><h3>SS por município <small class="cp-period-label" style="font-weight:400;font-size:11px;opacity:.7"></small></h3><div id="chart-cidades"></div></section><section class="panel cp-heat-panel"><h3>Mapa de calor — Inícios reais por dia e hora <small id="cp-heat-period"></small></h3><div id="cp-heatmap"></div></section></div></div></div><div class="bottom"><section class="panel"><div class="mov-head"><h3>Últimas movimentações / SS</h3><div class="mov-tabs" role="group" aria-label="Tipo de movimentação"><button type="button" id="tab-programadas" aria-pressed="false">Programadas</button><button type="button" id="tab-retornadas" class="active" aria-pressed="true">Retornadas</button><button type="button" id="cp-export-excel" title="Exportar todas as SS filtradas da aba ativa, com link do relatório original do uMov">⬇ Exportar Excel</button></div></div><div class="scroll" id="movimentos"></div></section><section class="panel cp-available-panel" id="cp-available-panel"><h3>Equipes sem SS atribuída</h3><div class="scroll" id="cp-available-list" aria-live="polite"><p class="empty">Conferindo somente equipes operacionais ATIVAS do uMov...</p></div></section></div><!-- Compatibilidade V29C: o gráfico foi retirado da tela, mas permanece como alvo interno do renderizador. -->
 <div id="chart-situacao" hidden aria-hidden="true" style="display:none!important"></div><p class="muted" id="rodape">Consulta integrada ao uMov pelo GLOBAL SS (/api/cp/ss). Integração classificada pelo status retornado pelo uMov; valores não reconhecidos aparecem como sem classificação.</p></main><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let base=[],filtered=[];const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();const iso=d=>{const p=String(d||'').split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:''};// V17: Em campo exige início REAL com data e hora, não apenas situação textual.
 const hasStart=x=>{
@@ -216,18 +234,20 @@ function mapRecordDate(x){
  const iso=v.match(/^(\d{4}-\d{2}-\d{2})/);
  return iso?iso[1]:'';
 }
-function passesSharedFilters(x){
+function passesSharedFilters(x,cpIgnoreHeat=false){
  const q=norm($('busca').value),ci=filterChoices.cidade,eq=filterChoices.equipe,st=filterChoices.situacao,inte=filterChoices.integracao;
  return (!ci.size||ci.has(x.cidade))&&(!eq.size||eq.has(x.equipe))&&
         (!st.size||st.has(classify(x)))&&(!inte.size||inte.has(integration(x)))&&
-        (!q||norm([x.ss,x.rua,x.bairro,x.servico,x.equipe].join(' ')).includes(q));
+        (!q||norm([x.ss,x.rua,x.bairro,x.servico,x.equipe].join(' ')).includes(q))&&cpCrossMatch(x,cpIgnoreHeat);
 }
 function mapEligible(x,ignoreTeam=false){
  if(mapMode==='rastreamento')return false;
+ if(!cpCrossMatch(x))return false;
  const status=cpMapStatusAtual(x);
  if(mapMode==='retorno'&&status!=='retorno')return false;
  if(mapMode==='campo'&&status!=='campo')return false;
  if(mapMode==='ambos'&&status!=='retorno'&&status!=='campo')return false;
+ if(mapMode==='programadas'&&status!=='programada')return false;
  const asISO=value=>{const v=String(value||'');const br=v.match(/^(\d{2})\/(\d{2})\/(\d{4})/);if(br)return `${br[3]}-${br[2]}-${br[1]}`;const iso=v.match(/^(\d{4}-\d{2}-\d{2})/);return iso?iso[1]:''};
  const inicio=asISO(x.inicio_real_iso||x.inicio);
  const fim=asISO(x.fim_real_iso||x.fim);
@@ -314,6 +334,7 @@ async function fetchAllCpRows(di,df,force=false,onProgress=null){
 function mapSource(){
  if(!mapDateStart&&!mapDateEnd){
   const pos=new Map(filtered.filter(x=>x.tsk_id).map(x=>[String(x.tsk_id),x]));
+  if(mapMode==='programadas')for(const x of cpProgramadasFiltradas()){const id=String(x.tsk_id);if(id)pos.set(id,{...(pos.get(id)||{}),...x,cp_programada_status:true});}
   if(mapMode==='campo'||mapMode==='ambos')for(const x of cpCampoStatusFiltradas()){
    const id=String(x.tsk_id);if(!id)continue;
    pos.set(id,{...(pos.get(id)||{}),...x,cp_status_execucao:true});
@@ -328,11 +349,12 @@ function mapSource(){
   if(!x.snapshot_ativa||classify(x)!=='campo')continue;
   const id=String(x.tsk_id||'');if(id&&!byId.has(id))byId.set(id,x);
  }
- if(mapMode==='campo'||mapMode==='ambos')for(const x of cpCampoStatusFiltradas()){
+ if(mapMode==='programadas')for(const x of cpProgramadasFiltradas()){const id=String(x.tsk_id);if(id)byId.set(id,{...(byId.get(id)||{}),...x,cp_programada_status:true});}
+  if(mapMode==='campo'||mapMode==='ambos')for(const x of cpCampoStatusFiltradas()){
    const id=String(x.tsk_id);if(!id)continue;
    byId.set(id,{...(byId.get(id)||{}),...x,cp_status_execucao:true});
  }
- return [...byId.values()].filter(x=>x.cp_status_execucao?cpFiltrarStatusAtual(x,'campo'):passesSharedFilters(x));
+ return [...byId.values()].filter(x=>x.cp_status_execucao?cpFiltrarStatusAtual(x,'campo'):x.cp_programada_status?cpFiltrarStatusAtual(x,'programada'):passesSharedFilters(x));
 }
 async function refreshMapData(){
  const version=++mapLoadVersion;
@@ -350,7 +372,7 @@ async function refreshMapData(){
   drawMap();void enrichGps(mapSource().filter(x=>mapEligible(x,true)));
  }catch(e){if(version!==mapLoadVersion)return;mapLoading=false;mapError=e.message;mapRecords=[];drawMap()}
 }
-function drawMapTeams(items){const el=$('map-team-list');if(!el)return;const groups=new Map();for(const x of items){const name=String(x.equipe||'').trim();if(!name||['sem equipe','nao informado','null','undefined'].includes(norm(name)))continue;const g=groups.get(name)||{total:0,ret:0,campo:0};g.total++;if(classify(x)==='retorno')g.ret++;if(cpMapStatusAtual(x)==='campo')g.campo++;groups.set(name,g)}const rows=[...groups].sort((a,b)=>b[1].total-a[1].total||a[0].localeCompare(b[0],'pt-BR'));$('map-team-total').textContent=`(${rows.length})`;el.innerHTML=rows.length?rows.map(([name,g])=>`<button type="button" class="map-team-row ${name===mapSelectedTeam?'selected':''}" data-team="${esc(name)}"><span title="${esc(name)}">${esc(name)}</span><b>${g.total}</b><small>${g.ret} retornadas · ${g.campo} em campo</small></button>`).join(''):'<p class="empty">Nenhuma equipe no filtro.</p>';el.querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>{mapSelectedTeam=mapSelectedTeam===b.dataset.team?'':b.dataset.team;drawMap()});}
+function drawMapTeams(items){const el=$('map-team-list');if(!el)return;const groups=new Map();for(const x of items){const name=String(x.equipe||'').trim();if(!name||['sem equipe','nao informado','null','undefined'].includes(norm(name)))continue;const g=groups.get(name)||{total:0,ret:0,campo:0};g.total++;if(classify(x)==='retorno')g.ret++;if(cpMapStatusAtual(x)==='campo')g.campo++;groups.set(name,g)}const rows=[...groups].sort((a,b)=>b[1].total-a[1].total||a[0].localeCompare(b[0],'pt-BR'));$('map-team-total').textContent=`(${rows.length})`;el.innerHTML=rows.length?rows.map(([name,g])=>`<button type="button" class="map-team-row ${name===mapSelectedTeam?'selected':''}" data-team="${esc(name)}"><span title="${esc(name)}">${esc(name)}</span><b>${g.total}</b><small>${g.ret} retornadas · ${g.campo} em campo</small></button>`).join(''):'<p class="empty">Nenhuma equipe no filtro.</p>';el.querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>{mapSelectedTeam='';cpCrossPick('equipe',b.dataset.team)});}
 // CP_V24_MAPA_RASTREIO: rastreio de agentes e marcadores de SS separados.
 // Nao vincular GPS de uma pessoa a inicio de SS sem evento operacional confirmado.
 let cpTrackPositions=[],cpTrackError='',cpTrackSource='',cpTrackUpdatedAt='',cpTrackLoading=false;
@@ -452,7 +474,7 @@ function cpMapSetModo(){
   if($('cp-gps-key')?.value)void cpTrackFetch();
  }else{
   drawMap();
-  void enrichGps(mapSource().filter(x=>mapEligible(x,true)));
+  if(mapMode!=='programadas')void enrichGps(mapSource().filter(x=>mapEligible(x,true)));
  }
 }
 if($('cp-gps-refresh'))$('cp-gps-refresh').onclick=()=>void cpTrackFetch();
@@ -472,9 +494,9 @@ function drawMap(){
    if(!pt){(groups[x.cidade||'Sem município']??=[]).push(x);missing++;continue}
    precise++;
    const stat=integration(x);const situacaoMapa=cpMapStatusAtual(x);
-   const col=stat==='baixada'?'#15966c':stat==='rejeitada'?'#dc4b54':stat==='duplicada'?'#9461cf':'#1976c9';
+   const col=situacaoMapa==='programada'?'#eeb32b':stat==='baixada'?'#15966c':stat==='rejeitada'?'#dc4b54':stat==='duplicada'?'#9461cf':'#1976c9';
    const marker=L.circleMarker(pt,{radius:7,color:'#fff',weight:2,fillColor:col,fillOpacity:.95}).addTo(mapLayer);
-   marker.bindPopup(`<b>SS ${esc(x.ss||'')}</b><br>${esc(x.rua||'Endereço não informado')}<br>${esc(x.bairro||'')} · ${esc(x.cidade||'')}<br>Equipe: ${esc(x.equipe||'Não informada')}<br>Serviço: ${esc(x.servico_executado_siscom||x.servico||'Não informado')}<br>Atividade: ${esc(situacaoMapa==='retorno'?'Finalizada':'Iniciada')}<br>Início: ${esc(x.inicio||'Não informado')}<br>Fim: ${esc(x.fim||'Não registrado')}<br>Campo: ${esc(x.situacao_campo||'')}<br>Integração: ${esc(integrationLabel[stat]||'Sem classificação')}<br><small>GPS do histórico de execução quando disponível; caso contrário, coordenada cadastrada (verificar precisão).</small>`);
+   marker.bindPopup(`<b>SS ${esc(x.ss||'')}</b><br>${esc(x.rua||'Endereço não informado')}<br>${esc(x.bairro||'')} · ${esc(x.cidade||'')}<br>Equipe: ${esc(x.equipe||'Não informada')}<br>Serviço: ${esc(x.servico_executado_siscom||x.servico||'Não informado')}<br>Atividade: ${esc(situacaoMapa==='retorno'?'Finalizada':situacaoMapa==='programada'?'Programada':'Iniciada')}<br>Início: ${esc(x.inicio||'Não informado')}<br>Fim: ${esc(x.fim||'Não registrado')}<br>Campo: ${esc(x.situacao_campo||'')}<br>Integração: ${esc(integrationLabel[stat]||'Sem classificação')}<br><small>GPS do histórico de execução quando disponível; caso contrário, coordenada cadastrada (verificar precisão).</small>`);
    bounds.push(pt);
  }
  // Sem marcadores municipais ficticios: um municipio nao e a localizacao da SS.
@@ -488,6 +510,119 @@ function drawMap(){
 window.filterMapCity=function(name){const option=[...$('cidade').options].find(o=>norm(o.value)===norm(name));if(option){$('cidade').value=option.value;render()}};
 let cpCadastroEquipes=[];
 const filterChoices={cidade:new Set(),equipe:new Set(),situacao:new Set(),integracao:new Set()};
+/* CP_V29J_FILTROS_CRUZADOS: apenas estado local, sem novas consultas ao clicar. */
+const cpCross={status:'',integracao:'',cidade:'',equipe:'',heat:null,semss:false,tempo:false};
+function cpCrossActive(){return !!(cpCross.status||cpCross.integracao||cpCross.cidade||cpCross.equipe||cpCross.heat||cpCross.semss||cpCross.tempo);}
+function cpCrossDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function cpCrossRoster(){return window.cpV29D?.getEquipes?.()||null;}
+function cpCrossMatch(x,ignoreHeat=false,forcedType=''){
+ const tipo=forcedType|| (x.cp_status_execucao?'campo':x.cp_programada_status?'programada':classify(x));
+ if(cpCross.status&&tipo!==cpCross.status)return false;
+ if(cpCross.integracao&&integration(x)!==cpCross.integracao)return false;
+ if(cpCross.cidade&&(String(x.cidade||'').trim()||'Não informado')!==cpCross.cidade)return false;
+ if(cpCross.equipe&&norm(x.equipe)!==norm(cpCross.equipe))return false;
+ if(cpCross.semss){
+  const roster=cpCrossRoster();
+  if(!roster?.ok)return false;
+  const names=new Set((roster.equipes_sem_ss||[]).map(y=>norm(y.nome)));
+  if(!names.has(norm(x.equipe)))return false;
+ }
+ if(cpCross.tempo&&!cpV29Exec(x))return false;
+ if(!ignoreHeat&&cpCross.heat){
+  const e=cpV29Exec(x);
+  if(!e||cpCrossDate(e.a)!==cpCross.heat.dia||Math.floor(e.a.getHours()/2)!==cpCross.heat.faixa)return false;
+ }
+ return true;
+}
+function cpCrossMovTab(tab){
+ movementTab=tab;
+ $('tab-programadas').classList.toggle('active',tab==='programadas');
+ $('tab-retornadas').classList.toggle('active',tab==='retornadas');
+ $('tab-programadas').setAttribute('aria-pressed',String(tab==='programadas'));
+ $('tab-retornadas').setAttribute('aria-pressed',String(tab==='retornadas'));
+}
+function cpCrossPick(kind,value){
+ if(kind==='status'||kind==='integracao'||kind==='cidade'||kind==='equipe')cpCross[kind]=cpCross[kind]===value?'':value;
+ else if(kind==='semss'||kind==='tempo')cpCross[kind]=!cpCross[kind];
+ if(kind==='status'){
+   cpCrossMovTab(cpCross.status==='programada'?'programadas':'retornadas');
+   const next=cpCross.status==='programada'?'programadas':cpCross.status==='campo'?'campo':'retorno';
+   if(mapMode!=='rastreamento'&&$('map-mode')?.value!==next){$('map-mode').value=next;mapMode=next;}
+ }
+ if(kind==='semss'&&cpCross.semss)window.cpV29D?.setModo?.('sem');
+ render();
+}
+function cpCrossPickHeat(d,slot){
+ const novo={dia:cpCrossDate(d),faixa:slot};
+ cpCross.heat=cpCross.heat&&cpCross.heat.dia===novo.dia&&cpCross.heat.faixa===novo.faixa?null:novo;
+ render();
+}
+function cpCrossClear(kind){
+ if(kind==='all'){
+  Object.assign(cpCross,{status:'',integracao:'',cidade:'',equipe:'',heat:null,semss:false,tempo:false});
+  cpCrossMovTab('retornadas');
+  if(mapMode==='programadas'){$('map-mode').value='retorno';mapMode='retorno';}
+ }else if(kind==='heat')cpCross.heat=null;
+ else if(kind==='semss'||kind==='tempo')cpCross[kind]=false;
+ else cpCross[kind]='';
+ if(kind==='status')cpCrossMovTab('retornadas');
+ render();
+}
+function cpCrossUI(){
+ const bar=$('cp-cross-state');if(!bar)return;
+ const names={status:{retorno:'Retornadas',campo:'Notas em campo',programada:'Programadas'},integracao:{baixada:'Baixadas',rejeitada:'Rejeitadas',duplicada:'Duplicadas',pendente:'Sem classificação'}};
+ const chips=[];
+ for(const k of ['status','integracao','cidade','equipe'])if(cpCross[k])chips.push([k,(names[k]?.[cpCross[k]]||cpCross[k])]);
+ if(cpCross.heat)chips.push(['heat',`Inícios: ${cpCross.heat.dia.split('-').reverse().join('/')} · ${String(cpCross.heat.faixa*2).padStart(2,'0')}-${String(cpCross.heat.faixa*2+2).padStart(2,'0')}h`]);
+ if(cpCross.semss)chips.push(['semss','Equipes sem SS atual']);
+ if(cpCross.tempo)chips.push(['tempo','SS com duração real']);
+ bar.hidden=!chips.length;
+ bar.innerHTML=chips.length?`<strong>Seleção dos painéis:</strong> ${chips.map(([k,label])=>`<button type="button" data-cp-cross-clear="${k}" title="Remover este filtro">${esc(label)} ×</button>`).join(' ')}<button type="button" class="cp-cross-reset" data-cp-cross-clear="all">Limpar seleções</button>`:'';
+ $('kpis')?.querySelectorAll('[data-kpi]').forEach(card=>{
+  const key=card.dataset.kpi;
+  const selected=key==='retornadas'?cpCross.status==='retorno':key==='programadas'?cpCross.status==='programada':
+   ['baixadas','rejeitadas','duplicadas'].includes(key)?cpCross.integracao===({baixadas:'baixada',rejeitadas:'rejeitada',duplicadas:'duplicada'}[key]):!!cpCross[key];
+  card.classList.toggle('cp-cross-active',selected);
+  card.setAttribute('role','button');card.setAttribute('tabindex','0');card.setAttribute('aria-pressed',String(selected));
+  card.title=card.title||'Clique para filtrar todos os painéis. Clique novamente para desfazer.';
+ });
+ $('chart-cidades')?.querySelectorAll('[data-cp-city]').forEach(e=>e.classList.toggle('cp-cross-active',e.dataset.cpCity===cpCross.cidade));
+ $('equipes')?.querySelectorAll('[data-cp-team]').forEach(e=>e.classList.toggle('cp-cross-active',norm(e.dataset.cpTeam)===norm(cpCross.equipe)));
+ $('cp-available-list')?.querySelectorAll('[data-cp-team]').forEach(e=>e.classList.toggle('cp-cross-active',norm(e.dataset.cpTeam)===norm(cpCross.equipe)));
+}
+function cpCrossUpdateKpis(state){
+ const sem=$('kpis')?.querySelector('[data-kpi="semss"]');
+ const tm=$('kpis')?.querySelector('[data-kpi="tempo"]');
+ const hasDropdown=Object.values(filterChoices).some(s=>s.size)||!!$('busca')?.value?.trim();
+ if(!cpCrossActive()&&!hasDropdown)return;
+ if(tm){
+  const range=cpV29Range(),uniq=new Map();
+  for(const x of filtered){const e=cpV29Exec(x);if(e&&(!range||(e.b>=range.a&&e.b<=range.b)))uniq.set(String(x.tsk_id||x.ss),e);}
+  const valores=[...uniq.values()];
+  const n=valores.length;
+  tm.querySelector('strong').textContent=n?`≈ ${(valores.reduce((a,v)=>a+(v.b-v.a)/60000,0)/n).toLocaleString('pt-BR',{maximumFractionDigits:1})} min`:'—';
+  tm.title=n?`Tempo médio estimado a partir de ${n} SS com início e fim reais na amostra filtrada (pode ser parcial).`:'Sem SS com início e fim reais nos filtros atuais.';
+ }
+ if(sem){
+  const roster=state?.equipes;
+  if(!roster?.ok){sem.querySelector('strong').textContent='—';sem.title='Cadastro de equipes ativas indisponível.';return;}
+  // O cadastro não oferece município, situação histórica nem hora da execução por equipe.
+  // Nesses recortes, não inventar uma contagem de equipes sem SS.
+  const unavailable=cpCross.status||cpCross.integracao||cpCross.cidade||cpCross.heat||cpCross.tempo||filterChoices.cidade.size||filterChoices.situacao.size||filterChoices.integracao.size||$('busca')?.value?.trim();
+  if(unavailable){sem.querySelector('strong').textContent='—';sem.title='Equipes sem SS é um indicador de atribuição atual, sem cruzamento confiável com status, município ou hora histórica.';return;}
+  const teams=cpCross.equipe?[cpCross.equipe]:[...filterChoices.equipe];
+  const semNames=new Set((roster.equipes_sem_ss||[]).map(x=>norm(x.nome)));
+  const allNames=new Set((roster.equipes_todas||[]).map(x=>norm(x.nome)));
+  const count=teams.length?[...new Set(teams.map(norm))].filter(n=>semNames.has(n)).length:Number(roster.total_sem_ss||0);
+  sem.querySelector('strong').textContent=String(count)+(roster.parcial?'+':'');
+  sem.title=teams.length?`${count} das ${teams.length} equipes selecionadas não possuem SS atual. Cadastro operacional ativo.`:
+   `${count} equipes operacionais ativas sem SS atual. Cadastro uMov.`;
+ }
+}
+window.cpCross=cpCross;window.cpCrossUpdateKpis=cpCrossUpdateKpis;
+window.cpCrossRosterReady=()=>{if(cpCross.semss)render();};
+
+
 const staticOptions={situacao:[['campo','Notas em campo'],['retorno','Retornada de campo'],['programada','Programadas']],integracao:[['baixada','Baixada'],['rejeitada','Rejeitada'],['duplicada','Duplicada'],['pendente','Sem classificação']]};
 const filterTitles={cidade:'Municípios',equipe:'Equipes',situacao:'Situação',integracao:'Integração'};
 function drawFilter(id,options){
@@ -564,7 +699,7 @@ function cpFiltrarStatusAtual(x,tipo){
        inte=filterChoices.integracao,q=norm($('busca').value);
  return (!ci.size||ci.has(x.cidade))&&(!eq.size||eq.has(x.equipe))&&
    (!st.size||st.has(tipo))&&(!inte.size||inte.has(integration(x)))&&
-   (!q||norm([x.ss,x.rua,x.bairro,x.macro,x.servico,x.equipe].join(' ')).includes(q));
+   (!q||norm([x.ss,x.rua,x.bairro,x.macro,x.servico,x.equipe].join(' ')).includes(q))&&cpCrossMatch(x,false,tipo);
 }
 function cpProgramadasFiltradas(){
  return cpProgramadasStatus.filter(x=>!cpExecucaoConfirmada(x)&&!hasEnd(x)&&hasTeam(x)&&
@@ -669,7 +804,7 @@ function cpLocationCell(x){
 function cpMacro(x){
  return [x.macro,x.servico,x.macro_servico,x.descricao_macro].find(v=>v!==null&&v!==undefined&&String(v).trim())||'Não informado no uMov';
 }
-function renderExecution(){
+function renderExecution(){if(!$('execucao'))return;
  // CP_V23_EXECUCAO_STATUS_GPS: executar em outra data nao deixa de ser nota em campo.
  const porId=new Map(filtered.filter(isExecutando).map(x=>[String(x.tsk_id),x]));
  const retornadas=new Set(filtered.filter(x=>classify(x)==='retorno').map(x=>String(x.tsk_id)));
@@ -726,7 +861,7 @@ function cpV29Exec(x){
 function cpRenderV29(rows,ranking){
  const range=cpV29Range();
  const completos=new Map();
- for(const x of (filtered||[])){
+ for(const x of base.filter(x=>passesSharedFilters(x,true))){
   const e=cpV29Exec(x);
   if(!e)continue;
   const id=String(x.tsk_id||x.ss||'');
@@ -778,7 +913,7 @@ function cpRenderV29(rows,ranking){
   for(let h=0;h<12;h++){
    const n=counts[i][h],nivel=!n?0:Math.max(1,Math.ceil(n/max*4));
    const details=buckets[i][h].slice(0,5).map(r=>`${r.ss} (${hr(r.inicio)}-${hr(r.fim)})`).join(', ');
-   html+=`<button type="button" class="cp-heat-cell cp-heat-level-${nivel}" ${inRange?'':'disabled'} title="${names[d.getDay()]} ${fmt(d)} ${faixa(h)}: ${n} SS iniciadas${details?' | '+esc(details):''}" data-day="${i}" data-hour="${h}" aria-label="${fmt(d)} ${faixa(h)}: ${n} SS iniciadas"></button>`;
+   html+=`<button type="button" class="cp-heat-cell cp-heat-level-${nivel}${cpCross.heat&&cpCross.heat.dia===cpCrossDate(d)&&cpCross.heat.faixa===h?' cp-cross-active-heat':''}" ${inRange?'':'disabled'} title="${names[d.getDay()]} ${fmt(d)} ${faixa(h)}: ${n} SS iniciadas${details?' | '+esc(details):''}" data-day="${i}" data-hour="${h}" aria-label="${fmt(d)} ${faixa(h)}: ${n} SS iniciadas"></button>`;
   }
   html+='</div>';
  }
@@ -791,6 +926,7 @@ function cpRenderV29(rows,ranking){
   const titulo=`${names[d.getDay()]} ${fmt(d)} ${faixa(h)}: ${lista.length} SS iniciadas`;
   const registros=lista.slice(0,40).map(r=>`${r.ss} | ${r.equipe||'Equipe não informada'} | início ${hr(r.inicio)} | fim ${hr(r.fim)}`);
   $('cp-heat-detail').textContent=[titulo,...registros,lista.length>40?`... e outras ${lista.length-40}`:''].filter(Boolean).join(' • ');
+  cpCrossPickHeat(d,h);
  }));
 }
 function render(){
@@ -872,7 +1008,7 @@ function render(){
   `<div class="city-bars">${exibidas.map(c=>{
     const altura=Math.max(3,100*c.total/maximo);
     const shares=[['retorno','ret'],['campo','campo'],['programada','prog']].filter(([k])=>c[k]>0).map(([k,classe])=>`<i class="${classe}" style="height:${c[k]*100/c.total}%" title="${esc(k)}: ${c[k]}"></i>`).join('');
-    return `<div class="city-col"><strong>${c.total}</strong><div class="city-stack" style="height:${altura}%" title="${esc(c.nome)}: ${c.retorno} retornadas, ${c.campo} em campo, ${c.programada} programadas">${shares}</div><span title="${esc(c.nome)}">${esc(c.nome)}</span></div>`;
+    return `<div class="city-col" data-cp-city="${c.nome==='Outros'?'':esc(c.nome)}" title="${esc(c.nome)} — clique para filtrar"><strong>${c.total}</strong><div class="city-stack" style="height:${altura}%" title="${esc(c.nome)}: ${c.retorno} retornadas, ${c.campo} em campo, ${c.programada} programadas">${shares}</div><span title="${esc(c.nome)}">${esc(c.nome)}</span></div>`;
    }).join('')}</div><div class="city-legend"><span style="--city-color:#1479d1">Retornadas: ${cpTotais.retornadas}</span><span style="--city-color:#00ad86">Notas em campo: ${cpTotais.campo}</span><span style="--city-color:#efac23">Programadas: ${cpTotais.programadas}</span></div>`
   :'<p class="empty">Nenhuma SS nas situações selecionadas.</p>';
  // Equipes usam o mesmo conjunto operacional, com a mesma situacao de cada SS.
@@ -893,7 +1029,7 @@ function render(){
  $('equipes').innerHTML=ranking.length?
   `<table class="team-ranking"><thead><tr><th>#</th><th>Equipe</th><th style="text-align:center">Recebidas</th><th style="text-align:center">Retornadas</th><th style="text-align:center">Notas em campo</th><th style="text-align:center">Baixadas</th><th style="text-align:center">Rejeitadas</th><th style="text-align:center">Duplicadas</th><th style="text-align:center">% Retorno</th><th>Progresso</th></tr></thead><tbody>${ranking.map((t,i)=>{
     const pct=t.received?Math.round(100*t.done/t.received):0;
-    return `<tr><td><span class="rank ${i<3?'top':''}">${i+1}</span></td><td><div class="name" title="${esc(t.nome)}">${esc(t.nome)}</div></td><td class="number">${t.received}</td><td class="number">${t.done}</td><td class="number">${t.campo}</td><td class="number">${t.baixadas}</td><td class="number">${t.rejeitadas}</td><td class="number">${t.duplicadas}</td><td class="number pct">${pct}%</td><td class="progress"><div class="mini-bar"><i class="${pct===100?'complete':''}" style="width:${pct}%"></i></div></td></tr>`;
+    return `<tr data-cp-team="${esc(t.nome)}"><td><span class="rank ${i<3?'top':''}">${i+1}</span></td><td><div class="name" title="${esc(t.nome)}">${esc(t.nome)}</div></td><td class="number">${t.received}</td><td class="number">${t.done}</td><td class="number">${t.campo}</td><td class="number">${t.baixadas}</td><td class="number">${t.rejeitadas}</td><td class="number">${t.duplicadas}</td><td class="number pct">${pct}%</td><td class="progress"><div class="mini-bar"><i class="${pct===100?'complete':''}" style="width:${pct}%"></i></div></td></tr>`;
    }).join('')}</tbody></table>`:'<p class="empty">Nenhuma SS com equipe vinculada nas situações dos cartões.</p>';
  const movimentos=operacionais.filter(x=>movementTab==='programadas'?situacaoDe(x)==='programada':situacaoDe(x)==='retorno');
  const sorted=[...movimentos].sort((a,b)=>(iso(b.data)||'').localeCompare(iso(a.data)||''));
@@ -904,7 +1040,7 @@ function render(){
   ['Situação campo',x=>`<span class="status ${situacaoDe(x)}">${esc(x.situacao_campo||label[situacaoDe(x)])}</span>`],
   ['Integração',x=>`<span class="status ${integration(x)}">${integrationLabel[integration(x)]}</span>`]
  ]);
- cpRenderV29(operacionais,ranking);if(window.cpV29D)window.cpV29D.render();drawMap();scheduleGpsRefresh();
+ cpRenderV29(operacionais,ranking);if(window.cpV29D)window.cpV29D.render();cpCrossUI();drawMap();scheduleGpsRefresh();
 }
 
 // Excel real (.xlsx), exportando todas as movimentacoes que atendem aos filtros.
@@ -953,8 +1089,8 @@ async function exportarMovimentacoesExcel(){
  finally{btn.disabled=false;btn.textContent=prev;}
 }
 $('cp-export-excel').addEventListener('click',exportarMovimentacoesExcel);
-$('tab-programadas').onclick=()=>{movementTab='programadas';$('tab-programadas').classList.add('active');$('tab-retornadas').classList.remove('active');$('tab-programadas').setAttribute('aria-pressed','true');$('tab-retornadas').setAttribute('aria-pressed','false');render()};
-$('tab-retornadas').onclick=()=>{movementTab='retornadas';$('tab-retornadas').classList.add('active');$('tab-programadas').classList.remove('active');$('tab-retornadas').setAttribute('aria-pressed','true');$('tab-programadas').setAttribute('aria-pressed','false');render()};
+$('tab-programadas').onclick=()=>{cpCross.status='programada';cpCrossMovTab('programadas');if(mapMode!=='rastreamento'){$('map-mode').value='programadas';mapMode='programadas';}render()};
+$('tab-retornadas').onclick=()=>{cpCross.status='retorno';cpCrossMovTab('retornadas');if(mapMode!=='rastreamento'){$('map-mode').value='retorno';mapMode='retorno';}render()};
 let gpsRequestVersion=0;
 async function enrichGps(data){
  if(gpsBusy){gpsRerun=true;return}
@@ -1293,7 +1429,7 @@ body.global-dark #kpis .kpi:nth-child(3) span{color:#fff1bd!important}
      requestAnimationFrame(()=>{leafletMap.invalidateSize({pan:false});setTimeout(()=>leafletMap.invalidateSize({pan:false}),180)});
    }
  }
- const mode=document.getElementById('map-mode'),from=document.getElementById('map-date-start'),to=document.getElementById('map-date-end');if(mode)mode.onchange=()=>{mapMode=mode.value;cpMapSetModo()};if(from)from.onchange=()=>{mapDateStart=from.value;void refreshMapData()};if(to)to.onchange=()=>{mapDateEnd=to.value;void refreshMapData()};const reset=document.getElementById('map-reset-team');if(reset)reset.onclick=()=>{mapSelectedTeam='';drawMap()};
+ const mode=document.getElementById('map-mode'),from=document.getElementById('map-date-start'),to=document.getElementById('map-date-end');if(mode)mode.onchange=()=>{mapMode=mode.value;cpMapSetModo()};if(from)from.onchange=()=>{mapDateStart=from.value;void refreshMapData()};if(to)to.onchange=()=>{mapDateEnd=to.value;void refreshMapData()};const reset=document.getElementById('map-reset-team');if(reset)reset.onclick=()=>{mapSelectedTeam='';cpCross.equipe='';render()};
  button.addEventListener('click',()=>toggle());
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&panel.classList.contains('map-expanded'))toggle(false)});
 })();
@@ -1371,15 +1507,19 @@ body:not(.global-dark) #cp-available-list .cp-roster-line b{color:#087ba1}
      const totalSem=Number(e.total_sem_ss ?? 0);
      const aviso=`${total} equipes operacionais ATIVAS • ${totalSem} sem SS atual • ${Number(e.total_com_ss ?? (total-totalSem))} com SS. ${e.observacao||'Sem SS não confirma disponibilidade.'}${e.parcial?' Resultado parcial.':''}`;
      const modo=state.modoEquipes;
-     const rows=modo==='todas'?(e.equipes_todas||e.equipes_sem_ss||[]):(e.equipes_sem_ss||[]);
+     const rowsBase=modo==='todas'?(e.equipes_todas||e.equipes_sem_ss||[]):(e.equipes_sem_ss||[]);
+     const selecionadas=window.cpCross?.equipe?[window.cpCross.equipe]:[...filterChoices.equipe];
+     const selecionadasNorm=new Set(selecionadas.map(norm));
+     const rows=selecionadasNorm.size?rowsBase.filter(x=>selecionadasNorm.has(norm(x.nome))):rowsBase;
      const botoes='<div class="cp-roster-switch" role="group" aria-label="Exibição de equipes"><button type="button" data-cp-roster="sem" aria-pressed="'+String(modo==='sem')+'">Sem SS ('+totalSem+')</button><button type="button" data-cp-roster="todas" aria-pressed="'+String(modo==='todas')+'">Todas ('+total+')</button></div>';
-     const itens=rows.length?rows.map(x=>'<div class="cp-roster-line"><span>'+h(x.nome)+'</span><b class="'+(x.com_ss?'cp-roster-assigned':'')+'">'+(x.com_ss?'Com SS':'Sem SS')+'</b></div>').join(''):'<p class="empty">Nenhuma equipe encontrada neste modo.</p>';
+     const itens=rows.length?rows.map(x=>'<div class="cp-roster-line" data-cp-team="'+h(x.nome)+'"><span>'+h(x.nome)+'</span><b class="'+(x.com_ss?'cp-roster-assigned':'')+'">'+(x.com_ss?'Com SS':'Sem SS')+'</b></div>').join(''):'<p class="empty">Nenhuma equipe encontrada neste modo.</p>';
      const rolagem=lista.scrollTop;
      lista.innerHTML=botoes+'<div class="cp-roster-meta">'+h(aviso)+'</div>'+itens;
      // O seletor de modo nao deve executar outra consulta nem recarregar a pagina.
      lista.querySelectorAll('[data-cp-roster]').forEach(btn=>btn.addEventListener('click',()=>{state.modoEquipes=btn.dataset.cpRoster;lista.scrollTop=0;ctrl.render();}));
      if(lista.scrollHeight>lista.clientHeight && rolagem>0)lista.scrollTop=rolagem;
     }else lista.innerHTML='<p class="empty">'+h(state.erroEquipes||'Consultando equipes cadastradas e suas SS atuais...')+'</p>';
+   if(window.cpCrossUpdateKpis)window.cpCrossUpdateKpis(state);
    }
   },
   async equipes(force=false){
@@ -1387,7 +1527,7 @@ body:not(.global-dark) #cp-available-list .cp-roster-line b{color:#087ba1}
    try{
     const r=await fetch('/api/cp/equipes-sem-ss',{cache:'no-store',signal:AbortSignal.timeout(18000)});
     const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Cadastro de equipes nao confirmado');
-    state.equipes=j;state.erroEquipes='';state.ultimaEquipe=Date.now();
+    state.equipes=j;state.erroEquipes='';state.ultimaEquipe=Date.now();if(window.cpCrossRosterReady)window.cpCrossRosterReady();
    }catch(e){state.erroEquipes='Equipes sem SS: '+e.message;state.equipes=null;}
    this.render();
   },
@@ -1404,11 +1544,38 @@ body:not(.global-dark) #cp-available-list .cp-roster-line b{color:#087ba1}
   },
   atualizar(force=false){void this.equipes(force);void this.tempo();}
  };
- window.cpV29D=ctrl;
+ ctrl.getEquipes=()=>state.equipes;ctrl.setModo=m=>{state.modoEquipes=m;ctrl.render();};window.cpV29D=ctrl;
  ['di','df'].forEach(id=>$(id)?.addEventListener('change',()=>ctrl.tempo()));
  const reload=$('reload');if(reload){const original=reload.onclick;reload.onclick=function(e){ctrl.atualizar(true);return original?.call(this,e);};}
  // Consulta independente: uma falha destes KPIs nunca interrompe o mapa nem as tabelas.
  ctrl.render();setTimeout(()=>ctrl.atualizar(false),200);
 })();
 </script>
+<script id="CP_V29J_EVENTOS_CROSSFILTER">
+(function(){
+ const $=id=>document.getElementById(id);
+ const keys={retornadas:['status','retorno'],programadas:['status','programada'],baixadas:['integracao','baixada'],rejeitadas:['integracao','rejeitada'],duplicadas:['integracao','duplicada'],semss:['semss',''],tempo:['tempo','']};
+ $('kpis')?.addEventListener('click',e=>{
+  const el=e.target.closest('[data-kpi]');if(!el)return;const [kind,val]=keys[el.dataset.kpi]||[];if(kind)cpCrossPick(kind,val);
+ });
+ $('kpis')?.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'&&e.key!==' ')return;const el=e.target.closest('[data-kpi]');if(!el)return;e.preventDefault();const [kind,val]=keys[el.dataset.kpi]||[];if(kind)cpCrossPick(kind,val);
+ });
+ $('chart-cidades')?.addEventListener('click',e=>{
+  const el=e.target.closest('[data-cp-city]');if(el?.dataset.cpCity)cpCrossPick('cidade',el.dataset.cpCity);
+ });
+ $('equipes')?.addEventListener('click',e=>{
+  const el=e.target.closest('[data-cp-team]');if(el?.dataset.cpTeam)cpCrossPick('equipe',el.dataset.cpTeam);
+ });
+ $('cp-available-list')?.addEventListener('click',e=>{
+  if(e.target.closest('[data-cp-roster]'))return;
+  const el=e.target.closest('[data-cp-team]');if(el?.dataset.cpTeam)cpCrossPick('equipe',el.dataset.cpTeam);
+ });
+ ['di','df'].forEach(id=>$(id)?.addEventListener('change',()=>{if(cpCross.heat)cpCrossClear('heat');}));
+ $('cp-cross-state')?.addEventListener('click',e=>{
+  const el=e.target.closest('[data-cp-cross-clear]');if(el)cpCrossClear(el.dataset.cpCrossClear);
+ });
+})();
+</script>
+
 </body></html>
