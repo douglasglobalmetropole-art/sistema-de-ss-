@@ -66,10 +66,13 @@ module.exports = function registrarIndicadoresAdicionais(app, pool, { sbRequest 
   function v29iPrimeiraColuna(existentes, preferencias) {
     return preferencias.find(x => existentes.has(x)) || '';
   }
+  // CP_V29K_FELIPE_364: equipe de campo com nome numerado ao final e login legado prog.g04.
   function v29iEquipeOperacional(nome, login) {
     const n = v29iNormalizar(nome), l = v29iNormalizar(login);
-    // Nao considerar usuarios sem identificacao operacional; codigos 001/002
-    // da lista fornecida sao acessos de programadores, nao equipes de campo.
+    // Felipe 364 e equipe operacional mesmo com login historico iniciado por PROG.
+    // Excecao limitada a este usuario: os demais programadores continuam excluidos.
+    const felipe364 = /^(?:364\s*[-–.]\s*FELIPE|FELIPE\s*[-–.]?\s*364)$/.test(n);
+    if (felipe364) return true;
     const m = n.match(/^(?:EQUIPE\s*)?(\d{3,4})(?!\d)(?:\s*[-–.]|\s|$)/);
     if (!m || Number(m[1]) < 100) return false;
     if (/(?:^|[.\-_])PROG|^PROG|PROGRAMADOR|PROGRAMACAO|MEDICAO|MASTER|ADMIN|SUPORTE|TESTE/.test(l)) return false;
