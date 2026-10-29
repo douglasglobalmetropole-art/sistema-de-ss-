@@ -1,3 +1,4 @@
+/* CORRECAO_VISUAL_GLOBAL_20261029 */
 /* Global SS | Recepcao: Matriz e selecao de SS duplicatas.
    As TAGs sao aplicadas somente por acao expressa e validada no servidor. */
 (()=>{
@@ -33,7 +34,7 @@ function cabecalho(ss){return `<div class="dupSummary"><div class="dupSumCard"><
 function linha(d,{matriz=false,selecionavel=false,habilitado=false}={}){
  const titulo=matriz?'Matriz':selecionavel?'Possivel duplicata':categoria[d.categoria]||'Revisar';
  const select=selecionavel?`<label class="dm-select"><input type="checkbox" data-dup-tarefa="${Number(d.tsk_id)}" aria-label="Selecionar ${safe(d.ss)}" ${habilitado?'':'disabled'}> <span class="dm-tiny">Marcar</span></label>`:matriz?'<span class="dupBadge field">Matriz</span>':'—';
- return `<tr><td>${select}</td><td class="dupSS">${safe(d.ss)}</td><td>${safe(data(d.registro_em))}</td>
+ return `<tr><td>${select}</td><td class="dupSS">${safe(d.ss)}</td><td>${safe(data(d.registro_em))}</td><td>${safe([d.logradouro, d.numero ? "Nº "+d.numero : "sem numero", d.bairro].filter(Boolean).join(" · "))}</td>
   <td><span class="dupBadge ${classe(d.situacao||'')}">${safe(d.situacao||'Nao informado')}</span></td>
   <td>${safe(d.matricula||'—')}</td><td>${safe(d.hidrometro||'—')}</td>
   <td>${safe(d.servico||'—')}</td>
@@ -45,27 +46,27 @@ function quadro(j){
  const chaves=new Set([...(matriz?[matriz.ss]:[]),...duplicates.map(r=>r.ss)]);
  const extras=todos.filter(r=>!chaves.has(r.ss));
  const lista=matriz?[matriz,...duplicates]:[];
- const head='<thead><tr><th>Selecionar</th><th>SS</th><th>Abertura</th><th>Situacao</th><th>Matricula</th><th>Hidrometro</th><th>Servico</th><th>Classificacao</th></tr></thead>';
+ const head='<thead><tr><th>Selecionar</th><th>SS</th><th>Abertura</th><th>Endereco / Numero</th><th>Situacao</th><th>Matricula</th><th>Hidrometro</th><th>Servico</th><th>Classificacao</th></tr></thead>';
  const linhas=lista.map((r,i)=>linha(r,{matriz:i===0,selecionavel:i>0,habilitado:!!j.pode_selecionar})).join('');
  const cobertura=j.cobertura||{};
  const bloqueio=j.motivo_bloqueio?`<div class="dm-warning"><strong>Marcacao indisponivel:</strong> ${safe(j.motivo_bloqueio)}</div>`:'';
  const matrizBox=matriz?`<div class="dm-matriz"><div class="dm-label">▣ Matriz</div><strong>${safe(matriz.ss)}</strong>
  <div class="dm-meta">Data de abertura: ${safe(data(matriz.registro_em))} · Matricula: ${safe(matriz.matricula||'—')} · Hidrometro: ${safe(matriz.hidrometro||'—')}</div>
  <div class="dm-meta">Esta SS e a referencia do grupo. A TAG nao sera aplicada nela.</div></div>`:
- `<div class="dm-warning">Nao foi possivel definir uma Matriz para as correspondencias encontradas. Nenhuma TAG sera gravada.</div>`;
+ `<div class="dm-warning"><b>Nenhuma duplicidade forte identificada ate o momento para esta SS.</b><div class="dm-meta">${extras.length ? extras.length + " SS com coincidencias parciais estao listadas abaixo, para conferencia." : "Nenhuma outra SS comparavel foi encontrada."} Mesma rua com numeros diferentes ou servicos distintos no mesmo endereco nao confirmam duplicidade. Nenhuma TAG sera gravada.</div></div>`;
  return `${cabecalho(alvo.ss||'—')}${matrizBox}
  <div class="dupSectionHead" style="margin-top:15px"><h3>Grupo de duplicidades <span class="dupCount">${duplicates.length}</span></h3>
  <span class="dm-tiny">Somente correspondencias fortes do mesmo tipo de servico</span></div>
  <div class="dupTableArea">${lista.length?`<table class="dupTable">${head}<tbody>${linhas}</tbody></table>`:
- '<div class="dupEmpty">Nenhuma duplicata elegivel localizada no indice.</div>'}</div>
+ '<div class="dupEmpty">Nenhuma duplicata confirmada pelos criterios de matricula, hidrometro ou endereco completo.</div>'}</div>
  ${bloqueio}
  <div class="dm-action"><div><div class="dm-label">TAG nas SS selecionadas</div><div class="dm-meta">${matriz?safe('DUPLICATA DA SS '+matriz.ss):'Selecione uma Matriz valida'}</div>
  <div class="dm-tiny" id="dmContador">0 SS selecionadas</div></div>
  <button id="dupAplicarTag" class="dupAction" type="button" ${j.pode_selecionar&&duplicates.length?'disabled':'disabled'}>Aplicar TAG nas selecionadas</button></div>
  <div id="dmFeedback" class="dm-feedback" role="status" aria-live="polite"></div>
- <details class="dm-secondary" ${extras.length?'':'style="display:none"'}><summary>Outras correspondencias: ${extras.length} (somente consulta)</summary>
+ <details class="dm-secondary" ${extras.length ? (!matriz ? 'open' : '') : 'style="display:none"'}><summary>Correspondencias para revisao: ${extras.length} (nao confirmadas)</summary>
  <div class="dupTableArea"><table class="dupTable">${head}<tbody>${extras.map(r=>linha(r)).join('')}</tbody></table></div>
- <div class="dm-tiny">Mesmo endereco com servico diferente, ou mesma rua, nao gera TAG automaticamente.</div></details>
+ <div class="dm-tiny">Correspondencias da mesma rua com numeros distintos sao referencias para revisao, nao duplicatas. TAG apenas para grupo confirmado.</div></details>
  <div class="dupCriteria"><h3>ⓘ Criterios de comparacao</h3><div class="dupCriteriaGrid">
  <div class="dupCriterion"><span>Mesma matricula valida</span><span class="dupPoints">40 pts</span></div>
  <div class="dupCriterion"><span>Mesmo hidrometro valido</span><span class="dupPoints">30 pts</span></div>
