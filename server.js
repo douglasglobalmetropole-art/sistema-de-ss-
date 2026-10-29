@@ -1154,7 +1154,17 @@ app.post('/api/tags',async(req,res)=>{try{
  if(sucesso)cache.clear();
  res.status(sucesso?200:502).json({ok:sucesso>0,tag,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
 }catch(error){res.status(500).json({ok:false,error:`Não foi possível gravar a tag: ${String(error?.message||'Erro interno').slice(0,300)}`})}});
-require('./duplicidades-index').registrar(app,{pool:poolPrincipal,autorizado:gatewayAuthorized,rest:gatewayRest});
+require('./duplicidades-index').registrar(app,{
+ pool:poolPrincipal,
+ autorizado:gatewayAuthorized,
+ podeEscrever:gatewayCanWrite,
+ origemOk:siscomSameOrigin,
+ rest:gatewayRest,
+ escreverTag:async(tarefa,tag)=>{
+  await postUmovXml('schedule',tarefa,`<schedule><customFields><tag>${xmlEscape(tag)}</tag></customFields></schedule>`);
+  cache.clear();
+ }
+});
 require('./busca-ss-fisica').registrar(app,{pool,hostRelatorioUmov});
 // No computador local, mantenha o comportamento original: `npm start`.
 // Na Vercel, o adaptador Node importa este Express app e não abre uma porta.
