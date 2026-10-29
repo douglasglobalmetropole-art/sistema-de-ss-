@@ -1165,6 +1165,7 @@ require('./duplicidades-index').registrar(app,{
   cache.clear();
  }
 });
+require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal});
 require('./busca-ss-fisica').registrar(app,{pool,hostRelatorioUmov});
 // No computador local, mantenha o comportamento original: `npm start`.
 // Na Vercel, o adaptador Node importa este Express app e não abre uma porta.

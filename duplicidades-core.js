@@ -10,7 +10,7 @@ function ruaNumero(rua,numero){
  let raw=semAcento(rua).toUpperCase().replace(/\s+/g,' ').trim();
  let n=codigo(numero);
  // uMov guarda frequentemente "RUA AFONSO PENA, 295," em loc_street.
- if(!n){const m=raw.match(/,\s*(\d+[A-Z]?)\s*,?\s*$/);if(m){n=m[1];raw=raw.slice(0,m.index);}}
+ const m=raw.match(/,\s*(\d+[A-Z]?)\s*,?\s*$/);if(m){const extraido=codigo(m[1]);if(!n||n===extraido){if(!n)n=extraido;raw=raw.slice(0,m.index);}}
  raw=raw.replace(/^(RUA|R\.|AVENIDA|AV\.|AV|TRAVESSA|TV\.|ESTRADA|RODOVIA)\s+/,'').replace(/,\s*$/,'');
  return {rua:texto(raw),numero:n};
 }
