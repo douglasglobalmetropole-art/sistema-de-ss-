@@ -408,6 +408,7 @@ function setScreen(screen,btn){
   }else if(currentScreen==='campo' && screen!=='campo'){
     setDefaultDateRange();
   }
+  if(window.__buscaSSAtiva){const quick=document.getElementById('buscaDiretaSS');if(quick)quick.value='';document.getElementById('buscaDiretaLimpar')?.click();}
   currentScreen=screen;document.body.classList.toggle('tram-mode',screen==='tramitacao');if(screen==='tramitacao')tramInit();window.__detailSS=null;
   $('tramitacaoIntro').hidden=screen!=='tramitacao';
   document.querySelector('.hint').textContent=screen==='tramitacao'?'Selecione uma SS para visualizar seus dados e relatório. Nenhuma operação de tramitação é executada nesta tela.':'Marque uma ou várias SS. A opção de envio abre somente após selecionar.';
@@ -581,9 +582,10 @@ async function load(forcarAtualizacao=false){
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
-    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!somenteEquipe;if(forcarAtualizacao)p.set('_refresh',String(Date.now()));let r=await fetch((global?'/api/pesquisa-global?':'/api/recepcao?')+p,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),cidade:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!(somenteEquipe&&currentScreen!=='recepcao');if(forcarAtualizacao)p.set('_refresh',String(Date.now()));if(ssBusca&&ssBusca.length<4){$('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return;}const direta=ssBusca.length>=4;const caminho=direta?'/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page}):(global?'/api/pesquisa-global?':'/api/recepcao?')+p;let r=await fetch(caminho,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
-    raw=reconciliarEquipes(j.rows||[]);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
+    if(direta&&filtros.length>1){j.rows=(j.rows||[]).filter(item=>filtros.every(f=>f.dataset.col==='ss'||String(f.dataset.col==='data_finalizacao'?(item.periodo_execucao||item.data_finalizacao||''):(item[f.dataset.col]??'')).toLocaleLowerCase('pt-BR').includes(f.value.trim().toLocaleLowerCase('pt-BR'))));j.total=j.rows.length;}
+    raw=reconciliarEquipes(j.rows||[]);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();if(direta&&!raw.length&&j.encontrados_fora_da_aba)$('countInfo').textContent='SS localizada no uMov, mas não pertence à aba '+currentScreen+'.';else if(direta&&j.aviso)$('countInfo').textContent=j.aviso;
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
 }
 let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},500)}));
@@ -615,10 +617,10 @@ document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener
   if(!window.__buscaSSAtiva)anterior={raw,offset:window.__pageOffset,total:window.__totalSS,hasMore:window.__hasMore,ms:window.ms};
   window.__buscaSSAtiva=true;botao.disabled=true;$('countInfo').textContent='Pesquisando SS diretamente no PostgreSQL...';
   try{
-   const r=await fetch('/api/localizar-ss?ss='+encodeURIComponent(ss));const j=await r.json();if(id!==seq)return;
+   const r=await fetch('/api/localizar-ss-rapida?ss='+encodeURIComponent(ss)+'&tela='+encodeURIComponent(currentScreen)+'&limit=30',{cache:'no-store'});const j=await r.json();if(id!==seq)return;
    if(!r.ok||!j.ok)throw Error(j.error||'Erro na consulta');
    raw=j.rows||[];selected={};window.__pageOffset=0;window.__totalSS=raw.length;window.__hasMore=false;window.ms=null;apply();
-   if(!raw.length)$('countInfo').textContent='Nenhuma SS encontrada para '+ss+'.';
+   if(!raw.length)$('countInfo').textContent=j.encontrados_fora_da_aba?'SS encontrada no uMov, mas não pertence à aba '+currentScreen+'.':'Nenhuma SS encontrada para '+ss+'.';else if(j.aviso)$('countInfo').textContent=j.aviso;
   }catch(e){if(id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
   finally{if(id===seq)botao.disabled=false}
  }
