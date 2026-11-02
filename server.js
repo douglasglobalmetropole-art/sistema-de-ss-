@@ -575,6 +575,47 @@ app.get('/api/busca-ss',async(req,res)=>{try{
  const rows=q.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return {ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
  res.json({ok:true,rows,total,count:rows.length,limit,offset,hasMore});
  }catch(e){console.error('Busca SS:',e);res.status(500).json({ok:false,error:e.message})}});
+// Acelerador opcional de pesquisa por endereco: Supabase seleciona IDs, uMov valida
+// os dados atuais e a situacao. Nunca usa indice parcial/antigo como fonte oficial.
+const cpBuscaIndiceCache=new Map();
+async function cpCandidatosEndereco({tela,filters,cidades,offset}){
+ if(emLote1())return null; // O indice pertence somente ao banco principal.
+ const url=String(process.env.SUPABASE_URL||'').replace(/\/$/,'');
+ const key=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_SECRET_KEY||'';
+ if(!url||!key)return null;
+ const colunas={bairro:'bairro',logradouro:'logradouro',cidade:'cidade'};
+ const criterios=Object.entries(colunas).filter(([k])=>filters[k]&&String(filters[k]).trim().length>=3);
+ // A pesquisa de SS usa outra rota dedicada. Para pesquisas muito amplas, usar uMov.
+ if(!criterios.length&&!cidades.length)return null;
+ if(offset>10000)return null;
+ const headers={apikey:key};
+ if(/^eyJ/.test(key))headers.Authorization='Bearer '+key;
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),2300);
+ try{
+  const estado=await fetch(url+'/rest/v1/ss_duplicidades_controle?select=varredura_concluida,atualizado_em&fonte=eq.umov&limit=1',{headers,signal:controller.signal}).then(r=>r.ok?r.json():[]);
+  const controle=estado[0];
+  if(!controle?.varredura_concluida||!controle.atualizado_em||Date.now()-Date.parse(controle.atualizado_em)>10*60*1000)return null;
+  const qs=new URLSearchParams({select:'tsk_id',limit:'2001',order:'tsk_id.desc'});
+  for(const [campo,coluna] of criterios){
+   const valor=String(filters[campo]).trim().replace(/[*,()]/g,' ').slice(0,80);
+   qs.set(coluna,'ilike.*'+valor+'*');
+  }
+  if(cidades.length){
+   // Evita interpretar entrada do usuario como sintaxe de filtro PostgREST.
+   const lista=cidades.filter(v=>/^[\p{L}\p{M} \-]{2,70}$/u.test(v)).slice(0,30);
+   if(lista.length!==cidades.length)return null;
+   qs.set('cidade','in.('+lista.map(x=>'"'+x.replace(/"/g,'')+'"').join(',')+')');
+  }
+  const resposta=await fetch(url+'/rest/v1/ss_duplicidades_indice?'+qs,{headers,signal:controller.signal});
+  if(!resposta.ok)return null;
+  const dados=await resposta.json();
+  // Se vazio ou truncado, voltamos ao uMov para nao esconder SS.
+  if(!Array.isArray(dados)||!dados.length||dados.length>2000)return null;
+  const ids=[...new Set(dados.map(x=>Number(x.tsk_id)).filter(Number.isSafeInteger))];
+  return ids.length?ids:null;
+ }catch(_erro){return null}finally{clearTimeout(timeout)}
+}
 // Pesquisa global: filtros no PostgreSQL ANTES de LIMIT/OFFSET.
 // Pesquisa por coluna: cada campo tem seu predicado próprio, sem busca OR global.
 // Evita JOIN permanente com dbout_local/agent/tasktype; consulta essas tabelas
@@ -606,8 +647,10 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  if(!filters.ss&&inicio&&fim){values.push(inicio,fim);const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dateCol} >= $${values.length-1}::date AND ${dateCol} < ($${values.length}::date + INTERVAL '1 day')`)}
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
+ const idsIndice=await cpCandidatosEndereco({tela,filters,cidades,offset});
+ if(idsIndice){values.push(idsIndice);where.push(`t.tsk_id=ANY($${values.length}::bigint[])`)}
  const localFilterKeys=['ss','logradouro','bairro','cidade'];
- const localFirst=localFilterKeys.some(k=>filters[k])||cidades.length>0;
+ const localFirst=!idsIndice&&(localFilterKeys.some(k=>filters[k])||cidades.length>0);
  const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('UPPER(TRIM(l.'));
  const taskPredicates=where.filter(x=>!localPredicates.includes(x));
  const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
@@ -618,6 +661,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const agentMap=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));const typeMap=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
  const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:typeMap.get(String(x.tty_id))||'',tecnico:agentMap.get(String(x.age_id))||'',equipe_executou:agentMap.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
+ res.set('X-CP-Search-Plan',idsIndice?'supabase-candidates+umov-verified':'umov-direct');
  res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-started});
  }catch(e){console.error('Pesquisa por coluna:',e);res.status(500).json({ok:false,error:e.message})}});
 // Pesquisa independente por numero de SS, sem filtros de tela ou data.
