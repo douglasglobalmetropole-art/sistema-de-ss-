@@ -791,10 +791,19 @@ load();
 </script><script>
 // Formulário de baixa automático, somente leitura; sem POST de baixa.
 (function(){
- const $=id=>document.getElementById(id);let equipes=[],micros=[],causas=[],current='',generation=0;
+ const $=id=>document.getElementById(id);let equipes=[],micros=[],causas=[],current='',generation=0,causaRequest=0;
  const status=t=>{$('sbStatus').textContent=t;};
  const unwrap=v=>Array.isArray(v)?v:(v&&typeof v==='object'?['data','items','rows','resultado','equipes','servicos','causas','body','result'].map(k=>v[k]).find(Array.isArray)||[]:[]);
- let baixaBloqueada=false;
+ let baixaBloqueada=true,historicoLiberado=false,historicoConcluido=false,oficialLiberado=false,catalogosLiberados=false;
+ // A baixa somente pode ser confirmada após TODAS as validações oficiais obrigatórias.
+ const atualizarHabilitacaoBaixa=()=>{
+  baixaBloqueada=!(historicoLiberado&&oficialLiberado&&catalogosLiberados);
+  $('sbPrevia').disabled=baixaBloqueada;
+  if(oficialLiberado&&catalogosLiberados){
+   $('sbLoadBadge').textContent=!historicoConcluido?'Dados oficiais prontos; aguardando histórico':
+      historicoLiberado?'Validação oficial concluída':'Baixa bloqueada — conferir histórico';
+  }
+ };
  const historicoStatus=t=>{$('sbHistoricoStatus').textContent=t;};
  async function carregarHistorico(g){
   historicoStatus('Consultando eventos oficiais...');$('sbHistoricoLista').replaceChildren();
@@ -804,16 +813,16 @@ load();
    const ordenados=[...eventos].sort((a,b)=>String(a.data_hora||'').localeCompare(String(b.data_hora||'')));
    const ultimo=ordenados.at(-1);
    const encerrada=ultimo&&(Number(ultimo.codigo)===9||/^encerrada$/i.test(String(ultimo.descricao||'').trim()));
-   baixaBloqueada=Boolean(encerrada);
-   $('sbPrevia').disabled=baixaBloqueada;
-   historicoStatus(baixaBloqueada?'SS ENCERRADA oficialmente no último evento. Nova baixa bloqueada.':
+   historicoConcluido=true;historicoLiberado=!encerrada;
+   atualizarHabilitacaoBaixa();
+   historicoStatus(encerrada?'SS ENCERRADA oficialmente no último evento. Nova baixa bloqueada.':
     'Eventos encontrados: '+eventos.length+'. Situação atual deve ser conferida antes da baixa.');
    for(const e of ordenados){const linha=document.createElement('div');linha.style.cssText='padding:6px 0;border-bottom:1px solid #e4ebf2';
     const titulo=document.createElement('strong');titulo.textContent=(e.codigo??'—')+' — '+(e.descricao||'Evento');
     const detalhe=document.createElement('div');detalhe.textContent=[e.data_hora,e.usuario,e.unidade].filter(Boolean).join(' · ');
     linha.append(titulo,detalhe);$('sbHistoricoLista').append(linha);
    }
-  }catch(e){if(g===generation){historicoStatus('Histórico indisponível: '+e.message+'. Baixa bloqueada até verificação.');baixaBloqueada=true;$('sbPrevia').disabled=true;}}
+  }catch(e){if(g===generation){historicoStatus('Histórico indisponível: '+e.message+'. Baixa bloqueada até verificação.');historicoConcluido=true;historicoLiberado=false;atualizarHabilitacaoBaixa();}}
  }
  const requiredCause=m=>m?.obgCausaProbl===true||['S','SIM','TRUE','1','Y'].includes(String(m?.obgCausaProbl??'').toUpperCase());
  function options(id,rows,placeholder,value,label){const el=$(id);el.replaceChildren(new Option(placeholder,''));rows.forEach(x=>el.add(new Option(label(x),String(value(x)))));}
@@ -824,7 +833,7 @@ load();
   const j=await r.json();if(!r.ok)throw Error(j.error||'Não foi possível iniciar a consulta');
   for(let i=0;i<50;i++){
    if(g!==generation)throw Error('Consulta cancelada');
-   await new Promise(resolve=>setTimeout(resolve,1200));
+   await new Promise(resolve=>setTimeout(resolve,i===0?600:i===1?900:1200));
    const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{cache:'no-store'});
    const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
    const state=String(x.status).toLowerCase();
@@ -854,29 +863,37 @@ load();
  }
  async function loadAll(){
   const g=++generation;
-  baixaBloqueada=true;$('sbPrevia').disabled=true;
-  carregarHistorico(g);
-  compConsultar();
-  status('Consultando SS oficial...');
+  historicoLiberado=false;historicoConcluido=false;oficialLiberado=false;catalogosLiberados=false;atualizarHabilitacaoBaixa();
+  $('sbLoadBadge').textContent='Consultando SS oficial...';
+  status('Consultando dados oficiais da SS...');
   try{
+   // Prioridade: enviar o job da SS primeiro. Histórico obrigatório é consultado
+   // após os catálogos terem sido enfileirados; complementares só ao abrir a aba.
    const data=await job('consultar-ss-baixa',{numero_ss:current},g);if(g!==generation)return;
    const obj=data?.data||data?.result||data||{};
    const macro=obj.servicoMacroDTO?.cdServico;
    const executor=obj.unidadeExecutoraDTO?.cdExecutor??obj.unidadeExecutoraDTO?.cdUnidadeExecutora;
    if(!macro)throw Error('SISCOM não retornou o macro oficial');
    if(!executor)throw Error('SISCOM não retornou o código da unidade executora');
-   $('sbMacro').value=macro;$('sbExecutor').value=executor;sbResumoSet('sbOfficialMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbResumoMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbOfficialExecutor',executor);$('sbLoadBadge').textContent='Consulta oficial concluída';
+   oficialLiberado=true;atualizarHabilitacaoBaixa();
+   $('sbMacro').value=macro;$('sbExecutor').value=executor;sbResumoSet('sbOfficialMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbResumoMacro',macro+(obj.servicoMacroDTO?.dcServico?' — '+obj.servicoMacroDTO.dcServico:''));sbResumoSet('sbOfficialExecutor',executor);$('sbLoadBadge').textContent='SS oficial consultada; validando catálogos e histórico';
    if(obj.codEquipe!=null)$('sbEquipeBusca').value=String(obj.codEquipe);
    if(!$('sbInicio').value&&obj.dataHoraExecucaoIni)$('sbInicio').value=obj.dataHoraExecucaoIni;
    if(!$('sbFim').value&&obj.dataHoraExecucaoFim)$('sbFim').value=obj.dataHoraExecucaoFim;
    if(!$('sbDescricao').value&&obj.descricaoExecucao)$('sbDescricao').value=obj.descricaoExecucao;sbAtualizarDuracao();
    status('Macro '+macro+' identificado. Carregando equipes e serviços...');
-   const results=await Promise.allSettled([loadEquipes(executor,g),loadMicros(macro,g)]);
+   // Enfileirar catálogos em paralelo e histórico obrigatório sem bloquear a interface.
+   const catalogs=Promise.allSettled([loadEquipes(executor,g),loadMicros(macro,g)]);
+   void carregarHistorico(g);
+   const results=await catalogs;
    if(g!==generation)return;
-   const failures=results.filter(x=>x.status==='rejected').map(x=>x.reason.message);
+   const failures=results.filter(x=>x.status==='rejected').map(x=>x.reason?.message||'Consulta de catálogo falhou');
+   catalogosLiberados=failures.length===0&&equipes.length>0&&micros.length>0;
+   atualizarHabilitacaoBaixa();
+   if(!catalogosLiberados)$('sbLoadBadge').textContent='Consulta de catálogos incompleta';
    status(failures.length?'Consultas parcialmente concluídas: '+failures.join('; '):
-    'Consultas concluídas: '+equipes.length+' equipes e '+micros.length+' serviços executados. Selecione o serviço.');
-  }catch(e){if(g===generation)status('Erro: '+e.message);}
+    'Equipes e serviços prontos. A confirmação depende também do histórico oficial.');
+  }catch(e){if(g===generation){oficialLiberado=false;atualizarHabilitacaoBaixa();$('sbLoadBadge').textContent='Consulta oficial indisponível';status('Erro: '+e.message);}}
  }
  function sbResumoSet(id,v){$(id).textContent=String(v??'').trim()||'Não informado';}
  function sbAtualizarDuracao(){
@@ -918,17 +935,19 @@ load();
   options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
   $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
   $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbObservacoes').value='';sbAtualizarDuracao();
-  compAreas=[];compServicos=[];compExistentes=[];$('sbCompDescricao').value='';compStatus('Consulta automática iniciada...');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
+  compAreas=[];compServicos=[];compExistentes=[];compConsultadaSS='';compConsultaEmAndamentoSS='';$('sbCompDescricao').value='';compStatus('Abra a aba Complementar para consultar áreas e SS complementares.');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
   status('Consultando SISCOM automaticamente...');
   $('siscomBaixaModal').classList.add('open');loadAll();
  };
  $('sbCloseTop').onclick=()=>$('sbFechar').click();$('sbLimpar').onclick=()=>{$('sbEquipeBusca').value='';$('sbEquipes').value='';$('sbMicro').value='';$('sbCausaBox').hidden=true;$('sbDescricao').value='';$('sbObservacoes').value='';status('Campos editáveis limpos. Dados oficiais e retorno da equipe preservados.');};['sbInicio','sbFim'].forEach(id=>$(id).addEventListener('input',sbAtualizarDuracao));
  $('sbFechar').onclick=()=>{generation++;$('siscomBaixaModal').classList.remove('open');window.__siscomBaixaSelecionada=null;};
  // Complementares: criação manual independente, sem disparar baixa automaticamente.
- let compAreas=[],compServicos=[],compExistentes=[];
+ let compAreas=[],compServicos=[],compExistentes=[],compConsultadaSS='',compConsultaEmAndamentoSS='';
  const compStatus=t=>{$('sbCompStatus').textContent=t;};
- async function compConsultar(){
+ async function compConsultar(force=false){
   const g=generation,ss=current;
+  if(!ss||(!force&&(compConsultadaSS===ss||compConsultaEmAndamentoSS===ss)))return;
+  compConsultaEmAndamentoSS=ss;
   compStatus('Consultando áreas e complementares no SISCOM...');
   try{
    const [a,c]=await Promise.all([job('complementar-areas',{numero_ss:ss},g),job('complementar-consultar',{numero_ss:ss},g)]);
@@ -936,8 +955,10 @@ load();
    compAreas=unwrap(a);compExistentes=unwrap(c);
    options('sbCompArea',compAreas,'Selecione a área',x=>x.codAraeExecutora,x=>x.codAraeExecutora+' — '+(x.descricaoAreaExecutora||''));
    options('sbCompServico',[],'Selecione uma área',x=>x.cdServico,x=>x.dcServico);
+   compConsultadaSS=ss;
    compStatus('Áreas: '+compAreas.length+' | Complementares existentes: '+compExistentes.length+'.');
-  }catch(e){if(g===generation)compStatus('Falha na consulta: '+e.message);}
+  }catch(e){if(g===generation&&ss===current)compStatus('Falha na consulta: '+e.message);}
+  finally{if(compConsultaEmAndamentoSS===ss)compConsultaEmAndamentoSS='';}
  }
  $('sbCompArea').onchange=async()=>{
   const g=generation,area=$('sbCompArea').value;
@@ -949,7 +970,8 @@ load();
    compStatus(compServicos.length+' serviços disponíveis na área selecionada.');
   }catch(e){if(g===generation)compStatus('Falha ao consultar serviços: '+e.message);}
  };
- $('sbCompAtualizar').onclick=compConsultar;
+ $('sbCompAtualizar').onclick=()=>compConsultar(true);
+ $('siscomBaixaModal').addEventListener('siscom:complementar-open',()=>{void compConsultar(false);});
  $('sbCompCriar').onclick=async()=>{
   const ss=current,area=Number($('sbCompArea').value),macro=Number($('sbCompServico').value),descricao=$('sbCompDescricao').value.trim();
   if(!compAreas.some(x=>Number(x.codAraeExecutora)===area)||!compServicos.some(x=>Number(x.cdServico)===macro)||!descricao)return compStatus('Selecione área, serviço macro e informe a descrição.');
@@ -1030,15 +1052,15 @@ load();
  $('sbRecarregar').onclick=loadAll;$('sbEquipeBusca').oninput=renderEquipes;
  $('sbEquipes').onchange=()=>{$('sbEquipeBusca').value=$('sbEquipes').value;const e=equipes.find(x=>String(x.cdEquipe)===$('sbEquipes').value);if(e)sbResumoSet('sbResumoEquipe',e.cdEquipe+(e.nomeEquipe?' — '+e.nomeEquipe:''));};
  $('sbMicro').onchange=async()=>{
-  const g=++generation,code=$('sbMicro').value;$('sbCausaBox').hidden=true;
+  const g=generation,request=++causaRequest,code=$('sbMicro').value;$('sbCausaBox').hidden=true;
   options('sbCausa',[],'Não aplicável',c=>c.id,c=>c.descricao);
   if(!code)return;const micro=micros.find(x=>String(x.cdServico)===code);
   if(!requiredCause(micro)){status('Serviço selecionado. Causa do problema não obrigatória.');return;}
   $('sbCausaBox').hidden=false;status('Consultando causas oficiais...');
-  try{causas=unwrap(await job('causas',{cd_micro:code},g));if(g!==generation)return;
+  try{const lista=unwrap(await job('causas',{cd_micro:code},g));if(g!==generation||request!==causaRequest)return;causas=lista;
    options('sbCausa',causas,'Selecione a causa',c=>c.id,c=>c.descricao||c.id);
    status(causas.length+' causas oficiais carregadas.');
-  }catch(e){if(g===generation)status('Erro ao carregar causas: '+e.message);}
+  }catch(e){if(g===generation&&request===causaRequest)status('Erro ao carregar causas: '+e.message);}
  };
  async function mostrarTentativaExistente(){
   try{

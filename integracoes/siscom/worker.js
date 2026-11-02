@@ -120,6 +120,7 @@ async function processar() {
   ocupado = true;
 
   let tarefaAtual = null;
+  let processouUmaTarefa = false;
   try {
     const { data: tarefas, error } = await supabase
       .from("siscom_gateway_jobs")
@@ -150,6 +151,7 @@ async function processar() {
     if (!reservada || reservada.length === 0) return;
 
     tarefaReservada = true;
+    processouUmaTarefa = true;
     console.log("Processando:", tarefa.id);
 
     let resultado;
@@ -597,6 +599,10 @@ async function processar() {
     }
   } finally {
     ocupado = false;
+    // Assim que uma tarefa termina, verifica a próxima em 200 ms.
+    // Se a fila estiver vazia, permanece o polling normal de 5 segundos.
+    // Mantém apenas UMA operação SISCOM por vez e nunca reenvia escritas.
+    if (processouUmaTarefa) setTimeout(processar, 200);
   }
 }
 
