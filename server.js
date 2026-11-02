@@ -630,28 +630,62 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  // Cada campo consulta SOMENTE a sua coluna. Bairro também contempla o bairro enriquecido.
  const keys=tela==='recepcao'?['ss','equipe_executou','logradouro','bairro','cidade','setor','servico','tags','criado_em']:tela==='campo'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou']:tela==='baixar'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou','data_finalizacao']:Object.keys(allowed);
  const filters={};for(const k of keys){const q=String(req.query[k]||'').trim().slice(0,100);if(q)filters[k]=q}
+ const localPredicates=[];
  const add=(expr,val)=>{values.push(val);where.push(`${expr} ILIKE $${values.length}`)};
+ // Campos da tabela pesquisam tanto a origem uMov quanto os valores enriquecidos
+ // usados na tela (dbout_local). Sem isso a tabela mostra um bairro que nao e encontrado.
+ const addLocal=(predicate)=>{where.push(predicate);localPredicates.push(predicate)};
  for(const [key,q] of Object.entries(filters)){
-   if(key==='bairro'){values.push('%'+q+'%');where.push(`l.loc_neighborhood ILIKE $${values.length}`)}
-   else if(key==='servico'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tt WHERE tt.tty_id=t.tty_id AND tt.tty_description ILIKE $${values.length})`)}
-   else if(key==='equipe_executou'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.agent ag WHERE ag.age_id=t.age_id AND ag.age_name ILIKE $${values.length})`)}
-   else if(key==='setor'){values.push('%'+q+'%');where.push(`EXISTS (SELECT 1 FROM u45468.dbout_local sx WHERE sx.loc_id=t.loc_id AND sx.e_setor ILIKE $${values.length})`)}
-   else if(key==='data_finalizacao'){values.push('%'+q+'%');where.push(`(TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length} OR TO_CHAR(d.tsk_realfinaldatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length})`)}
-   else if(key==='criado_em'&&tela!=='recepcao'){values.push('%'+q+'%');where.push(`TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length}`)}
-   else add(allowed[key],'%'+q+'%');
+   const v='%'+q+'%';
+   if(key==='ss'){
+     values.push(v);addLocal(`l.loc_integrationid ILIKE $${values.length}`);
+   }else if(key==='logradouro'){
+     values.push(v);
+     addLocal(`(l.loc_street ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local dlf WHERE dlf.loc_id=l.loc_id AND dlf.loc_street ILIKE $${values.length}))`);
+   }else if(key==='bairro'){
+     values.push(v);
+     addLocal(`(l.loc_neighborhood ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local dlf WHERE dlf.loc_id=l.loc_id AND dlf.e_bairro ILIKE $${values.length}))`);
+   }else if(key==='cidade'){
+     values.push(v);
+     addLocal(`(l.loc_city ILIKE $${values.length} OR EXISTS (SELECT 1 FROM u45468.dbout_local dlf WHERE dlf.loc_id=l.loc_id AND dlf.e_localidade ILIKE $${values.length}))`);
+   }else if(key==='setor'){
+     values.push(v);
+     where.push(`EXISTS (SELECT 1 FROM u45468.dbout_local sx WHERE sx.loc_id=t.loc_id AND sx.e_setor ILIKE $${values.length})`);
+   }else if(key==='servico'){
+     values.push(v);
+     where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tt WHERE tt.tty_id=t.tty_id AND tt.tty_description ILIKE $${values.length})`);
+   }else if(key==='equipe_executou'){
+     values.push(v);
+     where.push(`EXISTS (SELECT 1 FROM u45468.agent ag WHERE ag.age_id=t.age_id AND ag.age_name ILIKE $${values.length})`);
+   }else if(key==='data_finalizacao'){
+     values.push(v);
+     where.push(`(TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length} OR TO_CHAR(d.tsk_realfinaldatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length} OR TO_CHAR(d.tsk_lastexecutiondatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length})`);
+   }else if(key==='criado_em'&&tela!=='recepcao'){
+     values.push(v);where.push(`TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI') ILIKE $${values.length}`);
+   }else add(allowed[key],v);
  }
- const macros=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidades=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean);
+ const macros=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean);
+ const cidades=String(req.query.municipios||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean);
+ const equipeSuperior=String(req.query.equipe||'').trim().slice(0,100);
  if(macros.length){values.push(macros);where.push(`EXISTS (SELECT 1 FROM u45468.tasktype tm WHERE tm.tty_id=t.tty_id AND TRIM(tm.tty_description)=ANY($${values.length}::text[]))`)}
- if(cidades.length){values.push(cidades);where.push(`UPPER(TRIM(l.loc_city))=ANY($${values.length}::text[])`)}
+ if(cidades.length){
+   values.push(cidades);
+   addLocal(`(UPPER(TRIM(l.loc_city))=ANY($${values.length}::text[]) OR EXISTS (SELECT 1 FROM u45468.dbout_local dc WHERE dc.loc_id=l.loc_id AND UPPER(TRIM(dc.e_localidade))=ANY($${values.length}::text[])))`);
+ }
+ if(equipeSuperior){
+   values.push('%'+equipeSuperior+'%');
+   where.push(`EXISTS (SELECT 1 FROM u45468.agent ae WHERE ae.age_id=t.age_id AND ae.age_name ILIKE $${values.length})`);
+ }
  const inicio=String(req.query.inicio||''),fim=String(req.query.fim||'');
  if(!filters.ss&&inicio&&fim){values.push(inicio,fim);const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dateCol} >= $${values.length-1}::date AND ${dateCol} < ($${values.length}::date + INTERVAL '1 day')`)}
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
- const idsIndice=await cpCandidatosEndereco({tela,filters,cidades,offset});
+ // Indice Supabase so pode antecipar buscas cujas colunas correspondem
+ // fielmente ao valor exibido; bairro/cidade enriquecidos seguem direto ao uMov.
+ const usarIndice=!!filters.logradouro&&!filters.bairro&&!filters.cidade&&!cidades.length;
+ const idsIndice=usarIndice?await cpCandidatosEndereco({tela,filters,cidades:[],offset}):null;
  if(idsIndice){values.push(idsIndice);where.push(`t.tsk_id=ANY($${values.length}::bigint[])`)}
- const localFilterKeys=['ss','logradouro','bairro','cidade'];
- const localFirst=!idsIndice&&(localFilterKeys.some(k=>filters[k])||cidades.length>0);
- const localPredicates=where.filter(x=>x.startsWith('l.')||x.startsWith('UPPER(TRIM(l.'));
+ const localFirst=localPredicates.length>0&&!idsIndice;
  const taskPredicates=where.filter(x=>!localPredicates.includes(x));
  const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
  const sql=`${localCte}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.age_id,t.tty_id FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN ${localFirst?'locais_filtrados':'u45468.local'} l ON l.loc_id=t.loc_id WHERE ${localFirst?taskPredicates.join(' AND '):where.join(' AND ')} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`;
