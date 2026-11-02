@@ -620,8 +620,17 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
 // Pesquisa por coluna: cada campo tem seu predicado próprio, sem busca OR global.
 // Evita JOIN permanente com dbout_local/agent/tasktype; consulta essas tabelas
 // somente quando o respectivo filtro estiver preenchido.
+const CP_PESQUISA_CACHE=new Map();
 app.get('/api/pesquisa-global',async(req,res)=>{try{
  const inicioConsulta=Date.now();
+ const chavePesquisa=req.originalUrl||req.url||'';
+ const cacheHit=!req.query._refresh&&CP_PESQUISA_CACHE.get(chavePesquisa);
+ if(cacheHit&&inicioConsulta-cacheHit.ts<45000){
+   res.set('X-CP-Search-Plan','cache-45s/'+cacheHit.plano);
+   res.set('X-Cache','HIT');
+   res.set('Server-Timing','banco;dur=0,detalhes;dur=0');
+   return res.json({...cacheHit.dados,ms:Date.now()-inicioConsulta,tempos:{banco_ms:0,detalhes_ms:0,cache:true}});
+ }
  const tela=String(req.query.tela||'recepcao');
  const status={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
  if(!status[tela])return res.status(400).json({ok:false,error:'Aba inválida'});
@@ -678,7 +687,12 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
    where.push(`EXISTS (SELECT 1 FROM u45468.agent ae WHERE ae.age_id=t.age_id AND ae.age_name ILIKE $${values.length})`);
  }
  const inicio=String(req.query.inicio||''),fim=String(req.query.fim||'');
- if(!filters.ss&&inicio&&fim){values.push(inicio,fim);const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';where.push(`${dateCol} >= $${values.length-1}::date AND ${dateCol} < ($${values.length}::date + INTERVAL '1 day')`)}
+ let parametroDataInicial=0,parametroDataFinal=0;
+ if(!filters.ss&&/^\d{4}-\d{2}-\d{2}$/.test(inicio)&&/^\d{4}-\d{2}-\d{2}$/.test(fim)){
+   values.push(inicio,fim);parametroDataInicial=values.length-1;parametroDataFinal=values.length;
+   const dateCol=tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour';
+   where.push(`${dateCol} >= $${parametroDataInicial}::date AND ${dateCol} < ($${parametroDataFinal}::date + INTERVAL '1 day')`);
+ }
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
  // O status continua sendo aplicado antes da paginação, preservando as abas.
  // Indice Supabase so pode antecipar buscas cujas colunas correspondem
@@ -687,9 +701,31 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const idsIndice=usarIndice?await cpCandidatosEndereco({tela,filters,cidades:[],offset}):null;
  if(idsIndice){values.push(idsIndice);where.push(`t.tsk_id=ANY($${values.length}::bigint[])`)}
  const localFirst=localPredicates.length>0&&!idsIndice;
+ // CORRECAO CP 2026-11-02: com filtro por local + periodo curto, filtre
+ // primeiro o conjunto de tarefas do periodo. A CTE antiga materializava
+ // praticamente toda a tabela local e podia ultrapassar 12 segundos ao
+ // buscar por bairro/cidade/logradouro. O filtro permanece exato no uMov.
+ const diasPeriodo=parametroDataInicial&&parametroDataFinal
+   ?(Date.parse(fim+'T00:00:00Z')-Date.parse(inicio+'T00:00:00Z'))/86400000:NaN;
+ const temFiltro=Object.keys(filters).length>0||macros.length>0||cidades.length>0||!!equipeSuperior;
+ const periodoPrimeiro=!idsIndice&&temFiltro&&Number.isFinite(diasPeriodo)&&diasPeriodo>=0&&diasPeriodo<=45;
  const taskPredicates=where.filter(x=>!localPredicates.includes(x));
- const localCte=localFirst?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
- const sql=`${localCte}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.age_id,t.tty_id FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN ${localFirst?'locais_filtrados':'u45468.local'} l ON l.loc_id=t.loc_id WHERE ${localFirst?taskPredicates.join(' AND '):where.join(' AND ')} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`;
+ const localCte=localFirst&&!periodoPrimeiro
+   ?`WITH locais_filtrados AS MATERIALIZED (SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,loc_streetnumber FROM u45468.local l WHERE ${localPredicates.join(' AND ')}) `:'';
+ const periodoCte=periodoPrimeiro
+   ?(tela==='recepcao'
+     ?`WITH tarefas_periodo AS MATERIALIZED (SELECT tsk_id,loc_id,age_id,tty_id,tsk_insertdatehour FROM u45468.task WHERE tsk_insertdatehour >= $${parametroDataInicial}::date AND tsk_insertdatehour < ($${parametroDataFinal}::date + INTERVAL '1 day')) `
+     :`WITH situacoes_periodo AS MATERIALIZED (SELECT tsk_id,tsk_situation,e_situacao,e_tag,tsk_lastexecutiondatehour,tsk_realinitialdatehour,tsk_realfinaldatehour FROM u45468.dbout_task WHERE tsk_lastexecutiondatehour >= $${parametroDataInicial}::date AND tsk_lastexecutiondatehour < ($${parametroDataFinal}::date + INTERVAL '1 day')) `)
+   :'';
+ const fromSql=periodoPrimeiro
+   ?(tela==='recepcao'
+      ?'FROM tarefas_periodo t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id'
+      :'FROM situacoes_periodo d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id')
+   :`FROM u45468.task t JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id JOIN ${localFirst?'locais_filtrados':'u45468.local'} l ON l.loc_id=t.loc_id`;
+ const predicadosSql=periodoPrimeiro?where.join(' AND '):(localFirst?taskPredicates.join(' AND '):where.join(' AND '));
+ const sql=`${periodoCte||localCte}SELECT t.tsk_id,t.loc_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.age_id,t.tty_id ${fromSql} WHERE ${predicadosSql} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $${values.length+1} OFFSET $${values.length+2}`;
+ const plano=periodoPrimeiro?'umov-periodo-primeiro-v3':(idsIndice?'supabase-candidates+umov-verified':'umov-cte-anterior');
+ res.set('X-CP-Search-Plan',plano);
  const inicioBanco=Date.now();const r=await pool.query({text:sql,values:[...values,limit+1,offset],query_timeout:12000});
  const msBanco=Date.now()-inicioBanco;const inicioExtras=Date.now();
  const hasMore=r.rows.length>limit,items=r.rows.slice(0,limit);
@@ -698,10 +734,12 @@ app.get('/api/pesquisa-global',async(req,res)=>{try{
  const agentMap=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));const typeMap=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
  const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:typeMap.get(String(x.tty_id))||'',tecnico:agentMap.get(String(x.age_id))||'',equipe_executou:agentMap.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
- res.set('X-CP-Search-Plan',idsIndice?'supabase-candidates+umov-verified':'umov-cte-anterior');
  res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${msExtras}`);
- res.json({ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-inicioConsulta,tempos:{banco_ms:msBanco,detalhes_ms:msExtras}});
- }catch(e){console.error('Pesquisa por coluna:',e);res.status(500).json({ok:false,error:e.message})}});
+ const dados={ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-inicioConsulta,tempos:{banco_ms:msBanco,detalhes_ms:msExtras}};
+ if(CP_PESQUISA_CACHE.size>100)CP_PESQUISA_CACHE.clear();
+ CP_PESQUISA_CACHE.set(chavePesquisa,{ts:Date.now(),plano,dados});
+ res.set('X-Cache','MISS');res.json(dados);
+ }catch(e){console.error('Pesquisa por coluna:',e);const timeout=/timeout|timed out|canceling statement/i.test(String(e.message||''));res.status(timeout?504:500).json({ok:false,error:e.message})}});
 // Pesquisa independente por numero de SS, sem filtros de tela ou data.
 // Restringe a busca na tabela local antes de acessar as tarefas.
 app.get('/api/localizar-ss', async (req,res)=>{
