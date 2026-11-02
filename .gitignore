@@ -13,3 +13,6 @@ public/index.backup*
 public/index.html.backup*
 public/index.html.bak
 tatus
+
+# Gateway local - contem credenciais e chave privada
+/SISCOM-GATEWAY/

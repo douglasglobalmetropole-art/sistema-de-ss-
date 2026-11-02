@@ -114,6 +114,32 @@ function ehEventoRejeicao(e){return Number(e?.tipoEventoDTO?.id)===4||/^rejei(?:
 
 let ocupado = false;
 
+
+    // GLOBAL_SS_ANEXOS_V8_NORMALIZAR: suporta envelopes paginados reais sem gravar base64.
+    const normalizarListaAnexos=(resposta)=>{
+      const nomes=['content','data','dados','items','rows','registros','lista','anexos','listaAnexo','listaAnexos','result','resultado','response','body','_embedded','page','anexoSolicitacaoServicoDados','anexosSolicitacaoServicoDados'];
+      const vistos=new Set();const fila=[{obj:resposta,nivel:0}];let total=null;
+      while(fila.length){
+        const {obj,nivel}=fila.shift();
+        if(Array.isArray(obj))return {items:obj,total:total??obj.length};
+        if(!obj||typeof obj!=='object'||vistos.has(obj)||nivel>6||vistos.size>80)continue;
+        vistos.add(obj);
+        for(const campo of ['totalElements','totalRegistro','totalRegistros','totalItems','total']){
+          const n=Number(obj[campo]);if(obj[campo]!=null&&Number.isSafeInteger(n)&&n>=0&&total===null)total=n;
+        }
+        if(obj.nomeArquivo!=null&&obj.id!=null)return {items:[obj],total:total??1};
+        for(const campo of nomes){
+          const val=obj[campo];
+          if(Array.isArray(val))return {items:val,total:total??val.length};
+          if(val&&typeof val==='object')fila.push({obj:val,nivel:nivel+1});
+        }
+      }
+      if(total===0||resposta?.empty===true)return {items:[],total:0};
+      // Nao presumir lista vazia quando o SISCOM devolve outro formato.
+      const campos=resposta&&typeof resposta==='object'?Object.keys(resposta).filter(k=>/^[a-zA-Z0-9_]{1,40}$/.test(k)).slice(0,12).join(','):'sem objeto';
+      throw Error('Formato da lista de anexos nao reconhecido (campos: '+campos+'). Nenhum envio autorizado ate confirmar a consulta.');
+    };
+
 async function processar() {
   if (ocupado) return;
   for(const [id,s] of individualSessions)if(s.expires<Date.now())individualSessions.delete(id);
@@ -477,7 +503,7 @@ async function processar() {
       const listar=async()=>{
         const r=await fetch(base+'/backend-anexosSolicitacaoServicoDados/anexos/listAnexo?'+qs,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(25000)});
         if(!r.ok)throw Error('Consulta de anexos SISCOM HTTP '+r.status);
-        const j=await r.json();return Array.isArray(j)?j:Array.isArray(j.content)?j.content:Array.isArray(j.data)?j.data:[];
+        const j=await r.json();return normalizarListaAnexos(j).items;
       };
       // A API oficial usa POST 201 para incluir, e PUT 200 para editar.
       // Nunca fazer PUT para um anexo novo, nem reutilizar id de outro anexo.
@@ -489,7 +515,11 @@ async function processar() {
       if(!Number.isSafeInteger(Number(p.tarefa))||Number(p.tarefa)<1)throw Error('Tarefa de origem inválida');
       const hashNome=crypto.createHash('sha256').update('GLOBAL_SS_SISCOM_ANEXO_V1|'+numero+'|'+String(p.tarefa)).digest('hex');
       const nome=hashNome.slice(0,8)+'-'+hashNome.slice(8,12)+'-5'+hashNome.slice(13,16)+'-8'+hashNome.slice(17,20)+'-'+hashNome.slice(20,32)+'.pdf';
-      const presente=(rows)=>rows.some(x=>[nome,nomeExibido].includes(String(x?.nomeArquivo||'').trim()));
+      const presente=(rows)=>rows.some(x=>{
+        if([nome,nomeExibido].includes(String(x?.nomeArquivo||'').trim()))return true;
+        const d=String(x?.descricao||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        return d.includes('relatorio original')&&d.includes('umov')&&d.includes(numero.toLowerCase());
+      });
       if(presente(existente)){
         resultado={numero_ss:numero,status_anexo:'JA_EXISTE',nomeArquivo:nome,mensagem:'Já existe um anexo desta tarefa no SISCOM. Nenhum POST foi enviado.'};
       }else{
@@ -557,9 +587,9 @@ async function processar() {
       else if(op==='tram_itens')path=serv+'medicaoSolicitacaoServico/nis/medicaoSs/'+integer(p.medicao,'Medição',1);
       else if(op==='tram_historico')path=serv+'medicaoSolicitacaoServico/tramitacao/medicao/'+integer(p.medicao,'Medição',1);
       else if(op==='tram_ultima_acao')path=serv+'medicaoSolicitacaoServico/tramitacaoUltimaAcao/medicao/'+integer(p.medicao,'Medição',1);
-      else if(op==='tram_anexos'){const v=partes(p.ss);path='/backend-anexosMedicaoSs/anexos/listAnexo';q.set('refAtendimento',v.ref);q.set('codAtendimento',v.cod);q.set('ssSequencial',v.seq)}
+      else if(op==='tram_anexos'){const v=partes(p.ss);path=p.origem==='dados'?'/backend-anexosSolicitacaoServicoDados/anexos/listAnexo':'/backend-anexosMedicaoSs/anexos/listAnexo';q.set('refAtendimento',v.ref);q.set('codAtendimento',v.cod);q.set('ssSequencial',v.seq)}
       else throw Error('Operação não autorizada');
-      if(['tram_itens','tram_historico','tram_anexos'].includes(op)){q.set('page',String(integer(p.page??0,'Página')));q.set('size','25');q.set('sort',op==='tram_historico'?'dtTramitacao,ASC':op==='tram_itens'?'srvContratoNIDTO.numeroNi,ASC':'id,ASC')}
+      if(['tram_itens','tram_historico','tram_anexos'].includes(op)){q.set('page',String(integer(p.page??0,'Página')));q.set('size','25');q.set('sort',op==='tram_historico'?'dtTramitacao,ASC':op==='tram_itens'?'srvContratoNIDTO.numeroNi,ASC':op==='tram_anexos'&&p.origem==='dados'?'dataHoraInclusao,DESC':'id,ASC')}
       const u=base+path+(q.size?'?'+q.toString():'');
       const r=await fetch(u,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(25000)});
       if(!r.ok)throw Error('Consulta SISCOM '+op+' HTTP '+r.status);
@@ -570,6 +600,19 @@ async function processar() {
 
     if (resultado === undefined || resultado === null)
       throw new Error(`Operação ${tarefa.operation} não produziu resultado válido`);
+
+    // GLOBAL_SS_ANEXOS_DADOS_V8_SANITIZE: gravar apenas metadados, nunca data/Base64.
+    if(tarefa.operation==='tram_anexos'&&tarefa.payload?.params?.origem==='dados'){
+      const {items,total}=normalizarListaAnexos(resultado);
+      resultado={content:items.slice(0,25).map(a=>({
+        id:a?.id??null,
+        dataHoraInclusao:a?.dataHoraInclusao??a?.dtInclusao??null,
+        nomeArquivo:String(a?.nomeArquivo??a?.nmArquivo??'').slice(0,180),
+        descricao:String(a?.descricao??a?.dcArquivo??'').slice(0,250),
+        usuario:typeof a?.usuario==='string'?a.usuario.slice(0,120):String(a?.usuario?.nome??a?.nmUsuario??'').slice(0,120),
+        origemArquivo:String(a?.origemArquivo??'').slice(0,60)
+      })),totalElements:total};
+    }
 
     const { error: erroFinal } = await supabase
       .from("siscom_gateway_jobs")
@@ -599,9 +642,8 @@ async function processar() {
     }
   } finally {
     ocupado = false;
-    // Assim que uma tarefa termina, verifica a próxima em 200 ms.
-    // Se a fila estiver vazia, permanece o polling normal de 5 segundos.
-    // Mantém apenas UMA operação SISCOM por vez e nunca reenvia escritas.
+    // Fila ativa: busca proximo job sem aguardar o ciclo ocioso de 5 segundos.
+    // Uma operacao SISCOM por vez, sem alterar politica de reenvio.
     if (processouUmaTarefa) setTimeout(processar, 200);
   }
 }
