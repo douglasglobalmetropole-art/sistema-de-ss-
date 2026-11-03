@@ -622,6 +622,7 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
 // somente quando o respectivo filtro estiver preenchido.
 const CP_PESQUISA_CACHE=new Map();
 app.get('/api/pesquisa-global',async(req,res)=>{
+ if(process.env.CP_PESQUISA_V6 !== 'false' && !emLote1()) return require('./cp-pesquisa-v6').handler(req,res,{pool,hostRelatorioUmov});
  if(process.env.CP_PESQUISA_V4 !== 'false') return require('./cp-pesquisa-v4').handler(req,res,{pool,extrasLocal,extrasTask,campo,hostRelatorioUmov});
  try{
  const inicioConsulta=Date.now();
