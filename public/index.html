@@ -214,6 +214,7 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 <div aria-labelledby="siscomBaixaTitle" aria-modal="true" class="modalBg" id="siscomBaixaModal" role="dialog">
 <div class="modalBox sbShell">
 <div class="sbHeader"><h3 id="siscomBaixaTitle">▣ Baixar SS no SISCOM <span>— Baixa real (somente teste)</span></h3><strong>⚠ Baixa real — confirme antes de enviar</strong><button aria-label="Fechar" id="sbCloseTop" type="button">×</button></div>
+<div id="sbWorkflowProgress" class="sbWorkflowProgress" data-state="initial" role="status" aria-live="polite"><span id="sbWorkflowStage" class="sbWorkflowStage">Etapa 1 de 2</span><span id="sbWorkflowText">Confira a SS, realize a baixa no SISCOM e depois finalize para movê-la às Notas Baixadas.</span></div>
 <section class="sbRibbon"><div class="sbRibbonTitle">▣ Dados principais da SS</div><div class="sbSummaryTop">
 <div><b>SS</b><div class="sbRead" id="sbResumoSS">—</div></div>
 <div><b>Endereço</b><div class="sbRead" id="sbResumoEndereco">Não informado</div></div>
@@ -281,7 +282,7 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 <div id="sbHistoricoLista" style="max-height:190px;overflow:auto;font-size:12px"></div>
 </section></aside>
 </div>
-<div class="modalBtns sbFooter"><button class="btn sbAux" type="button" id="sbVerFotos">▧ Ver fotos</button><button class="btn sbAux" type="button" id="sbBaixarUmov">✓ Baixar no uMov</button><button class="btn sbAux" type="button" id="sbAnexarSiscom">▣ Anexar relatório no SISCOM</button><button class="btn" id="sbRecarregar">↻ Recarregar consultas</button><button class="btn" id="sbLimpar">Limpar campos</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" id="sbPrevia">✓ Confirmar e baixar SS no SISCOM</button></div>
+<div class="modalBtns sbFooter"><button class="btn sbAux" type="button" id="sbVerFotos">▧ Ver fotos</button><button class="btn sbAux" type="button" id="sbBaixarUmov">✓ Baixar no uMov</button><button class="btn sbAux" type="button" id="sbAnexarSiscom">▣ Anexar relatório no SISCOM</button><button class="btn" id="sbRecarregar">↻ Recarregar consultas</button><button class="btn" id="sbLimpar">Limpar campos</button><button class="btn" id="sbFechar">Fechar</button><button class="btn primary" type="button" id="sbPrevia">↓ Baixar SS</button><button class="btn sbFinish" type="button" id="sbFinalizar" disabled title="Disponível após confirmação da baixa no SISCOM">✓ Finalizar</button></div>
 <input id="sbSS" type="hidden"/>
 </div>
 </div>
@@ -795,10 +796,66 @@ load();
  const status=t=>{$('sbStatus').textContent=t;};
  const unwrap=v=>Array.isArray(v)?v:(v&&typeof v==='object'?['data','items','rows','resultado','equipes','servicos','causas','body','result'].map(k=>v[k]).find(Array.isArray)||[]:[]);
  let baixaBloqueada=true,historicoLiberado=false,historicoConcluido=false,oficialLiberado=false,catalogosLiberados=false;
+ // V5: baixa oficial e finalização visual são ações distintas.
+ let baixaEmAndamento=false,baixaOficialConfirmada=false,sincronizacaoConfirmada=false,resultadoIncerto=false,jobConfirmadoId='',ssBaixada='';
+ const alterarEtapa=(etapa,mensagem,estado='initial')=>{
+  const barra=$('sbWorkflowProgress');
+  if(barra)barra.dataset.state=estado;
+  $('sbWorkflowStage').textContent=etapa;
+  $('sbWorkflowText').textContent=mensagem;
+ };
+ const atualizarBotoesFluxo=()=>{
+  $('sbPrevia').disabled=baixaBloqueada||baixaEmAndamento||baixaOficialConfirmada||resultadoIncerto;
+  const finalizar=$('sbFinalizar');
+  finalizar.disabled=!baixaOficialConfirmada||baixaEmAndamento||!jobConfirmadoId;
+  finalizar.textContent='✓ Finalizar';
+  finalizar.title=!baixaOficialConfirmada?'Disponível somente após confirmação oficial da baixa':sincronizacaoConfirmada?'Mover a SS para Notas Baixadas':'Sincronizar a baixa confirmada no uMov e mover para Notas Baixadas';
+ };
+ const reiniciarFluxo=()=>{
+  baixaEmAndamento=false;baixaOficialConfirmada=false;sincronizacaoConfirmada=false;resultadoIncerto=false;jobConfirmadoId='';ssBaixada='';
+  alterarEtapa('Etapa 1 de 2','Confira a SS, realize a baixa no SISCOM e depois finalize para movê-la às Notas Baixadas.');
+  atualizarBotoesFluxo();
+ };
+ async function sincronizarBaixaConfirmada(){
+  if(!baixaOficialConfirmada||!jobConfirmadoId||ssBaixada!==current)throw Error('Baixa SISCOM não confirmada nesta sessão; não sincronizar.');
+  if(sincronizacaoConfirmada)return;
+  alterarEtapa('Etapa 2 de 2','Baixa oficial confirmada. Atualizando o status no uMov...','running');
+  status('Baixa confirmada no SISCOM. Sincronizando status no uMov, sem repetir a baixa...');
+  const r=await fetch('/api/siscom-gateway/sincronizar-baixa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:ssBaixada,job_id:jobConfirmadoId}),cache:'no-store'});
+  let dados={};try{dados=await r.json()}catch(_e){}
+  if(!r.ok||!dados.ok)throw Error(dados.error||'Sincronização não confirmada pelo servidor.');
+  sincronizacaoConfirmada=true;
+  atualizarBotoesFluxo();
+  alterarEtapa('Baixa confirmada','SS '+ssBaixada+' baixada no SISCOM e atualização aceita pelo uMov. Clique em Finalizar para abrir Notas Baixadas.','success');
+  status('Baixa oficial confirmada. Status enviado ao uMov. Clique em Finalizar para concluir e localizar a SS em Notas Baixadas.');
+ }
+ function concluirNavegacaoBaixa(){
+  if(!baixaOficialConfirmada||!sincronizacaoConfirmada)return;
+  const numero=ssBaixada;
+  generation++;
+  $('siscomBaixaModal').classList.remove('open');
+  window.__siscomBaixaSelecionada=null;
+  // Procura a própria SS na aba Baixadas, independente do intervalo de datas.
+  // O status é persistido exclusivamente pela rota validada do servidor.
+  if(typeof raw!=='undefined')raw=raw.filter(x=>String(x.ss||'').trim()!==numero);
+  if(typeof selected!=='undefined')selected={};
+  const filtros=[...document.querySelectorAll('.filter input[data-col]')];
+  for(const campo of filtros)campo.value='';
+  const campoSS=document.querySelector('.filter input[data-col="ss"]');
+  if(campoSS)campoSS.value=numero;
+  if(typeof cities!=='undefined')cities=[];
+  if(typeof macros!=='undefined')macros=[];
+  if(typeof window.__pageOffset!=='undefined')window.__pageOffset=0;
+  const aba=document.querySelector('.tab[data-screen="encerradas"]');
+  if(aba&&typeof setScreen==='function')setScreen('encerradas',aba);
+  else if(typeof load==='function')load(true);
+  if(typeof window.notify==='function')window.notify('SS '+numero+' baixada. Abra/atualize Notas Baixadas para confirmar a sincronização.','success');
+ }
+
  // A baixa somente pode ser confirmada após TODAS as validações oficiais obrigatórias.
  const atualizarHabilitacaoBaixa=()=>{
   baixaBloqueada=!(historicoLiberado&&oficialLiberado&&catalogosLiberados);
-  $('sbPrevia').disabled=baixaBloqueada;
+  atualizarBotoesFluxo();
   if(oficialLiberado&&catalogosLiberados){
    $('sbLoadBadge').textContent=!historicoConcluido?'Dados oficiais prontos; aguardando histórico':
       historicoLiberado?'Validação oficial concluída':'Baixa bloqueada — conferir histórico';
@@ -928,7 +985,7 @@ load();
  window.openSiscomBaixa=()=>{
   if(typeof currentScreen!=='undefined'&&currentScreen!=='baixar')return alert('Disponível somente em Notas para Baixar');
   const items=Object.values(selected||{});if(items.length!==1)return alert('Selecione exatamente uma SS.');
-  const x=items[0];window.__siscomBaixaSelecionada=x;current=String(x.ss||'');generation++;equipes=[];micros=[];causas=[];
+  const x=items[0];window.__siscomBaixaSelecionada=x;current=String(x.ss||'');generation++;equipes=[];micros=[];causas=[];reiniciarFluxo();
   $('sbSS').value=current;$('sbLoadBadge').textContent='Aguardando consulta';sbResumoPreencher(x);$('sbExecutor').value='';$('sbMacro').value='';$('sbEquipeBusca').value='';
   options('sbEquipes',[],'Aguardando consulta',e=>e.cdEquipe,e=>e.cdEquipe);
   options('sbMicro',[],'Aguardando macro oficial',m=>m.cdServico,m=>m.dcServico);
@@ -940,7 +997,11 @@ load();
   $('siscomBaixaModal').classList.add('open');loadAll();
  };
  $('sbCloseTop').onclick=()=>$('sbFechar').click();$('sbLimpar').onclick=()=>{$('sbEquipeBusca').value='';$('sbEquipes').value='';$('sbMicro').value='';$('sbCausaBox').hidden=true;$('sbDescricao').value='';$('sbObservacoes').value='';status('Campos editáveis limpos. Dados oficiais e retorno da equipe preservados.');};['sbInicio','sbFim'].forEach(id=>$(id).addEventListener('input',sbAtualizarDuracao));
- $('sbFechar').onclick=()=>{generation++;$('siscomBaixaModal').classList.remove('open');window.__siscomBaixaSelecionada=null;};
+ $('sbFechar').onclick=()=>{
+  if(baixaEmAndamento){status('Há uma operação em andamento. Aguarde a confirmação para evitar uma baixa duplicada.');return;}
+  if(baixaOficialConfirmada){status('A baixa já foi confirmada. Clique em Finalizar para concluir; esta SS não deve ser baixada novamente.');return;}
+  generation++;$('siscomBaixaModal').classList.remove('open');window.__siscomBaixaSelecionada=null;
+ };
  // Complementares: criação manual independente, sem disparar baixa automaticamente.
  let compAreas=[],compServicos=[],compExistentes=[],compConsultadaSS='',compConsultaEmAndamentoSS='';
  const compStatus=t=>{$('sbCompStatus').textContent=t;};
@@ -1072,6 +1133,7 @@ load();
   }catch(e){status('Não foi possível consultar a tentativa anterior: '+e.message+'. NÃO reenviar.');return null;}
  }
  $('sbPrevia').onclick=async()=>{
+  if(baixaEmAndamento||baixaOficialConfirmada||resultadoIncerto)return status('Esta SS já possui baixa confirmada ou em andamento. Não reenviar.');
   if(baixaBloqueada)return status('Baixa bloqueada: histórico oficial não validado ou SS encerrada.');
   const code=$('sbEquipes').value,micro=$('sbMicro').value,desc=$('sbDescricao').value.trim();
   if(!code||!equipes.some(x=>String(x.cdEquipe)===code))return status('Selecione uma equipe validada pelo GET.');
@@ -1080,24 +1142,53 @@ load();
   const m=micros.find(x=>String(x.cdServico)===micro);
   if(requiredCause(m)&&!$('sbCausa').value)return status('O serviço exige causa do problema.');
   if(!['S','N'].includes($('sbUltima').value))return status('Informe se é a última SS.');
-  status('PRÉVIA VALIDADA — SS '+current+' | Equipe '+code+' | Macro '+$('sbMacro').value+
-   ' | Serviço executado '+micro+' | Causa '+($('sbCausa').value||'não exigida')+
-   ' | Início '+$('sbInicio').value+' | Fim '+$('sbFim').value+
-   ' | Última SS '+($('sbUltima').value||'não informado')+' | Pronta para confirmação.');
-  if(!window.confirm('ATENÇÃO: Encerrar definitivamente a SS '+current+' no SISCOM? Esta operação não deve ser repetida.'))return;
-  const btn=$('sbPrevia');btn.disabled=true;status('Enviando baixa real. Não feche nem reenvie...');
-  try{const r=await job('baixar-ss',{numero_ss:current,confirmacao:'BAIXAR '+current,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},generation);status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+(r.http_status?' | HTTP '+r.http_status:'')+(r.diagnostico_validacao?' | Validação: '+r.diagnostico_validacao:'')+' — '+(r.mensagem||''));if(r.status_baixa==='CONFIRMADA'){
-    status('Baixa confirmada no SISCOM. Atualizando status no uMov...');
-    try{
-     const sync=await fetch('/api/siscom-gateway/sincronizar-baixa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:current,job_id:r.__job_id}),cache:'no-store'});
-     const sj=await sync.json();if(!sync.ok||!sj.ok)throw Error(sj.error||'Sincronização não confirmada');
-     status('SS '+current+' encerrada no SISCOM e marcada como Baixada no uMov.');
-     if(typeof raw!=='undefined'){raw=raw.filter(x=>String(x.ss)!==current);selected={};apply();}
-     $('siscomBaixaModal').classList.remove('open');
-     alert('SS '+current+' encerrada e movida para Notas Baixadas.');
-     if(typeof load==='function')load();
-    }catch(syncErr){status('SS encerrada no SISCOM, porém sincronização local pendente: '+syncErr.message+'. NÃO reenviar baixa.');alert('Baixa oficial confirmada, mas não foi possível mover a SS automaticamente. NÃO envie novamente.');}
-   }else alert('Resultado não confirmado. NÃO tente novamente antes de conferir o SISCOM.');}catch(e){status('Envio não confirmado: '+e.message+' — NÃO reenviar.');await mostrarTentativaExistente();}
+  const numero=current,abertura=generation;
+  status('Prévia validada: SS '+numero+' | Equipe '+code+' | Macro '+$('sbMacro').value+
+   ' | Serviço '+micro+' | Causa '+($('sbCausa').value||'não exigida')+
+   ' | Início '+$('sbInicio').value+' | Fim '+$('sbFim').value+' | Última SS '+$('sbUltima').value+'.');
+  if(!window.confirm('ATENÇÃO: confirmar a baixa definitiva da SS '+numero+' no SISCOM? A janela permanecerá aberta após a operação. Não é permitido repetir a baixa.'))return;
+  baixaEmAndamento=true;atualizarBotoesFluxo();
+  alterarEtapa('Baixando no SISCOM','Enviando baixa oficial da SS '+numero+'. Não feche ou reenvie.','running');
+  status('Enviando baixa real. Não feche nem reenvie...');
+  try{
+   const r=await job('baixar-ss',{numero_ss:numero,confirmacao:'BAIXAR '+numero,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},abertura);
+   if(abertura!==generation||numero!==current)return;
+   status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+(r.http_status?' | HTTP '+r.http_status:'')+(r.diagnostico_validacao?' | Validação: '+r.diagnostico_validacao:'')+' — '+(r.mensagem||''));
+   if(r.status_baixa==='CONFIRMADA'){
+    baixaOficialConfirmada=true;ssBaixada=numero;jobConfirmadoId=String(r.__job_id||'');
+    if(!jobConfirmadoId){
+     alterarEtapa('Baixa oficial confirmada','O SISCOM confirmou, mas não retornou o identificador de sincronização. Não reenvie a baixa; verifique a tentativa oficial.','warning');
+     status('Baixa confirmada, mas identificador do job ausente. Não repetir a baixa no SISCOM.');
+    }else{
+     // V5: somente FINALIZAR atualiza o status no uMov e move a SS de aba.
+     alterarEtapa('Etapa 2 de 2','Baixa oficial da SS '+numero+' confirmada. Revise as informações; clique em Finalizar para sincronizar com o uMov e mover a SS para Notas Baixadas.','success');
+     status('Baixa confirmada no SISCOM. A tela permanecerá aberta; clique em Finalizar para mover às Notas Baixadas.');
+    }
+   }else{
+    resultadoIncerto=true;
+    alterarEtapa('Resultado não confirmado','O SISCOM não confirmou a baixa. Consulte o histórico e a tentativa oficial antes de qualquer nova operação.','warning');
+    status('Baixa não confirmada. Não reenvie sem conferir o SISCOM.');
+   }
+  }catch(e){
+   resultadoIncerto=true;
+   alterarEtapa('Resultado incerto','Não foi possível confirmar o resultado da baixa. Consulte a tentativa oficial; não repita o envio.','warning');
+   status('Envio não confirmado: '+e.message+' — NÃO reenviar.');
+   await mostrarTentativaExistente();
+  }finally{baixaEmAndamento=false;atualizarBotoesFluxo();}
+ };
+ $('sbFinalizar').onclick=async()=>{
+  if(baixaEmAndamento)return;
+  if(!baixaOficialConfirmada){status('Primeiro confirme a baixa oficial no SISCOM.');return;}
+  if(!sincronizacaoConfirmada){
+   baixaEmAndamento=true;atualizarBotoesFluxo();
+   try{await sincronizarBaixaConfirmada();}
+   catch(e){
+    alterarEtapa('Sincronização pendente','SISCOM já confirmou a baixa. Erro no uMov: '+e.message+'. Não execute Baixar SS novamente.','warning');
+    status('Sincronização pendente: '+e.message+'. Tente somente a sincronização, sem baixar a SS novamente.');
+    return;
+   }finally{baixaEmAndamento=false;atualizarBotoesFluxo();}
+  }
+  concluirNavegacaoBaixa();
  };
 })();
 </script>
@@ -1788,8 +1879,8 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  });
 })();
 </script>
-<link rel="stylesheet" href="/siscom-baixa-layout.css?v=20261023v6">
-<script src="/siscom-baixa-layout.js?v=20261023v6" defer></script>
+<link rel="stylesheet" href="/siscom-baixa-layout.css?v=20261103v5">
+<script src="/siscom-baixa-layout.js?v=20261103v5" defer></script>
 <!-- GLOBAL_SS_RELATORIO_AGRUPADO_V10_SCRIPT -->
 <script src="/vendor/pdf-lib.min.js"></script>
 <script src="/relatorio-agrupado-v10.js"></script>

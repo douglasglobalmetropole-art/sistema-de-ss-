@@ -78,3 +78,16 @@
 #siscomBaixaModal .sbV4AnexoList{max-height:440px;overflow:auto;border:1px solid #dce8f1;border-radius:7px}
 #siscomBaixaModal .sbV4AnexoTable td{overflow-wrap:anywhere;max-width:300px}
 #siscomBaixaModal .sbV4AnexoMore{padding:10px 15px;font-size:12px;color:#7a4d16;background:#fff6e7}
+
+/* V5 - fluxo de baixa em duas etapas, sem fechar automaticamente */
+#siscomBaixaModal .sbWorkflowProgress{display:flex;align-items:center;gap:12px;padding:10px 22px;font-size:12px;font-weight:600;color:#17578d;background:#e9f3fd;border-bottom:1px solid #c8deef;flex:0 0 auto}
+#siscomBaixaModal .sbWorkflowStage{background:#d7eafa;border-radius:20px;padding:5px 11px;color:#07559a;white-space:nowrap;font-size:11px;font-weight:800}
+#siscomBaixaModal .sbWorkflowProgress[data-state="running"]{background:#e4efff;color:#08477d}
+#siscomBaixaModal .sbWorkflowProgress[data-state="success"]{background:#e7f7ee;color:#11613d;border-bottom-color:#a4dabe}
+#siscomBaixaModal .sbWorkflowProgress[data-state="success"] .sbWorkflowStage{background:#bde9d0;color:#09552e}
+#siscomBaixaModal .sbWorkflowProgress[data-state="warning"]{background:#fff3e3;color:#865015;border-bottom-color:#efd2a2}
+#siscomBaixaModal .sbWorkflowProgress[data-state="warning"] .sbWorkflowStage{background:#ffe4bb;color:#805016}
+#siscomBaixaModal .sbFooter #sbPrevia{min-width:173px!important;background:#0969c6!important;border-color:#0969c6!important;color:white!important;margin-left:auto!important}
+#siscomBaixaModal .sbFooter #sbFinalizar{min-width:173px!important;background:#15915c!important;border-color:#15915c!important;color:white!important;font-weight:800}
+#siscomBaixaModal .sbFooter #sbFinalizar:disabled,#siscomBaixaModal .sbFooter #sbPrevia:disabled{background:#a5b9c9!important;border-color:#a5b9c9!important;cursor:not-allowed!important;opacity:.7}
+@media(max-width:760px){#siscomBaixaModal .sbWorkflowProgress{padding:10px;align-items:flex-start;flex-wrap:wrap}#siscomBaixaModal .sbFooter #sbPrevia,#siscomBaixaModal .sbFooter #sbFinalizar{min-width:0!important;flex:1 1 44%;margin-left:0!important}}
