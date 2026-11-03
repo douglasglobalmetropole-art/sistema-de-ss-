@@ -621,7 +621,9 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
 // Evita JOIN permanente com dbout_local/agent/tasktype; consulta essas tabelas
 // somente quando o respectivo filtro estiver preenchido.
 const CP_PESQUISA_CACHE=new Map();
-app.get('/api/pesquisa-global',async(req,res)=>{try{
+app.get('/api/pesquisa-global',async(req,res)=>{
+ if(process.env.CP_PESQUISA_V4 !== 'false') return require('./cp-pesquisa-v4').handler(req,res,{pool,extrasLocal,extrasTask,campo,hostRelatorioUmov});
+ try{
  const inicioConsulta=Date.now();
  const chavePesquisa=req.originalUrl||req.url||'';
  const cacheHit=!req.query._refresh&&CP_PESQUISA_CACHE.get(chavePesquisa);
