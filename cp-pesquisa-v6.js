@@ -44,7 +44,7 @@ function statement(params, ids){
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
  const base=[];
  if(!filters.ss&&isoDate(inicio)&&isoDate(fim)){
-  const col=tela==='recepcao'?'t.tsk_insertdatehour':'t.tsk_lastexecutiondatehour';
+  const col='t.tsk_insertdatehour';
   base.push(`${col} >= ${add(inicio)}::date`,`${col} < (${add(fim)}::date + INTERVAL '1 day')`);
  }
  const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'"};
