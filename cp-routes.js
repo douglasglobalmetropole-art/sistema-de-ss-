@@ -1,5 +1,6 @@
 'use strict';
 const path=require('node:path');
+const {timingSafeEqual}=require('node:crypto');
 
 // Modulo da Central de Operacoes. Reaproveita a instancia e o pool do GLOBAL SS.
 // Backend adaptado do index.js original da Central; nenhum servidor ou pool duplicado.
@@ -82,7 +83,7 @@ async function cpLerComplementos(tarefas){
  };
  const [tarefasOut,locais,locaisOut]=await Promise.all([
   consultar('dbout_task',`SELECT tsk_id,age_id,tss_id,tsk_situation,tsk_scheduleinitialdatehour,
-      tsk_realinitialdatehour,tsk_realfinaldatehour,e_situacao,e_tag
+      tsk_realinitialdatehour,tsk_realfinaldatehour,tsk_lastexecutiondatehour,e_situacao,e_tag
       FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])`,[ids],2600),
   consultar('local',`SELECT loc_id,loc_integrationid,loc_city,loc_neighborhood,loc_street,
       loc_streetnumber FROM u45468.local WHERE loc_id=ANY($1::bigint[])`,[locaisIds],2600),
@@ -200,6 +201,12 @@ app.get('/api/cp/health',async(req,res)=>{
 });
 
 app.get('/api/cp/ss',async(req,res)=>{
+ const secret=String(process.env.RDO_SS_SHARED_SECRET||'');
+ const supplied=Buffer.from(req.get('x-rdo-ss-key')||'');
+ const expected=Buffer.from(secret);
+ const includeLinks=expected.length>=32&&supplied.length===expected.length&&timingSafeEqual(supplied,expected);
+ if(supplied.length&&!includeLinks)return res.status(403).set('Cache-Control','no-store').json({ok:false,error:'Integração RDO não autorizada.'});
+ if(includeLinks)res.set('Cache-Control','no-store');
  const di=String(req.query.di||req.query.inicio||'');
  const df=String(req.query.df||req.query.fim||di);
  const valida=s=>/^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s+'T00:00:00Z')) && new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;
@@ -215,14 +222,14 @@ app.get('/api/cp/ss',async(req,res)=>{
  // Páginas maiores evitam dezenas de chamadas sequenciais no navegador.
  const offset=Math.min(Math.max(Number(req.query.offset||0),0),200000);
  if(!Number.isSafeInteger(offset))return res.status(400).json({ok:false,error:'Offset invalido.'});
- const chave=`v21|${modo}|${di}|${df}|${limite}|${offset}`;
+ const chave=`v21-rdo-hora|${modo}|${di}|${df}|${limite}|${offset}`;
  const fresh=req.query.refresh==='1';
  let etapa='cache';
  const lifeMs=df>=cpToday()?120000:900000;
  const maxStale=df>=cpToday()?48*3600000:14*86400000;
  let fallbackCache=null;
  try{
-   if(!fresh){
+   if(!fresh&&!includeLinks){
     const cached=DATA_CACHE.get(chave);
     if(cached && (Date.now()-cached.ts)<lifeMs){
       DATA_CACHE.delete(chave);DATA_CACHE.set(chave,cached);
@@ -294,6 +301,14 @@ app.get('/api/cp/ss',async(req,res)=>{
    etapa='complementos';
    const extra=await cpLerComplementos(tarefas);
    if(extra.falhas.length)console.warn('CP_V21 dados complementares parciais:',extra.falhas.join(' | '));
+   const reportTokens=new Map();
+   if(includeLinks){
+     const ids=tarefas.filter(t=>Number(extra.dt.get(String(t.tsk_id))?.tss_id)===50).map(t=>t.tsk_id);
+     if(ids.length){
+       const links=await pool.query({text:'SELECT tsk_id,tsk_accesstoken FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[]) AND tss_id=50',values:[ids],query_timeout:3500});
+       for(const row of links.rows)if(row.tsk_accesstoken)reportTokens.set(String(row.tsk_id),String(row.tsk_accesstoken));
+     }
+   }
    const linhas=tarefas.map(t=>{
      const d=extra.dt.get(String(t.tsk_id))||{};
      const l=extra.local.get(String(t.loc_id))||{};
@@ -328,6 +343,10 @@ app.get('/api/cp/ss',async(req,res)=>{
    if(extra.falhas.length)res.set('X-CP-Enrichment-Partial','1');
    let baixadas=0,rejeitadas=0,duplicadas=0,soma=0,qtd=0;
    const dados=linhas.map(x=>{
+     const taskId=String(x.tsk_id);
+     const reportToken=reportTokens.get(taskId);
+     const ultimaAtividade=extra.dt.get(taskId)?.tsk_lastexecutiondatehour;
+     const linkUmov=reportToken&&/^\d+$/.test(taskId)?'https://consglobalmetropole.umov.me/CenterWeb/report/schedule/'+taskId+'/'+encodeURIComponent(reportToken):'';
      const s={
        situacao:x.s_situacao||'',
        servico_executado_siscom:x.s_servico_executado_siscom||'',
@@ -371,6 +390,9 @@ app.get('/api/cp/ss',async(req,res)=>{
        info_execucao_siscom:s.info_execucao_siscom||'',
        usuario_baixa_siscom:s.usuario_baixa_siscom||'',
        horario_baixa_siscom:s.horario_baixa_siscom||'',
+       fim_real:brDT(x.fim_real),
+       ultima_atividade:brDT(ultimaAtividade),
+       ...(linkUmov?{link_umov:linkUmov}:{}),
        programacao_iso:x.programacao_real||null,
        inicio_real_iso:x.inicio_real||null, fim_real_iso:x.fim_real||null,
        programacao:brDT(x.programacao_real),
@@ -382,6 +404,7 @@ app.get('/api/cp/ss',async(req,res)=>{
      };
    });
    const k={ok:true,total:dados.length,baixadas,rejeitadas,duplicadas,tempo_medio:hhmm(qtd?Math.round(soma/qtd):0)};
+   if(includeLinks)return res.json(dados); // Nunca armazena links de relatório no cache público.
    setBounded(CACHE,chave,{...k,ts:Date.now()});
    setBounded(DATA_CACHE,chave,{dados,truncated:truncado,ts:Date.now()});
    // Persistencia permite resposta rapida mesmo em outro processo Vercel.
@@ -396,6 +419,7 @@ app.get('/api/cp/ss',async(req,res)=>{
    res.set('Cache-Control','no-store');
    res.json(dados);
  }catch(e){
+   if(includeLinks)return res.status(502).json({ok:false,error:'Consulta protegida de SS indisponível.'});
    console.error('ERRO /api/cp/ss:',e.message);
    try{
     const memoria=DATA_CACHE.get(chave);
