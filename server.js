@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const express=require('express'),{Pool}=require('pg'),path=require('path');
 const fs=require('node:fs');
 const {AsyncLocalStorage}=require('node:async_hooks');
@@ -23,7 +23,7 @@ const poolPrincipal=new Pool({
 });
 // Banco isolado para /lote1. Nao troca DB_NAME do site principal.
 const nomeBancoLote1=String(process.env.DB_NAME_LOTE1||'umovme_dbview_consglobalmetropole1').trim();
-const schemaLote1=String(process.env.DB_SCHEMA_LOTE1||'u45468').trim();
+const schemaLote1=String(process.env.DB_SCHEMA_LOTE1||'u46915').trim();
 if(!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(schemaLote1))throw Error('DB_SCHEMA_LOTE1 invalido');
 const poolLote1=new Pool({
  host:process.env.DB_HOST,port:Number(process.env.DB_PORT||5432),database:nomeBancoLote1,
@@ -56,7 +56,7 @@ app.use((req,res,next)=>{
     let html=fs.readFileSync(path.join(__dirname,'public','index.html'),'utf8');
     const antes="const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
     if(!html.includes(antes))return res.status(503).send('Lista de cidades do layout mudou; atualize o integrador do Lote 1.');
-    html=html.replace(antes,"const CIDADES_CONFIGURADAS=['VITÃ“RIA','SERRA','FUNDÃƒO','ARACRUZ'];");
+    html=html.replace(antes,"const CIDADES_CONFIGURADAS=['VIT\u00D3RIA','SERRA','FUND\u00C3O','ARACRUZ'];");
     html=html.replaceAll('/api/','/lote1/api/');
     res.set('Cache-Control','no-store');
     return res.type('html').send(html);
