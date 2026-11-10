@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 const express=require('express'),{Pool}=require('pg'),path=require('path');
 const fs=require('node:fs');
 const {AsyncLocalStorage}=require('node:async_hooks');
@@ -7,8 +7,8 @@ const emLote1=()=>loteContext.getStore()?.lote1===true;
 const LOTE1_CIDADES=['VITORIA','SERRA','FUNDAO','ARACRUZ'];
 const normalizarCidade=v=>String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 const app=express(),PORT=Number(process.env.PORT||3000);
-// Em ambientes serverless (Vercel), a mesma instância pode atender várias
-// requisições. Um pool curto evita abrir conexões demais no PostgreSQL.
+// Em ambientes serverless (Vercel), a mesma instÃ¢ncia pode atender vÃ¡rias
+// requisiÃ§Ãµes. Um pool curto evita abrir conexÃµes demais no PostgreSQL.
 const poolPrincipal=new Pool({
  host:process.env.DB_HOST,
  port:Number(process.env.DB_PORT||5432),
@@ -36,9 +36,9 @@ const pool={query:(...args)=>{
  if(!nomeBancoLote1||nomeBancoLote1===process.env.DB_NAME)throw Error('Banco Lote 1 nao configurado de forma isolada');
  if(typeof args[0]==='string')args[0]=args[0].replace(/\bu45468\./g,'"'+schemaLote1+'".').replace(/table_schema='u45468'/g,"table_schema='"+schemaLote1+"'");
  else if(args[0]&&typeof args[0]==='object'&&typeof args[0].text==='string')args[0]={...args[0],text:args[0].text.replace(/\bu45468\./g,'"'+schemaLote1+'".').replace(/table_schema='u45468'/g,"table_schema='"+schemaLote1+"'")};
- // Aceita VITORIA/VITÓRIA e FUNDAO/FUNDÃO sem depender de extensoes SQL.
- const normalizarSQL=x=>x.replace(/UPPER\(TRIM\((l|cl)\.loc_city\)\)/g,(_,alias)=>`translate(UPPER(TRIM(${alias}.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')`)
-  .replace(/\bloc_city=ANY\(\$2::text\[\]\)/g,"translate(UPPER(TRIM(loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])");
+ // Aceita VITORIA/VITÃ“RIA e FUNDAO/FUNDÃƒO sem depender de extensoes SQL.
+ const normalizarSQL=x=>x.replace(/UPPER\(TRIM\((l|cl)\.loc_city\)\)/g,(_,alias)=>`translate(UPPER(TRIM(${alias}.loc_city)),'ÃÃ€Ã‚ÃƒÃ‰ÃˆÃŠÃÃŒÃŽÃ“Ã’Ã”Ã•ÃšÃ™Ã›Ã‡','AAAAEEEIIIOOOOUUUC')`)
+  .replace(/\bloc_city=ANY\(\$2::text\[\]\)/g,"translate(UPPER(TRIM(loc_city)),'ÃÃ€Ã‚ÃƒÃ‰ÃˆÃŠÃÃŒÃŽÃ“Ã’Ã”Ã•ÃšÃ™Ã›Ã‡','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])");
  if(typeof args[0]==='string')args[0]=normalizarSQL(args[0]);
  else if(args[0]&&typeof args[0]==='object'&&typeof args[0].text==='string')args[0]={...args[0],text:normalizarSQL(args[0].text)};
  return poolLote1.query(...args);
@@ -56,7 +56,7 @@ app.use((req,res,next)=>{
     let html=fs.readFileSync(path.join(__dirname,'public','index.html'),'utf8');
     const antes="const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
     if(!html.includes(antes))return res.status(503).send('Lista de cidades do layout mudou; atualize o integrador do Lote 1.');
-    html=html.replace(antes,"const CIDADES_CONFIGURADAS=['VITÓRIA','SERRA','FUNDÃO','ARACRUZ'];");
+    html=html.replace(antes,"const CIDADES_CONFIGURADAS=['VITÃ“RIA','SERRA','FUNDÃƒO','ARACRUZ'];");
     html=html.replaceAll('/api/','/lote1/api/');
     res.set('Cache-Control','no-store');
     return res.type('html').send(html);
@@ -87,7 +87,7 @@ app.use((req,res,next)=>{
 });
 
 app.use(express.json({limit:'100kb'}));
-// Teste de SSO OIDC (desativado por padrão). Nunca recebe senhas do uMov.
+// Teste de SSO OIDC (desativado por padrÃ£o). Nunca recebe senhas do uMov.
 const crypto=require('node:crypto');
 const OIDC_ENABLED=process.env.UMOV_OIDC_ENABLED==='true';
 const OIDC_ISSUER='https://login.umov.me/realms/umovme';
@@ -101,10 +101,10 @@ function verified(token){try{const [p,sig]=String(token||'').split('.');if(!p||!
 function cookies(req){return Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split(/=(.*)/s).slice(0,2)).filter(x=>x.length===2).map(([k,v])=>[k,decodeURIComponent(v)]))}
 function cookie(res,name,value,maxAge){res.append('Set-Cookie',`${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`)}
 function ready(){return OIDC_ENABLED&&OIDC_CLIENT&&OIDC_BASE.startsWith('https://')&&OIDC_SECRET.length>=32}
-async function metadata(){const r=await fetch(OIDC_ISSUER+'/.well-known/openid-configuration',{signal:AbortSignal.timeout(6000)});if(!r.ok)throw Error('Não foi possível consultar configuração OIDC');const m=await r.json();if(m.issuer!==OIDC_ISSUER)throw Error('Emissor OIDC inesperado');return m}
-app.get('/api/auth/config',(req,res)=>res.json({enabled:OIDC_ENABLED,ready:!!ready(),provider:'uMov (Keycloak)',message:OIDC_ENABLED&&!ready()?'Configuração OIDC incompleta':''}));
-app.get('/api/auth/login',async(req,res)=>{if(!ready())return res.status(503).send('SSO não configurado: verifique as variáveis de ambiente.');try{const m=await metadata();const state=b64(crypto.randomBytes(24)),nonce=b64(crypto.randomBytes(24)),verifier=b64(crypto.randomBytes(32)),challenge=b64(crypto.createHash('sha256').update(verifier).digest());cookie(res,OIDC_FLOW,signed({state,nonce,verifier,exp:Date.now()+300000}),300);const u=new URL(m.authorization_endpoint);for(const [k,v] of Object.entries({client_id:OIDC_CLIENT,response_type:'code',redirect_uri:OIDC_BASE+'/api/auth/callback',scope:'openid profile email',state,nonce,code_challenge:challenge,code_challenge_method:'S256'}))u.searchParams.set(k,v);res.redirect(u.toString())}catch(e){res.status(502).send('Falha ao iniciar autenticação: '+e.message)}});
-app.get('/api/auth/callback',async(req,res)=>{cookie(res,OIDC_FLOW,'',0);if(!ready())return res.status(503).send('SSO indisponível');const flow=verified(cookies(req)[OIDC_FLOW]);if(!flow||!req.query.code||req.query.state!==flow.state)return res.status(400).send('Sessão de login inválida ou expirada.');try{const m=await metadata();const body=new URLSearchParams({grant_type:'authorization_code',client_id:OIDC_CLIENT,code:String(req.query.code),redirect_uri:OIDC_BASE+'/api/auth/callback',code_verifier:flow.verifier});if(process.env.UMOV_OIDC_CLIENT_SECRET)body.set('client_secret',process.env.UMOV_OIDC_CLIENT_SECRET);const tr=await fetch(m.token_endpoint,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body,signal:AbortSignal.timeout(8000)});if(!tr.ok)throw Error('Troca do código rejeitada ('+tr.status+'). Verifique cliente e URL de retorno.');const tokens=await tr.json();if(!tokens.id_token)throw Error('ID token não recebido');const parts=tokens.id_token.split('.');if(parts.length!==3)throw Error('ID token inválido');const hdr=JSON.parse(Buffer.from(parts[0],'base64url')),claims=JSON.parse(Buffer.from(parts[1],'base64url'));const jwks=await fetch(m.jwks_uri,{signal:AbortSignal.timeout(6000)}).then(r=>r.json());const jwk=jwks.keys.find(k=>k.kid===hdr.kid&&k.kty==='RSA');if(hdr.alg!=='RS256'||!jwk)throw Error('Algoritmo ou chave de assinatura não aceitos');const key=crypto.createPublicKey({key:jwk,format:'jwk'});if(!crypto.verify('RSA-SHA256',Buffer.from(parts[0]+'.'+parts[1]),key,Buffer.from(parts[2],'base64url')))throw Error('Assinatura inválida');const now=Math.floor(Date.now()/1000);if(claims.iss!==OIDC_ISSUER||!(claims.aud===OIDC_CLIENT||(Array.isArray(claims.aud)&&claims.aud.includes(OIDC_CLIENT)))||claims.exp<=now||claims.iat>now+60||claims.nonce!==flow.nonce)throw Error('Claims OIDC inválidas');cookie(res,OIDC_COOKIE,signed({sub:claims.sub,name:claims.preferred_username||claims.name||claims.sub,exp:Date.now()+Math.min(3600000,(claims.exp-now)*1000)}),3600);res.redirect('/')}catch(e){res.status(401).send('Não foi possível concluir o login: '+e.message)}});
+async function metadata(){const r=await fetch(OIDC_ISSUER+'/.well-known/openid-configuration',{signal:AbortSignal.timeout(6000)});if(!r.ok)throw Error('NÃ£o foi possÃ­vel consultar configuraÃ§Ã£o OIDC');const m=await r.json();if(m.issuer!==OIDC_ISSUER)throw Error('Emissor OIDC inesperado');return m}
+app.get('/api/auth/config',(req,res)=>res.json({enabled:OIDC_ENABLED,ready:!!ready(),provider:'uMov (Keycloak)',message:OIDC_ENABLED&&!ready()?'ConfiguraÃ§Ã£o OIDC incompleta':''}));
+app.get('/api/auth/login',async(req,res)=>{if(!ready())return res.status(503).send('SSO nÃ£o configurado: verifique as variÃ¡veis de ambiente.');try{const m=await metadata();const state=b64(crypto.randomBytes(24)),nonce=b64(crypto.randomBytes(24)),verifier=b64(crypto.randomBytes(32)),challenge=b64(crypto.createHash('sha256').update(verifier).digest());cookie(res,OIDC_FLOW,signed({state,nonce,verifier,exp:Date.now()+300000}),300);const u=new URL(m.authorization_endpoint);for(const [k,v] of Object.entries({client_id:OIDC_CLIENT,response_type:'code',redirect_uri:OIDC_BASE+'/api/auth/callback',scope:'openid profile email',state,nonce,code_challenge:challenge,code_challenge_method:'S256'}))u.searchParams.set(k,v);res.redirect(u.toString())}catch(e){res.status(502).send('Falha ao iniciar autenticaÃ§Ã£o: '+e.message)}});
+app.get('/api/auth/callback',async(req,res)=>{cookie(res,OIDC_FLOW,'',0);if(!ready())return res.status(503).send('SSO indisponÃ­vel');const flow=verified(cookies(req)[OIDC_FLOW]);if(!flow||!req.query.code||req.query.state!==flow.state)return res.status(400).send('SessÃ£o de login invÃ¡lida ou expirada.');try{const m=await metadata();const body=new URLSearchParams({grant_type:'authorization_code',client_id:OIDC_CLIENT,code:String(req.query.code),redirect_uri:OIDC_BASE+'/api/auth/callback',code_verifier:flow.verifier});if(process.env.UMOV_OIDC_CLIENT_SECRET)body.set('client_secret',process.env.UMOV_OIDC_CLIENT_SECRET);const tr=await fetch(m.token_endpoint,{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body,signal:AbortSignal.timeout(8000)});if(!tr.ok)throw Error('Troca do cÃ³digo rejeitada ('+tr.status+'). Verifique cliente e URL de retorno.');const tokens=await tr.json();if(!tokens.id_token)throw Error('ID token nÃ£o recebido');const parts=tokens.id_token.split('.');if(parts.length!==3)throw Error('ID token invÃ¡lido');const hdr=JSON.parse(Buffer.from(parts[0],'base64url')),claims=JSON.parse(Buffer.from(parts[1],'base64url'));const jwks=await fetch(m.jwks_uri,{signal:AbortSignal.timeout(6000)}).then(r=>r.json());const jwk=jwks.keys.find(k=>k.kid===hdr.kid&&k.kty==='RSA');if(hdr.alg!=='RS256'||!jwk)throw Error('Algoritmo ou chave de assinatura nÃ£o aceitos');const key=crypto.createPublicKey({key:jwk,format:'jwk'});if(!crypto.verify('RSA-SHA256',Buffer.from(parts[0]+'.'+parts[1]),key,Buffer.from(parts[2],'base64url')))throw Error('Assinatura invÃ¡lida');const now=Math.floor(Date.now()/1000);if(claims.iss!==OIDC_ISSUER||!(claims.aud===OIDC_CLIENT||(Array.isArray(claims.aud)&&claims.aud.includes(OIDC_CLIENT)))||claims.exp<=now||claims.iat>now+60||claims.nonce!==flow.nonce)throw Error('Claims OIDC invÃ¡lidas');cookie(res,OIDC_COOKIE,signed({sub:claims.sub,name:claims.preferred_username||claims.name||claims.sub,exp:Date.now()+Math.min(3600000,(claims.exp-now)*1000)}),3600);res.redirect('/')}catch(e){res.status(401).send('NÃ£o foi possÃ­vel concluir o login: '+e.message)}});
 app.get('/api/auth/me',(req,res)=>{const x=OIDC_ENABLED?verified(cookies(req)[OIDC_COOKIE]):null;res.json({enabled:OIDC_ENABLED,authenticated:!!x,user:x?{id:x.sub,name:x.name}:null,permissionsVerified:false})});
 app.post('/api/auth/logout',(req,res)=>{cookie(res,OIDC_COOKIE,'',0);res.json({ok:true})});
 
@@ -167,7 +167,7 @@ function individualWriteAllowed(user){
  const ids=String(process.env.SISCOM_INDIVIDUAL_WRITE_USERS||'').split(',').map(x=>x.trim()).filter(Boolean);
  return ids.length>0&&ids.includes(String(user?.uid||''));
 }
-// Não expor endpoint de login em HTTP nem aceitar chamadas cross-site.
+// NÃ£o expor endpoint de login em HTTP nem aceitar chamadas cross-site.
 function siscomSameOrigin(req){
  const origin=req.get('Origin');
  if(!origin)return false;
@@ -176,9 +176,9 @@ function siscomSameOrigin(req){
 app.post('/api/siscom-individual/login',async(req,res)=>{
  res.set('Cache-Control','no-store');
  if(!siscomIndividualReady())return res.status(503).json({error:'Configure SISCOM_AUTH_PUBLIC_KEY e SISCOM_GATEWAY_SIGNING_SECRET no Vercel.'});
- if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem de login não autorizada'});
+ if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem de login nÃ£o autorizada'});
  const login=String(req.body?.login||'').trim(),password=String(req.body?.password||'');
- if(!/^[a-zA-Z0-9_.@-]{2,80}$/.test(login)||password.length<1||password.length>256)return res.status(400).json({error:'Login ou senha em formato inválido'});
+ if(!/^[a-zA-Z0-9_.@-]{2,80}$/.test(login)||password.length<1||password.length>256)return res.status(400).json({error:'Login ou senha em formato invÃ¡lido'});
  const sid=crypto.randomBytes(32).toString('hex');
  try{
   const envelope=sealedCredentials(login,password);
@@ -190,14 +190,14 @@ app.post('/api/siscom-individual/login',async(req,res)=>{
 app.get('/api/siscom-individual/login-status',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const pending=verified(cookies(req)[SISCOM_PENDING_COOKIE]);
- if(!pending||pending.role!=='siscom_pending')return res.status(401).json({error:'Solicitação de login expirada'});
+ if(!pending||pending.role!=='siscom_pending')return res.status(401).json({error:'SolicitaÃ§Ã£o de login expirada'});
  try{
   const rows=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,error_message,payload&id=eq.'+pending.job_id+'&limit=1');
   const job=rows?.[0];
-  if(!job||job.operation!=='siscom_login_individual'||job.payload?.__siscom_identity?.sid!==pending.sid)return res.status(403).json({error:'Login não corresponde à sessão'});
+  if(!job||job.operation!=='siscom_login_individual'||job.payload?.__siscom_identity?.sid!==pending.sid)return res.status(403).json({error:'Login nÃ£o corresponde Ã  sessÃ£o'});
   if(job.status==='erro'){
    cookie(res,SISCOM_PENDING_COOKIE,'',0);
-   return res.status(401).json({error:'SISCOM não autenticou esta conta. Confira as credenciais ou a permissão da rede.'});
+   return res.status(401).json({error:'SISCOM nÃ£o autenticou esta conta. Confira as credenciais ou a permissÃ£o da rede.'});
   }
   if(job.status!=='concluido')return res.status(202).json({status:'pendente'});
   const user=job.result;
@@ -206,11 +206,11 @@ app.get('/api/siscom-individual/login-status',async(req,res)=>{
   cookie(res,SISCOM_PENDING_COOKIE,'',0);
   cookie(res,SISCOM_USER_COOKIE,signed({role:'siscom_individual',sid:pending.sid,uid:user.idUsuario,name:String(user.nome).slice(0,120),login:String(user.login||'').slice(0,80),exp}),Math.floor(SISCOM_SID_TTL/1000));
   res.json({status:'autenticado',user:{idUsuario:user.idUsuario,nome:user.nome,login:user.login},writeEnabled:individualWriteAllowed({uid:user.idUsuario})});
- }catch(e){console.error('SISCOM login status:',e.message);res.status(502).json({error:'Falha ao conferir autenticação'});}
+ }catch(e){console.error('SISCOM login status:',e.message);res.status(502).json({error:'Falha ao conferir autenticaÃ§Ã£o'});}
 });
 app.post('/api/siscom-individual/logout',async(req,res)=>{
  res.set('Cache-Control','no-store');
- if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem não autorizada'});
+ if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem nÃ£o autorizada'});
  const user=siscomIndividual(req);
  cookie(res,SISCOM_PENDING_COOKIE,'',0);
  cookie(res,SISCOM_USER_COOKIE,'',0);
@@ -222,10 +222,10 @@ app.post('/api/siscom-individual/logout',async(req,res)=>{
 });
 // === FIM SISCOM INDIVIDUAL ===
 
-// SISCOM Gateway: healthcheck de integração. Não encaminha requisições arbitrárias à VPN.
-// Protegido por token exclusivo de servidor, mesmo quando o SSO opcional está desativado.
-// Login administrativo TEMPORÁRIO: senha digitada UMA VEZ por sessão.
-// Não é login SISCOM nem identifica individualmente o programador.
+// SISCOM Gateway: healthcheck de integraÃ§Ã£o. NÃ£o encaminha requisiÃ§Ãµes arbitrÃ¡rias Ã  VPN.
+// Protegido por token exclusivo de servidor, mesmo quando o SSO opcional estÃ¡ desativado.
+// Login administrativo TEMPORÃRIO: senha digitada UMA VEZ por sessÃ£o.
+// NÃ£o Ã© login SISCOM nem identifica individualmente o programador.
 const GATEWAY_COOKIE='ss_gateway_admin';
 function adminReady(){return (process.env.SISCOM_ADMIN_PASSWORD||'').length>=16 && OIDC_SECRET.length>=32;}
 function adminSession(req){const x=adminReady()?verified(cookies(req)[GATEWAY_COOKIE]):null;return !!(x&&x.role==='siscom_admin');}
@@ -258,7 +258,7 @@ function gatewayCanWrite(req) {
 async function gatewayRest(route, options = {}) {
  const url = process.env.SUPABASE_URL;
  const key = process.env.SUPABASE_SECRET_KEY;
- if (!url || !/^https:\/\//.test(url) || !key) throw Error('Supabase não configurado no servidor');
+ if (!url || !/^https:\/\//.test(url) || !key) throw Error('Supabase nÃ£o configurado no servidor');
  const response = await fetch(url.replace(/\/$/, '') + '/rest/v1/' + route, {
   ...options,
   headers: { apikey:key, Authorization:'Bearer '+key, 'Content-Type':'application/json', ...(options.headers || {}) },
@@ -268,7 +268,7 @@ async function gatewayRest(route, options = {}) {
  return response.json();
 }
 app.post('/api/siscom-gateway/healthcheck', async (req,res) => {
- if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'NÃ£o autorizado'});
  try {
   const jobs = await gatewayRest('siscom_gateway_jobs', {
    method:'POST', headers:{Prefer:'return=representation'},
@@ -277,11 +277,11 @@ app.post('/api/siscom-gateway/healthcheck', async (req,res) => {
   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
  } catch (e) { console.error('Gateway:',e.message);res.status(502).json({error:'Falha ao criar tarefa'}); }
 });
-// Consulta SS: API restrita ao token do gateway, sem senha de usuário na fila.
+// Consulta SS: API restrita ao token do gateway, sem senha de usuÃ¡rio na fila.
 app.post('/api/siscom-gateway/consultar-ss', async (req,res) => {
- if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'NÃ£o autorizado'});
  const numero = String(req.body?.numero_ss || '').trim();
- if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)) return res.status(400).json({error:'Formato inválido de SS'});
+ if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)) return res.status(400).json({error:'Formato invÃ¡lido de SS'});
  try {
   const jobs = await gatewayRest('siscom_gateway_jobs', {
    method:'POST',headers:{Prefer:'return=representation'},
@@ -290,19 +290,19 @@ app.post('/api/siscom-gateway/consultar-ss', async (req,res) => {
   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
  } catch(e) { console.error('Gateway consulta:',e.message);res.status(502).json({error:'Falha ao criar consulta'}); }
 });
-// Consulta somente leitura do histórico de eventos oficiais da SS.
+// Consulta somente leitura do histÃ³rico de eventos oficiais da SS.
 app.post('/api/siscom-gateway/consultar-ss-baixa', async(req,res)=>{
- if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
+ if(!gatewayAuthorized(req))return res.status(401).json({error:'NÃ£o autorizado'});
  const numero=String(req.body?.numero_ss||'').trim();
- if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS invÃ¡lida'});
  try {const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'consultar_ss_baixa',payload:individualJobPayload(req,'consultar_ss_baixa',{numero_ss:numero})})});res.status(202).json({id:jobs[0].id,status:jobs[0].status});}
  catch(e){console.error('Gateway SS baixa:',e.message);res.status(502).json({error:'Falha ao iniciar consulta oficial da SS'});}
 });
-// Diagnóstico somente leitura da tentativa existente: jamais cria outro POST.
+// DiagnÃ³stico somente leitura da tentativa existente: jamais cria outro POST.
 app.get('/api/siscom-gateway/tentativa-baixa/:numero',async(req,res)=>{
- if(!gatewayAuthorized(req))return res.status(401).json({error:'Não autorizado'});
+ if(!gatewayAuthorized(req))return res.status(401).json({error:'NÃ£o autorizado'});
  const numero=String(req.params.numero||'').trim();
- if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS invÃ¡lida'});
  try{
   const qs=new URLSearchParams({select:'id,status,result,error_message,created_at,finished_at',operation:'eq.baixar_ss_real','payload->>numero_ss':'eq.'+numero,order:'created_at.desc',limit:'1'});
   const jobs=await gatewayRest('siscom_gateway_jobs?'+qs.toString());
@@ -311,26 +311,26 @@ app.get('/api/siscom-gateway/tentativa-baixa/:numero',async(req,res)=>{
   res.set('Cache-Control','no-store').json({id:j.id,status:j.status,created_at:j.created_at,finished_at:j.finished_at,http_status:r.http_status??null,status_baixa:r.status_baixa??null,diagnostico_validacao:r.diagnostico_validacao??null,mensagem:r.mensagem??null,error_message:j.error_message??null});
  }catch(e){console.error('Consulta de tentativa:',e.message);res.status(502).json({error:'Falha ao consultar tentativa anterior'});}
 });
-// Encerramento controlado: somente com confirmação explícita e chave única por SS.
+// Encerramento controlado: somente com confirmaÃ§Ã£o explÃ­cita e chave Ãºnica por SS.
 app.post('/api/siscom-gateway/baixar-ss',async(req,res)=>{
- if(!gatewayCanWrite(req))return res.status(401).json({error:'Não autorizado'});
+ if(!gatewayCanWrite(req))return res.status(401).json({error:'NÃ£o autorizado'});
  const p=req.body||{},numero=String(p.numero_ss||'').trim();
- if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
- if(p.confirmacao!==`BAIXAR ${numero}`)return res.status(400).json({error:'Confirmação obrigatória'});
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS invÃ¡lida'});
+ if(p.confirmacao!==`BAIXAR ${numero}`)return res.status(400).json({error:'ConfirmaÃ§Ã£o obrigatÃ³ria'});
  const inteiro=v=>Number.isSafeInteger(Number(v))&&Number(v)>0;
- if(![p.executor,p.equipe,p.macro,p.micro].every(inteiro))return res.status(400).json({error:'Códigos inválidos'});
- if(!['S','N'].includes(p.ultima_ss)||!String(p.descricao||'').trim()||String(p.descricao).length>1000)return res.status(400).json({error:'Dados de execução incompletos'});
- if(!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.inicio)||!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.fim))return res.status(400).json({error:'Datas inválidas'});
+ if(![p.executor,p.equipe,p.macro,p.micro].every(inteiro))return res.status(400).json({error:'CÃ³digos invÃ¡lidos'});
+ if(!['S','N'].includes(p.ultima_ss)||!String(p.descricao||'').trim()||String(p.descricao).length>1000)return res.status(400).json({error:'Dados de execuÃ§Ã£o incompletos'});
+ if(!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.inicio)||!/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/.test(p.fim))return res.status(400).json({error:'Datas invÃ¡lidas'});
  const payload={numero_ss:numero,executor:Number(p.executor),equipe:Number(p.equipe),macro:Number(p.macro),micro:Number(p.micro),ultima_ss:p.ultima_ss,inicio:p.inicio,fim:p.fim,descricao:p.descricao.trim(),causa:p.causa?Number(p.causa):null};
  try{
   const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation:'baixar_ss_real',status:'pendente',payload:individualJobPayload(req,'baixar_ss_real',payload)})});
   return res.status(202).json({id:jobs[0].id,status:jobs[0].status});
- }catch(e){console.error('Gravação SISCOM:',e.message);return res.status(409).json({error:'Envio não iniciado ou já registrado. Consulte a tentativa existente; nenhuma nova baixa foi enviada.',consulta_tentativa:'/api/siscom-gateway/tentativa-baixa/'+encodeURIComponent(numero)});}
+ }catch(e){console.error('GravaÃ§Ã£o SISCOM:',e.message);return res.status(409).json({error:'Envio nÃ£o iniciado ou jÃ¡ registrado. Consulte a tentativa existente; nenhuma nova baixa foi enviada.',consulta_tentativa:'/api/siscom-gateway/tentativa-baixa/'+encodeURIComponent(numero)});}
 });
 app.post('/api/siscom-gateway/consultar-eventos-ss', async (req,res) => {
- if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'NÃ£o autorizado'});
  const numero = String(req.body?.numero_ss || '').trim();
- if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)) return res.status(400).json({error:'Formato inválido de SS'});
+ if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)) return res.status(400).json({error:'Formato invÃ¡lido de SS'});
  try {
   const jobs = await gatewayRest('siscom_gateway_jobs', {
    method:'POST',headers:{Prefer:'return=representation'},
@@ -339,46 +339,46 @@ app.post('/api/siscom-gateway/consultar-eventos-ss', async (req,res) => {
   res.status(202).json({id:jobs[0].id,status:jobs[0].status});
  } catch(e) { console.error('Gateway eventos:',e.message);res.status(502).json({error:'Falha ao criar consulta de eventos'}); }
 });
-// Consultas oficiais somente leitura para o formulário de baixa.
-// A execução depende de suporte correspondente no worker VPN.
+// Consultas oficiais somente leitura para o formulÃ¡rio de baixa.
+// A execuÃ§Ã£o depende de suporte correspondente no worker VPN.
 for (const [route, operation, field] of [
  ['equipes','listar_equipes','cd_executor'],
  ['micros','listar_micros','cd_macro'],
  ['causas','listar_causas','cd_micro']
 ]) {
  app.post('/api/siscom-gateway/'+route, async (req,res) => {
-  if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+  if (!gatewayAuthorized(req)) return res.status(401).json({error:'NÃ£o autorizado'});
   const code=String(req.body?.[field]??'').trim();
-  if (!/^\d{1,8}$/.test(code)) return res.status(400).json({error:'Código inválido'});
+  if (!/^\d{1,8}$/.test(code)) return res.status(400).json({error:'CÃ³digo invÃ¡lido'});
   try {
    const jobs=await gatewayRest('siscom_gateway_jobs',{
     method:'POST',headers:{Prefer:'return=representation'},
     body:JSON.stringify({operation,payload:individualJobPayload(req,operation,{[field]:Number(code)})})
    });
    res.status(202).json({id:jobs[0].id,status:jobs[0].status});
-  } catch(e) {console.error('Gateway catálogo:',e.message);res.status(502).json({error:'Falha ao iniciar consulta'});}
+  } catch(e) {console.error('Gateway catÃ¡logo:',e.message);res.status(502).json({error:'Falha ao iniciar consulta'});}
  });
 }
-// Consultas e criação de complementar. Não usa token no navegador nem no payload.
+// Consultas e criaÃ§Ã£o de complementar. NÃ£o usa token no navegador nem no payload.
 for(const [route,operation] of [['complementar-areas','listar_areas_complementar'],['complementar-servicos','listar_servicos_complementar'],['complementar-consultar','consultar_complementares_ss'],['complementar-criar','criar_ss_complementar']]){
  app.post('/api/siscom-gateway/'+route,async(req,res)=>{
   const escrita=operation==='criar_ss_complementar';
-  if(!(escrita?gatewayCanWrite(req):gatewayAuthorized(req)))return res.status(401).json({error:'Não autorizado'});
+  if(!(escrita?gatewayCanWrite(req):gatewayAuthorized(req)))return res.status(401).json({error:'NÃ£o autorizado'});
   const p=req.body||{},numero=String(p.numero_ss||'').trim();
-  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS inválida'});
+  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({error:'SS invÃ¡lida'});
   const payload={numero_ss:numero};
   if(operation==='listar_servicos_complementar'||escrita){
-   if(!Number.isSafeInteger(Number(p.area))||Number(p.area)<1)return res.status(400).json({error:'Área inválida'});
+   if(!Number.isSafeInteger(Number(p.area))||Number(p.area)<1)return res.status(400).json({error:'Ãrea invÃ¡lida'});
    payload.area=Number(p.area);
   }
   if(escrita){
-   if(!Number.isSafeInteger(Number(p.macro))||Number(p.macro)<1||!String(p.descricao||'').trim()||String(p.descricao).length>1000||p.confirmacao!=='COMPLEMENTAR '+numero)return res.status(400).json({error:'Dados ou confirmação inválidos'});
+   if(!Number.isSafeInteger(Number(p.macro))||Number(p.macro)<1||!String(p.descricao||'').trim()||String(p.descricao).length>1000||p.confirmacao!=='COMPLEMENTAR '+numero)return res.status(400).json({error:'Dados ou confirmaÃ§Ã£o invÃ¡lidos'});
    payload.macro=Number(p.macro);payload.descricao=String(p.descricao).trim();
   }
   try{
    const jobs=await gatewayRest('siscom_gateway_jobs',{method:'POST',headers:{Prefer:'return=representation'},body:JSON.stringify({operation,status:'pendente',payload:individualJobPayload(req,operation,payload)})});
    res.status(202).json({id:jobs[0].id,status:jobs[0].status});
-  }catch(e){console.error('Gateway complementar:',e.message);res.status(escrita?409:502).json({error:escrita?'Criação não iniciada ou já registrada. Consulte o SISCOM e o histórico de jobs antes de reenviar.':'Falha ao consultar SISCOM'});}
+  }catch(e){console.error('Gateway complementar:',e.message);res.status(escrita?409:502).json({error:escrita?'CriaÃ§Ã£o nÃ£o iniciada ou jÃ¡ registrada. Consulte o SISCOM e o histÃ³rico de jobs antes de reenviar.':'Falha ao consultar SISCOM'});}
  });
 }
 // ANEXOS SS: transporte privado do PDF via Storage; a fila guarda apenas o caminho.
@@ -389,7 +389,7 @@ function anexoStorageBase(){return String(process.env.SUPABASE_URL||'').replace(
 async function anexoStorageUpload(nome,bytes){
  const key=process.env.SUPABASE_SECRET_KEY;
  const r=await fetch(anexoStorageBase()+encodeURIComponent(nome),{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/pdf','x-upsert':'false'},body:bytes,signal:AbortSignal.timeout(20000)});
- if(!r.ok)throw Error('Storage temporário indisponível (HTTP '+r.status+'). Verifique o bucket privado '+ANEXO_BUCKET);
+ if(!r.ok)throw Error('Storage temporÃ¡rio indisponÃ­vel (HTTP '+r.status+'). Verifique o bucket privado '+ANEXO_BUCKET);
 }
 async function anexoStorageRemove(nome){
  const key=process.env.SUPABASE_SECRET_KEY;
@@ -402,21 +402,21 @@ app.get('/api/siscom-gateway/anexo-permissao',(req,res)=>{
 app.post('/api/siscom-gateway/anexar-relatorio',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const user=siscomIndividual(req);
- if(!user)return res.status(401).json({error:'Faça login individual no SISCOM.'});
- if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem não autorizada'});
- if(!individualWriteAllowed(user)||process.env.SISCOM_ANEXO_WRITE_ENABLED!=='true')return res.status(403).json({error:'Envio de anexos desabilitado. Habilite SISCOM_ANEXO_WRITE_ENABLED após validar o fluxo.'});
+ if(!user)return res.status(401).json({error:'FaÃ§a login individual no SISCOM.'});
+ if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem nÃ£o autorizada'});
+ if(!individualWriteAllowed(user)||process.env.SISCOM_ANEXO_WRITE_ENABLED!=='true')return res.status(403).json({error:'Envio de anexos desabilitado. Habilite SISCOM_ANEXO_WRITE_ENABLED apÃ³s validar o fluxo.'});
  const ss=String(req.body?.numero_ss||'').trim(),tarefa=Number(req.body?.tarefa),confirmacao=String(req.body?.confirmacao||''),descricao=String(req.body?.descricao||'').trim();
- if(!ANEXO_SS_RE.test(ss)||!Number.isSafeInteger(tarefa)||tarefa<1||confirmacao!=='ANEXAR '+ss||!descricao||descricao.length>250)return res.status(400).json({error:'SS, tarefa, descrição ou confirmação inválida'});
+ if(!ANEXO_SS_RE.test(ss)||!Number.isSafeInteger(tarefa)||tarefa<1||confirmacao!=='ANEXAR '+ss||!descricao||descricao.length>250)return res.status(400).json({error:'SS, tarefa, descriÃ§Ã£o ou confirmaÃ§Ã£o invÃ¡lida'});
  let objeto='';
  try{
   // Nunca confiar no link do cliente: verificar tarefa e SS diretamente no banco uMov.
   const q=await pool.query({text:`SELECT d.tss_id,d.tsk_accesstoken,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:8000});
   const x=q.rows[0];
-  if(!x||String(x.numero_ss||'').trim()!==ss||Number(x.tss_id)!==50||!x.tsk_accesstoken||!/^[a-zA-Z0-9._~-]+$/.test(String(x.tsk_accesstoken)))return res.status(404).json({error:'Não foi possível comprovar o vínculo da tarefa uMov com a SS.'});
-  const host=hostRelatorioUmov();if(!host)throw Error('Host do relatório uMov não configurado');
+  if(!x||String(x.numero_ss||'').trim()!==ss||Number(x.tss_id)!==50||!x.tsk_accesstoken||!/^[a-zA-Z0-9._~-]+$/.test(String(x.tsk_accesstoken)))return res.status(404).json({error:'NÃ£o foi possÃ­vel comprovar o vÃ­nculo da tarefa uMov com a SS.'});
+  const host=hostRelatorioUmov();if(!host)throw Error('Host do relatÃ³rio uMov nÃ£o configurado');
   const link='https://'+host+'/CenterWeb/report/schedule/'+tarefa+'/'+x.tsk_accesstoken;
   const pdf=await gerarPdfOriginalUmov(link);
-  if(pdf.length<100||pdf.length>ANEXO_MAX_BYTES||pdf.subarray(0,5).toString()!=='%PDF-')return res.status(413).json({error:'PDF inválido ou maior que 8 MB; envio não iniciado.'});
+  if(pdf.length<100||pdf.length>ANEXO_MAX_BYTES||pdf.subarray(0,5).toString()!=='%PDF-')return res.status(413).json({error:'PDF invÃ¡lido ou maior que 8 MB; envio nÃ£o iniciado.'});
   objeto=crypto.randomUUID()+'.pdf';
   await anexoStorageUpload(objeto,pdf);
   const operacao='anexar_relatorio_ss';
@@ -426,7 +426,7 @@ app.post('/api/siscom-gateway/anexar-relatorio',async(req,res)=>{
  }catch(e){if(objeto)await anexoStorageRemove(objeto);console.error('Anexo SISCOM:',e.message);return res.status(502).json({error:String(e.message||'Falha ao preparar PDF').slice(0,200)})}
 });
 
-// === REJEIÇÃO OFICIAL SISCOM (somente sessão individual, nunca senha administrativa) ===
+// === REJEIÃ‡ÃƒO OFICIAL SISCOM (somente sessÃ£o individual, nunca senha administrativa) ===
 const SS_REJEICAO_FORMATO=/^\d{2}\/\d{2}-\d{6}-\d{2}$/;
 const REJEICAO_OPS=['validar_ss_rejeicao','rejeitar_ss_real'];
 function rejectionEnabled(req){
@@ -435,104 +435,107 @@ function rejectionEnabled(req){
 }
 app.post('/api/siscom-gateway/rejeicao-validar',async(req,res)=>{
  const user=siscomIndividual(req);
- if(!user)return res.status(401).json({error:'Entre com seu usuário SISCOM para validar a rejeição'});
+ if(!user)return res.status(401).json({error:'Entre com seu usuÃ¡rio SISCOM para validar a rejeiÃ§Ã£o'});
  const numero=String(req.body?.numero_ss||'').trim();
- if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'Número da SS inválido'});
+ if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'NÃºmero da SS invÃ¡lido'});
  try{res.status(202).json(await siscomCreateJob('validar_ss_rejeicao',signedTask('validar_ss_rejeicao',{numero_ss:numero},user.sid)));}
- catch(e){console.error('Validação rejeição:',e.message);res.status(502).json({error:'Não foi possível iniciar a validação no SISCOM'});}
+ catch(e){console.error('ValidaÃ§Ã£o rejeiÃ§Ã£o:',e.message);res.status(502).json({error:'NÃ£o foi possÃ­vel iniciar a validaÃ§Ã£o no SISCOM'});}
 });
 app.post('/api/siscom-gateway/rejeicao-confirmar',async(req,res)=>{
  const user=siscomIndividual(req);
- if(!user)return res.status(401).json({error:'Login SISCOM individual obrigatório'});
- if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem não autorizada'});
- if(!rejectionEnabled(req))return res.status(403).json({error:'Rejeição oficial ainda não habilitada para este usuário. Configure permissões de escrita e SISCOM_REJEICAO_WRITE_ENABLED.'});
+ if(!user)return res.status(401).json({error:'Login SISCOM individual obrigatÃ³rio'});
+ if(!siscomSameOrigin(req))return res.status(403).json({error:'Origem nÃ£o autorizada'});
+ if(!rejectionEnabled(req))return res.status(403).json({error:'RejeiÃ§Ã£o oficial ainda nÃ£o habilitada para este usuÃ¡rio. Configure permissÃµes de escrita e SISCOM_REJEICAO_WRITE_ENABLED.'});
  const p=req.body||{},numero=String(p.numero_ss||'').trim();
- if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'SS inválida'});
- if(p.confirmacao!=='REJEITAR '+numero)return res.status(400).json({error:'Confirmação explícita obrigatória'});
- if(p.motivo!=='NAO_EXECUCAO')return res.status(400).json({error:'Somente Não Execução está validado para envio. Duplicidade ainda não habilitada.'});
+ if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'SS invÃ¡lida'});
+ if(p.confirmacao!=='REJEITAR '+numero)return res.status(400).json({error:'ConfirmaÃ§Ã£o explÃ­cita obrigatÃ³ria'});
+ if(p.motivo!=='NAO_EXECUCAO')return res.status(400).json({error:'Somente NÃ£o ExecuÃ§Ã£o estÃ¡ validado para envio. Duplicidade ainda nÃ£o habilitada.'});
  const equipe=Number(p.equipe),inicio=String(p.inicio||''),fim=String(p.fim||''),observacao=String(p.observacao||'').trim();
- if(!Number.isSafeInteger(equipe)||equipe<1||equipe>99999999)return res.status(400).json({error:'Equipe inválida'});
- if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(inicio)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(fim)||!Number.isFinite(Date.parse(inicio))||!Number.isFinite(Date.parse(fim))||Date.parse(fim)<Date.parse(inicio))return res.status(400).json({error:'Datas de início e fim inválidas'});
- if(!observacao||observacao.length>1000)return res.status(400).json({error:'Observação obrigatória (até 1000 caracteres)'});
+ if(!Number.isSafeInteger(equipe)||equipe<1||equipe>99999999)return res.status(400).json({error:'Equipe invÃ¡lida'});
+ if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(inicio)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(fim)||!Number.isFinite(Date.parse(inicio))||!Number.isFinite(Date.parse(fim))||Date.parse(fim)<Date.parse(inicio))return res.status(400).json({error:'Datas de inÃ­cio e fim invÃ¡lidas'});
+ if(!observacao||observacao.length>1000)return res.status(400).json({error:'ObservaÃ§Ã£o obrigatÃ³ria (atÃ© 1000 caracteres)'});
  const payload={numero_ss:numero,motivo:'NAO_EXECUCAO',equipe,inicio,fim,observacao};
  try{res.status(202).json(await siscomCreateJob('rejeitar_ss_real',signedTask('rejeitar_ss_real',payload,user.sid)));}
- catch(e){console.error('Fila de rejeição:',e.message);res.status(409).json({error:'Rejeição não iniciada ou já registrada para esta SS. Verifique o histórico; não reenvie sem conferir.'});}
+ catch(e){console.error('Fila de rejeiÃ§Ã£o:',e.message);res.status(409).json({error:'RejeiÃ§Ã£o nÃ£o iniciada ou jÃ¡ registrada para esta SS. Verifique o histÃ³rico; nÃ£o reenvie sem conferir.'});}
 });
 app.get('/api/siscom-gateway/rejeicao-tentativa/:numero',async(req,res)=>{
  const user=siscomIndividual(req);
- if(!user)return res.status(401).json({error:'Login individual obrigatório'});
+ if(!user)return res.status(401).json({error:'Login individual obrigatÃ³rio'});
  const numero=String(req.params.numero||'').trim();
- if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'SS inválida'});
+ if(!SS_REJEICAO_FORMATO.test(numero))return res.status(400).json({error:'SS invÃ¡lida'});
  try{
   const qs=new URLSearchParams({select:'id,operation,status,result,error_message,created_at,finished_at,payload',operation:'eq.rejeitar_ss_real','payload->>numero_ss':'eq.'+numero,order:'created_at.desc',limit:'1'});
   const jobs=await gatewayRest('siscom_gateway_jobs?'+qs);
-  if(!jobs.length||jobs[0].payload?.__siscom_identity?.sid!==user.sid)return res.status(404).json({error:'Nenhuma tentativa disponível nesta sessão'});
+  if(!jobs.length||jobs[0].payload?.__siscom_identity?.sid!==user.sid)return res.status(404).json({error:'Nenhuma tentativa disponÃ­vel nesta sessÃ£o'});
   const {payload,...data}=jobs[0];res.set('Cache-Control','no-store').json(data);
- }catch(e){console.error('Tentativa de rejeição:',e.message);res.status(502).json({error:'Falha ao consultar tentativa'});}
+ }catch(e){console.error('Tentativa de rejeiÃ§Ã£o:',e.message);res.status(502).json({error:'Falha ao consultar tentativa'});}
 });
-// Sincroniza uMov apenas quando o worker comprovou evento oficial novo (código 4).
+// Sincroniza uMov apenas quando o worker comprovou evento oficial novo (cÃ³digo 4).
 app.post('/api/siscom-gateway/sincronizar-rejeicao',async(req,res)=>{
  const user=siscomIndividual(req);
- if(!user)return res.status(401).json({ok:false,error:'Login individual obrigatório'});
- if(!siscomSameOrigin(req))return res.status(403).json({ok:false,error:'Origem não autorizada'});
- if(!rejectionEnabled(req))return res.status(403).json({ok:false,error:'Sincronização de rejeição não autorizada'});
+ if(!user)return res.status(401).json({ok:false,error:'Login individual obrigatÃ³rio'});
+ if(!siscomSameOrigin(req))return res.status(403).json({ok:false,error:'Origem nÃ£o autorizada'});
+ if(!rejectionEnabled(req))return res.status(403).json({ok:false,error:'SincronizaÃ§Ã£o de rejeiÃ§Ã£o nÃ£o autorizada'});
  const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim();
- if(!SS_REJEICAO_FORMATO.test(numero)||!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou tarefa inválida'});
+ if(!SS_REJEICAO_FORMATO.test(numero)||!/^[0-9a-f]{8}-[0-9a-f-]{27,36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou tarefa invÃ¡lida'});
  try{
   const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
   const j=jobs[0];
-  if(!j||j.operation!=='rejeitar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==user.sid||j.result?.status_rejeicao!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Rejeição ainda não confirmada oficialmente neste job'});
+  if(!j||j.operation!=='rejeitar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==user.sid||j.result?.status_rejeicao!=='CONFIRMADA')return res.status(409).json({ok:false,error:'RejeiÃ§Ã£o ainda nÃ£o confirmada oficialmente neste job'});
   const q=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1 ORDER BY t.tsk_id DESC LIMIT 25`,values:[numero],query_timeout:7000});
-  if(!q.rows.length)return res.status(404).json({ok:false,error:'Rejeição SISCOM confirmada, mas SS não encontrada no uMov'});
+  if(!q.rows.length)return res.status(404).json({ok:false,error:'RejeiÃ§Ã£o SISCOM confirmada, mas SS nÃ£o encontrada no uMov'});
   const valor=xmlEscape(identificadorSituacao('Rejeitada')),resultados=[];
   for(const row of q.rows){try{await postUmovXml('schedule',row.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);resultados.push({tarefa:row.tsk_id,ok:true})}catch(e){resultados.push({tarefa:row.tsk_id,ok:false,error:String(e.message).slice(0,180)})}}
   if(resultados.some(x=>x.ok))for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
   const falhas=resultados.filter(x=>!x.ok);
-  res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'SISCOM confirmou; sincronização uMov incompleta':null});
- }catch(e){console.error('Sincronização rejeição:',e.message);res.status(502).json({ok:false,error:'Rejeição SISCOM confirmada; falha ao sincronizar o uMov'});}
+  res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'SISCOM confirmou; sincronizaÃ§Ã£o uMov incompleta':null});
+ }catch(e){console.error('SincronizaÃ§Ã£o rejeiÃ§Ã£o:',e.message);res.status(502).json({ok:false,error:'RejeiÃ§Ã£o SISCOM confirmada; falha ao sincronizar o uMov'});}
 });
-// === FIM REJEIÇÃO OFICIAL ===
+// === FIM REJEIÃ‡ÃƒO OFICIAL ===
 
-// Tramitação SISCOM: apenas leitura, sempre com sessão individual assinada.
+// TramitaÃ§Ã£o SISCOM: apenas leitura, sempre com sessÃ£o individual assinada.
 const TRAM_OPS=new Set(['tram_contratos','tram_fases','tram_macros','tram_responsaveis','tram_pesquisar','tram_detalhes','tram_ni','tram_itens','tram_anexos','tram_historico','tram_ultima_acao','tram_perfil']);
 app.post('/api/siscom-gateway/tramitacao',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const user=siscomIndividual(req);
- if(!user)return res.status(401).json({error:'Faça login individual no SISCOM para consultar a tramitação.'});
+ if(!user)return res.status(401).json({error:'FaÃ§a login individual no SISCOM para consultar a tramitaÃ§Ã£o.'});
  const operation=String(req.body?.operation||'');
- if(!TRAM_OPS.has(operation))return res.status(400).json({error:'Operação inválida'});
+ if(!TRAM_OPS.has(operation))return res.status(400).json({error:'OperaÃ§Ã£o invÃ¡lida'});
  const p=req.body?.params||{};
- if(!p||typeof p!=='object'||Array.isArray(p))return res.status(400).json({error:'Parâmetros inválidos'});
+ if(!p||typeof p!=='object'||Array.isArray(p))return res.status(400).json({error:'ParÃ¢metros invÃ¡lidos'});
  try{const job=await siscomCreateJob(operation,signedTask(operation,{params:p},user.sid));res.status(202).json(job)}
- catch(e){console.error('Tramitação fila:',e.message);res.status(502).json({error:'Falha ao consultar fila SISCOM'});}
+ catch(e){console.error('TramitaÃ§Ã£o fila:',e.message);res.status(502).json({error:'Falha ao consultar fila SISCOM'});}
 });
 
 app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
- if (!gatewayAuthorized(req)) return res.status(401).json({error:'Não autorizado'});
+ if (!gatewayAuthorized(req)) return res.status(401).json({error:'NÃ£o autorizado'});
  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id))
-  return res.status(400).json({error:'ID inválido'});
+  return res.status(400).json({error:'ID invÃ¡lido'});
  try {
   const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,error_message,created_at,finished_at,payload&id=eq.'+req.params.id+'&limit=1');
-  if (!jobs.length) return res.status(404).json({error:'Tarefa não encontrada'});
+  if (!jobs.length) return res.status(404).json({error:'Tarefa nÃ£o encontrada'});
   const individual=siscomIndividual(req);
-  if(individual&&jobs[0].payload?.__siscom_identity?.sid!==individual.sid)return res.status(403).json({error:'Tarefa pertence a outra sessão'});
-  if(individual&&jobs[0].operation==='siscom_login_individual')return res.status(403).json({error:'Use o endpoint de autenticação'});
+  if(individual&&jobs[0].payload?.__siscom_identity?.sid!==individual.sid)return res.status(403).json({error:'Tarefa pertence a outra sessÃ£o'});
+  if(individual&&jobs[0].operation==='siscom_login_individual')return res.status(403).json({error:'Use o endpoint de autenticaÃ§Ã£o'});
   const {payload,...publicJob}=jobs[0];
   res.set('Cache-Control','no-store').json(publicJob);
  } catch (e) { console.error('Gateway:',e.message);res.status(502).json({error:'Falha ao consultar tarefa'}); }
 });
 
-// Modo SSO de teste: bloquear todas as rotas de negócio até as permissões do uMov serem verificadas.
-// Mesmo um login válido NÃO libera dados ou ações administrativas.
-app.use('/api',(req,res,next)=>{if(!OIDC_ENABLED)return next();const x=verified(cookies(req)[OIDC_COOKIE]);if(!x)return res.status(401).json({ok:false,error:'Faça login com uMov.'});return res.status(403).json({ok:false,error:'Login validado. Aguardando integração de permissões do uMov; acesso às SS bloqueado por segurança.'})});
+// Modo SSO de teste: bloquear todas as rotas de negÃ³cio atÃ© as permissÃµes do uMov serem verificadas.
+// Mesmo um login vÃ¡lido NÃƒO libera dados ou aÃ§Ãµes administrativas.
+app.use('/api',(req,res,next)=>{if(!OIDC_ENABLED)return next();const x=verified(cookies(req)[OIDC_COOKIE]);if(!x)return res.status(401).json({ok:false,error:'FaÃ§a login com uMov.'});return res.status(403).json({ok:false,error:'Login validado. Aguardando integraÃ§Ã£o de permissÃµes do uMov; acesso Ã s SS bloqueado por seguranÃ§a.'})});
 require('./cp-routes')(app,pool);
+app.get('/cm', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'cm.html'));
+});
 app.use(express.static(path.join(__dirname,'public')));
 const cache=new Map(),cacheKey=k=>(emLote1()?'lote1:':'principal:')+k,getCache=(k,ttl)=>{const x=cache.get(cacheKey(k));return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(cacheKey(k),{ts:Date.now(),data:v}),v);
 async function extrasLocal(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT loc_id,loc_integrationid AS ss,e_localidade AS cidade,e_bairro AS bairro,e_setor AS setor,e_reflocalizacao AS referencia_localizacao,loc_description AS localizacao,loc_street AS logradouro,loc_streetnumber AS numero,e_hidrometro AS hidrometro,e_situacao AS status_integracao,e_servicoexecutadosiscom AS servico_executado,e_informacaoexecucaosiscom AS informacao_bombeiro,e_informacaosolicitante AS informacao_solicitante,e_esclarecimentosolicitante AS esclarecimento_solicitante,to_jsonb(dbout_local) AS campos FROM u45468.dbout_local WHERE loc_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.loc_id),x));return m}
 async function extrasTask(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT d.tsk_id,d.tss_id,d.tsk_accesstoken,d.tsk_situation AS situacao_campo,d.e_tag AS tags,d.e_situacao AS status_integracao,d.tsk_realinitialdatehour AS inicio_atividade_raw,d.tsk_lastexecutiondatehour AS ultima_atividade_raw,d.tsk_realfinaldatehour AS fim_real_raw,to_jsonb(d) AS campos FROM u45468.dbout_task d WHERE d.tsk_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.tsk_id),x));return m}
 const campo=(row,...nomes)=>{const dados=row?.campos||{};for(const nome of nomes){const valor=dados[nome];if(valor!==null&&valor!==undefined&&String(valor).trim()!=='')return String(valor)}return ''};
-// Recepção é buscada em blocos pequenos pela tabela task. Assim a tabela de
-// integração nunca é varrida inteira para descobrir as SS pendentes.
+// RecepÃ§Ã£o Ã© buscada em blocos pequenos pela tabela task. Assim a tabela de
+// integraÃ§Ã£o nunca Ã© varrida inteira para descobrir as SS pendentes.
 async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca}){
  const idsEquipe=equipeBusca?(await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000})).rows.map(x=>String(x.age_id)):null;
  const idsMacro=macroBusca.length?(await pool.query({text:'SELECT tty_id FROM u45468.tasktype WHERE TRIM(tty_description)=ANY($1::text[])',values:[macroBusca],query_timeout:4000})).rows.map(x=>String(x.tty_id)):null;
@@ -558,21 +561,21 @@ async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBu
  const servicoPorId=new Map(servicos.rows.map(x=>[String(x.tty_id),x.tty_description])),tecnicoPorId=new Map(tecnicos.rows.map(x=>[String(x.age_id),x.age_name]));
  return{rows:selecionadas.slice(0,limit).map(x=>({...x,servico:servicoPorId.get(String(x.tty_id))||'',tecnico:tecnicoPorId.get(String(x.age_id))||''})),hasMore:selecionadas.length>limit||!acabou};
 }
-// Busca por SS sem limite de datas; paginação feita no banco antes do enriquecimento.
+// Busca por SS sem limite de datas; paginaÃ§Ã£o feita no banco antes do enriquecimento.
 app.get('/api/busca-ss',async(req,res)=>{try{
  const ss=String(req.query.ss||'').trim();if(ss.length<3)return res.json({ok:true,rows:[],total:0,hasMore:false});
  const tela=String(req.query.tela||'recepcao'),limit=Math.min(Math.max(Number(req.query.limit)||25,1),100),offset=Math.max(Number(req.query.offset)||0,0);
  const cond={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
- if(!cond[tela])return res.status(400).json({ok:false,error:'Aba inválida'});
+ if(!cond[tela])return res.status(400).json({ok:false,error:'Aba invÃ¡lida'});
  const base=`FROM u45468.local l JOIN u45468.task t ON t.loc_id=l.loc_id JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id WHERE l.loc_integrationid ILIKE $1 AND ${cond[tela]}`;
  const values=['%'+ss+'%'];
- // Sem COUNT(*) global: busca apenas a página solicitada e um registro extra.
+ // Sem COUNT(*) global: busca apenas a pÃ¡gina solicitada e um registro extra.
  const total=null;
  const q=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,a.age_name AS tecnico,tt.tty_description AS servico ${base} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $2 OFFSET $3`,values:[...values,limit+1,offset],query_timeout:9000});
  const hasMore=q.rows.length>limit; q.rows=q.rows.slice(0,limit);
  const [locals,tasks]=await Promise.all([extrasLocal(q.rows.map(x=>x.loc_id)),extrasTask(q.rows.map(x=>x.tsk_id))]);
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
- const rows=q.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return {ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
+ const rows=q.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return {ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" â€“ "),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
  res.json({ok:true,rows,total,count:rows.length,limit,offset,hasMore});
  }catch(e){console.error('Busca SS:',e);res.status(500).json({ok:false,error:e.message})}});
 // Acelerador opcional de pesquisa por endereco: Supabase seleciona IDs, uMov valida
@@ -617,7 +620,7 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
  }catch(_erro){return null}finally{clearTimeout(timeout)}
 }
 // Pesquisa global: filtros no PostgreSQL ANTES de LIMIT/OFFSET.
-// Pesquisa por coluna: cada campo tem seu predicado próprio, sem busca OR global.
+// Pesquisa por coluna: cada campo tem seu predicado prÃ³prio, sem busca OR global.
 // Evita JOIN permanente com dbout_local/agent/tasktype; consulta essas tabelas
 // somente quando o respectivo filtro estiver preenchido.
 const CP_PESQUISA_CACHE=new Map();
@@ -636,11 +639,11 @@ app.get('/api/pesquisa-global',async(req,res)=>{
  }
  const tela=String(req.query.tela||'recepcao');
  const status={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
- if(!status[tela])return res.status(400).json({ok:false,error:'Aba inválida'});
+ if(!status[tela])return res.status(400).json({ok:false,error:'Aba invÃ¡lida'});
  const limit=Math.min(Math.max(Number(req.query.limit)||25,1),100),offset=Math.max(Number(req.query.offset)||0,0);
  const allowed={ss:'l.loc_integrationid',logradouro:'l.loc_street',bairro:'l.loc_neighborhood',cidade:'l.loc_city',setor:'dl.e_setor',servico:'tt.tty_description',tags:'d.e_tag',equipe_executou:'a.age_name',status_integracao:'d.e_situacao',criado_em:"TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')",data_finalizacao:"TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI')"};
  const values=[],where=[status[tela]];
- // Cada campo consulta SOMENTE a sua coluna. Bairro também contempla o bairro enriquecido.
+ // Cada campo consulta SOMENTE a sua coluna. Bairro tambÃ©m contempla o bairro enriquecido.
  const keys=tela==='recepcao'?['ss','equipe_executou','logradouro','bairro','cidade','setor','servico','tags','criado_em']:tela==='campo'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou']:tela==='baixar'?['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou','data_finalizacao']:Object.keys(allowed);
  const filters={};for(const k of keys){const q=String(req.query[k]||'').trim().slice(0,100);if(q)filters[k]=q}
  const localPredicates=[];
@@ -697,7 +700,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{
    where.push(`${dateCol} >= $${parametroDataInicial}::date AND ${dateCol} < ($${parametroDataFinal}::date + INTERVAL '1 day')`);
  }
  // Filtrar a tabela local primeiro reduz a quantidade de tarefas que precisam consultar dbout_task.
- // O status continua sendo aplicado antes da paginação, preservando as abas.
+ // O status continua sendo aplicado antes da paginaÃ§Ã£o, preservando as abas.
  // Indice Supabase so pode antecipar buscas cujas colunas correspondem
  // fielmente ao valor exibido; bairro/cidade enriquecidos seguem direto ao uMov.
  const usarIndice=!!filters.logradouro&&!filters.bairro&&!filters.cidade&&!cidades.length;
@@ -736,7 +739,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{
  const msExtras=Date.now()-inicioExtras;
  const agentMap=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));const typeMap=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
- const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:typeMap.get(String(x.tty_id))||'',tecnico:agentMap.get(String(x.age_id))||'',equipe_executou:agentMap.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
+ const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:typeMap.get(String(x.tty_id))||'',tecnico:agentMap.get(String(x.age_id))||'',equipe_executou:agentMap.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' â€“ '),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
  res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${msExtras}`);
  const dados={ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-inicioConsulta,tempos:{banco_ms:msBanco,detalhes_ms:msExtras}};
  if(CP_PESQUISA_CACHE.size>100)CP_PESQUISA_CACHE.clear();
@@ -771,13 +774,13 @@ app.get('/api/localizar-ss', async (req,res)=>{
   const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
   const rows=encontrados.map(x=>{
     const l=locaisExtras.get(String(x.loc_id))||{},t=tarefasExtras.get(String(x.tarefa))||{};
-    return {ss:x.ss||'',tarefa:x.tarefa,local:x.loc_id,cidade:l.cidade||x.cidade||'',bairro:l.bairro||x.bairro||'',logradouro:l.logradouro||x.rua||'',numero:l.numero||'',setor:l.setor||'',servico:x.servico||'',tags:t.tags||'',situacao_campo:x.situacao||'',status_integracao:x.status_integracao||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tss_id:t.tss_id||'',link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tarefa}/${t.tsk_accesstoken}`:'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' – '),criado_em:fmt(x.criado_em)};
+    return {ss:x.ss||'',tarefa:x.tarefa,local:x.loc_id,cidade:l.cidade||x.cidade||'',bairro:l.bairro||x.bairro||'',logradouro:l.logradouro||x.rua||'',numero:l.numero||'',setor:l.setor||'',servico:x.servico||'',tags:t.tags||'',situacao_campo:x.situacao||'',status_integracao:x.status_integracao||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tss_id:t.tss_id||'',link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tarefa}/${t.tsk_accesstoken}`:'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' â€“ '),criado_em:fmt(x.criado_em)};
   });
   res.json({ok:true,rows});
  }catch(e){console.error('Localizar SS:',e);res.status(500).json({ok:false,error:'Falha ao consultar SS no banco: '+e.message})}
 });
 app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.query('SELECT current_database() banco,NOW() agora')).rows[0]})}catch(e){res.status(500).json({ok:false,error:e.message})}});
-// Consulta rápida: limita task primeiro e só consulta dbout_local para até 100 SS.
+// Consulta rÃ¡pida: limita task primeiro e sÃ³ consulta dbout_local para atÃ© 100 SS.
 app.get('/api/recepcao',async(req,res)=>{try{
  const inicio=req.query.inicio||'2026-10-01',fim=req.query.fim||'2026-10-05',limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas','tramitacao']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
  const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
@@ -786,7 +789,7 @@ app.get('/api/recepcao',async(req,res)=>{try{
   const [locals,tasks]=await Promise.all([extrasLocal(pagina.rows.map(x=>x.loc_id)),extrasTask(pagina.rows.map(x=>x.tsk_id))]);
   const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
   const rows=pagina.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:l.ss||'',cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:'',situacao_campo:x.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:'',informacao_bombeiro:'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:'',fim_atividade:'',fim_real:'',ultima_atividade:'',data_finalizacao:'',periodo_execucao:'',criado_em:fmt(x.tsk_insertdatehour)}});
-  const total=null; // Paginação leve: sem COUNT(*) a cada página.
+  const total=null; // PaginaÃ§Ã£o leve: sem COUNT(*) a cada pÃ¡gina.
   const data={ok:true,count:rows.length,total,hasMore:total===null?pagina.hasMore:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');return res.json(data);
  }
  // Resolve IDs da equipe antes da consulta principal, evitando subconsulta por SS.
@@ -796,7 +799,7 @@ app.get('/api/recepcao',async(req,res)=>{try{
  const proximoParametro=(tela==='recepcao'?5:(filtraPorUltimaAtividade?5:3)),parametroEquipe=proximoParametro,parametroMacro=parametroEquipe+(equipeBusca?1:0),parametroCidade=parametroMacro+(macroBusca.length?1:0),equipeSql=equipeBusca?`AND t.age_id=ANY($${parametroEquipe}::bigint[])`:'',macroSql=macroBusca.length?`AND EXISTS (SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY($${parametroMacro}::text[]))`:'',cidadeSql=cidadeBusca.length?`AND EXISTS (SELECT 1 FROM u45468.local cl WHERE cl.loc_id=t.loc_id AND UPPER(TRIM(cl.loc_city))=ANY($${parametroCidade}::text[]))`:'';
  const sqlRecepcao=`WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_insertdatehour >= $1::date AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day') AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo' ${equipeSql} ${macroSql} ${cidadeSql} ORDER BY t.tsk_insertdatehour DESC, t.tsk_id DESC LIMIT $3 OFFSET $4) SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id ORDER BY data_referencia DESC,t.tsk_id DESC`;
  const sqlPorStatus='';
- // A tabela dbout_local é enriquecida somente após limitar a página; juntá-la antes do LIMIT causava timeout.
+ // A tabela dbout_local Ã© enriquecida somente apÃ³s limitar a pÃ¡gina; juntÃ¡-la antes do LIMIT causava timeout.
  const limiteStatus=filtraPorUltimaAtividade?'$3':'$1',deslocamentoStatus=filtraPorUltimaAtividade?'$4':'$2',filtroDataStatus=filtraPorUltimaAtividade?"AND d.tsk_lastexecutiondatehour >= $1::date AND d.tsk_lastexecutiondatehour < ($2::date + INTERVAL '1 day')":'';
  const sqlPorStatusRapido=['WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao','FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id','WHERE '+condicoes[tela],filtroDataStatus,equipeSql,macroSql,cidadeSql,'ORDER BY d.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC','LIMIT '+limiteStatus+' OFFSET '+deslocamentoStatus+')','SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico','FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id','ORDER BY t.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC'].join(' ');
  const valoresExtras=[...(equipeBusca?[equipesIds]:[]),...(macroBusca.length?[macroBusca]:[]),...(cidadeBusca.length?[cidadeBusca]:[])];
@@ -806,10 +809,10 @@ app.get('/api/recepcao',async(req,res)=>{try{
  const registrosPagina=base.rows.slice(0,limit);
  const [locals,tasks]=await Promise.all([extrasLocal(registrosPagina.map(x=>x.loc_id)),extrasTask(registrosPagina.map(x=>x.tsk_id))]);
  const msExtras=Date.now()-tExtras;
- const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||t.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" – "),criado_em:fmt(x.data_referencia)}});
- const total=null; // Paginação leve: sem varredura para contar todas as SS.
+ const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||t.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" â€“ "),criado_em:fmt(x.data_referencia)}});
+ const total=null; // PaginaÃ§Ã£o leve: sem varredura para contar todas as SS.
  const data={ok:true,count:rows.length,total,hasMore:total===null?base.rows.length>limit:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows,tempos:{banco_ms:msBanco,detalhes_ms:msExtras}};setCache(key,data);res.set('X-Cache','MISS');res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${msExtras}`);res.json(data);
-}catch(e){console.error('Recepção:',e);res.status(500).json({ok:false,error:e.message})}});
+}catch(e){console.error('RecepÃ§Ã£o:',e);res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/macros',async(req,res)=>{try{const hit=getCache('macros',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(tty_description) AS macro FROM u45468.tasktype WHERE tty_description IS NOT NULL AND TRIM(tty_description)<>'' ORDER BY 1`,query_timeout:6000});setCache('macros',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/cidades',async(req,res)=>{try{const hit=getCache('cidades',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(e_localidade) AS cidade FROM u45468.dbout_local WHERE e_localidade IS NOT NULL AND TRIM(e_localidade)<>'' ORDER BY 1`,query_timeout:6000});setCache('cidades',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/equipes',async(req,res)=>{try{const q=String(req.query.q||'').trim(),key='eq:'+q.toLowerCase(),hit=getCache(key,60000);if(hit)return res.json({ok:true,rows:hit});const values=[],where=['age_name IS NOT NULL',"TRIM(age_name)<>''"];if(q){values.push('%'+q+'%');where.push('(age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1)')}const r=await pool.query({text:`SELECT DISTINCT age_id AS id,age_name AS nome FROM u45468.agent WHERE ${where.join(' AND ')} ORDER BY age_name LIMIT 80`,values,query_timeout:6000});setCache(key,r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
@@ -819,12 +822,12 @@ app.post('/api/enviar-equipe',async(req,res)=>{
  try{
   const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
   const agente=Number(req.body?.agente);
-  if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0)||!Number.isSafeInteger(agente)||agente<=0)return res.status(400).json({ok:false,error:'Selecione uma equipe válida e até 100 SS.'});
-  // A atribuição do agente foi confirmada em uma requisição real do VilaBoa.
-  // ID de situação é opcional: nunca inventar um valor.
+  if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0)||!Number.isSafeInteger(agente)||agente<=0)return res.status(400).json({ok:false,error:'Selecione uma equipe vÃ¡lida e atÃ© 100 SS.'});
+  // A atribuiÃ§Ã£o do agente foi confirmada em uma requisiÃ§Ã£o real do VilaBoa.
+  // ID de situaÃ§Ã£o Ã© opcional: nunca inventar um valor.
   const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
-  if(situacaoId&&!/^[0-9]+$/.test(situacaoId))return res.status(400).json({ok:false,error:'UMOV_EM_CAMPO_SITUATION_ID deve ser numérico quando configurado.'});
-  // Sem consulta SQL bloqueante: a API uMov valida o agente na gravação.
+  if(situacaoId&&!/^[0-9]+$/.test(situacaoId))return res.status(400).json({ok:false,error:'UMOV_EM_CAMPO_SITUATION_ID deve ser numÃ©rico quando configurado.'});
+  // Sem consulta SQL bloqueante: a API uMov valida o agente na gravaÃ§Ã£o.
   // Envia ate 5 SS simultaneamente. Nao faz consulta SQL por SS apos o POST:
   // a confirmacao de situacao ocorre na sincronizacao normal do uMov.
   const resultados=[];
@@ -839,22 +842,22 @@ app.post('/api/enviar-equipe',async(req,res)=>{
    resultados.push(...lote);
   }
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
-  res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'A atribuição e a mudança de situação são operações distintas. Somente confirmado=true comprova Em Campo no banco.'});
+  res.json({ok:resultados.every(x=>x.ok),equipe:String(agente),resultados,avisos:'A atribuiÃ§Ã£o e a mudanÃ§a de situaÃ§Ã£o sÃ£o operaÃ§Ãµes distintas. Somente confirmado=true comprova Em Campo no banco.'});
  }catch(e){res.status(500).json({ok:false,error:e.message})}
 });
 
 // Marca notas retornadas de campo no uMov. A chave fica exclusivamente nas
-// variáveis da Vercel; ela nunca é entregue ao navegador.
+// variÃ¡veis da Vercel; ela nunca Ã© entregue ao navegador.
 const integrationStatuses=new Set(['Baixada','Rejeitada','Duplicada']);
 const xmlEscape=value=>String(value).replace(/[<>&'\"]/g,char=>({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[char]));
-// A API XML do uMov recebe o alternativeIdentifier da opção cadastrada no
-// campo de lista "situacao". O rótulo mostrado no painel pode ser diferente.
+// A API XML do uMov recebe o alternativeIdentifier da opÃ§Ã£o cadastrada no
+// campo de lista "situacao". O rÃ³tulo mostrado no painel pode ser diferente.
 const hostRelatorioUmov=()=>emLote1()?String(process.env.UMOV_REPORT_HOST_LOTE1||'').trim().toLowerCase():'consglobalmetropole.umov.me';
 const identificadorSituacao=status=>String(process.env[`UMOV_STATUS_${status.toUpperCase()}`]||(status==='Baixada'?'Baixada no Siscom':status)).trim();
 async function postUmovXml(resource,id,xml){
  const token=String(emLote1()?process.env.UMOV_API_TOKEN_LOTE1||'':process.env.UMOV_API_TOKEN||'').trim();
  const base=String(emLote1()?process.env.UMOV_API_BASE_URL_LOTE1||'https://api.umov.me/CenterWeb/api':process.env.UMOV_API_BASE_URL||'https://api.umov.me/CenterWeb/api').replace(/\/$/,'');
- if(!token)throw new Error('Integração uMov não configurada. Cadastre '+(emLote1()?'UMOV_API_TOKEN_LOTE1':'UMOV_API_TOKEN')+' na Vercel.');
+ if(!token)throw new Error('IntegraÃ§Ã£o uMov nÃ£o configurada. Cadastre '+(emLote1()?'UMOV_API_TOKEN_LOTE1':'UMOV_API_TOKEN')+' na Vercel.');
  const response=await fetch(`${base}/${encodeURIComponent(token)}/${resource}/${encodeURIComponent(id)}.xml`,{
   method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'data='+encodeURIComponent(xml),signal:AbortSignal.timeout(12000)
  });
@@ -869,7 +872,7 @@ const textoXml=v=>String(v||'').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').repl
 async function getUmovXml(resource,id){
  const token=String(emLote1()?process.env.UMOV_API_TOKEN_LOTE1||'':process.env.UMOV_API_TOKEN||'').trim();
  const base=String(emLote1()?process.env.UMOV_API_BASE_URL_LOTE1||'https://api.umov.me/CenterWeb/api':process.env.UMOV_API_BASE_URL||'https://api.umov.me/CenterWeb/api').replace(/\/$/,'');
- if(!token)throw new Error('Integração uMov não configurada. Cadastre '+(emLote1()?'UMOV_API_TOKEN_LOTE1':'UMOV_API_TOKEN')+' na Vercel.');
+ if(!token)throw new Error('IntegraÃ§Ã£o uMov nÃ£o configurada. Cadastre '+(emLote1()?'UMOV_API_TOKEN_LOTE1':'UMOV_API_TOKEN')+' na Vercel.');
  const response=await fetch(`${base}/${encodeURIComponent(token)}/${resource}/${encodeURIComponent(id)}.xml`,{signal:AbortSignal.timeout(12000)});
  const xml=await response.text();
  if(!response.ok)throw new Error(`uMov respondeu ${response.status}: ${xml.replace(/\s+/g,' ').trim().slice(0,240)}`);
@@ -901,8 +904,8 @@ async function retornoHistorico(tarefa){
  }
  return setCache(key,saida);
 }
-// Relatório gerado a partir dos dados da SS exibidos na aba Para Baixar.
-// PDF autônomo, sem serviços externos ou dependências adicionais.
+// RelatÃ³rio gerado a partir dos dados da SS exibidos na aba Para Baixar.
+// PDF autÃ´nomo, sem serviÃ§os externos ou dependÃªncias adicionais.
 function relatorioPdf(dados){
  const clean=v=>String(v??'').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,2500);
  const rows=[
@@ -946,7 +949,7 @@ async function gerarPdfOriginalUmov(link){
  let browser;
  try{
   const url=new URL(link);
-  if(url.protocol!=='https:'||url.hostname!==hostRelatorioUmov()||!/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash)throw Error('URL do relatório uMov inválida');
+  if(url.protocol!=='https:'||url.hostname!==hostRelatorioUmov()||!/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash)throw Error('URL do relatÃ³rio uMov invÃ¡lida');
   const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
   browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
   const page=await browser.newPage();await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
@@ -1024,8 +1027,8 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
 });
 // GLOBAL_SS_RELATORIO_AGRUPADO_V10_END
 
-// Converte a própria página original do relatório uMov, inclusive imagens, em PDF.
-// Não usa os campos resumidos da SS: renderiza o HTML original no Chromium.
+// Converte a prÃ³pria pÃ¡gina original do relatÃ³rio uMov, inclusive imagens, em PDF.
+// NÃ£o usa os campos resumidos da SS: renderiza o HTML original no Chromium.
 app.post('/api/relatorio-original-pdf',async(req,res)=>{
  let browser;
  try{
@@ -1033,7 +1036,7 @@ app.post('/api/relatorio-original-pdf',async(req,res)=>{
   const url=new URL(link);
   if(url.protocol!=='https:'||url.hostname!==hostRelatorioUmov()||
     !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash){
-    return res.status(400).json({ok:false,error:'Endereço do relatório uMov inválido.'});
+    return res.status(400).json({ok:false,error:'EndereÃ§o do relatÃ³rio uMov invÃ¡lido.'});
   }
   const chromium=require('@sparticuz/chromium');
   const puppeteer=require('puppeteer-core');
@@ -1044,7 +1047,7 @@ app.post('/api/relatorio-original-pdf',async(req,res)=>{
   const page=await browser.newPage();
   await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
   await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
-  // Aguarda imagens do relatório original antes da impressão.
+  // Aguarda imagens do relatÃ³rio original antes da impressÃ£o.
   await page.evaluate(async()=>{
     const imgs=Array.from(document.images);
     await Promise.race([Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{
@@ -1059,7 +1062,7 @@ app.post('/api/relatorio-original-pdf',async(req,res)=>{
   res.setHeader('Cache-Control','no-store');res.send(Buffer.from(pdf));
  }catch(e){
   console.error('PDF original uMov:',e.message);
-  if(!res.headersSent)res.status(502).json({ok:false,error:'Não foi possível converter o relatório original. Verifique se o link abre normalmente e se a função possui Chromium disponível.'});
+  if(!res.headersSent)res.status(502).json({ok:false,error:'NÃ£o foi possÃ­vel converter o relatÃ³rio original. Verifique se o link abre normalmente e se a funÃ§Ã£o possui Chromium disponÃ­vel.'});
  }finally{if(browser)await browser.close().catch(()=>{});}
 });
 app.post('/api/relatorio-pdf',(req,res)=>{
@@ -1100,8 +1103,8 @@ async function programacaoFetch(query='',form=null){
 }
 app.get('/api/materiais',async(req,res)=>{try{const hit=getCache('programacao:materiais',300000);if(hit)return res.json({ok:true,rows:hit});const rows=await programacaoFetch('materiais=1');setCache('programacao:materiais',Array.isArray(rows)?rows:[]);res.json({ok:true,rows:Array.isArray(rows)?rows:[]})}catch(error){res.status(502).json({ok:false,error:error.message})}});
 app.get('/api/itens',async(req,res)=>{try{const ss=String(req.query.ss||'').trim();if(!ss)return res.status(400).json({ok:false,error:'Informe a SS.'});const rows=await programacaoFetch('itens=1&ss='+encodeURIComponent(ss));res.json({ok:true,rows:Array.isArray(rows)?rows:[]})}catch(error){res.status(502).json({ok:false,error:error.message})}});
-app.post('/api/itens',async(req,res)=>{try{const ss=String(req.body?.ss||'').trim(),material=String(req.body?.material||'').trim(),unidade=String(req.body?.unidade||'').trim(),quantidade=String(req.body?.quantidade||'').trim(),valor_total=String(req.body?.valor_total||'').trim();if(!ss||!material||!unidade||!quantidade)return res.status(400).json({ok:false,error:'Preencha material, unidade e quantidade.'});const result=await programacaoFetch('',{inserir_item:'1',ss,material,unidade,quantidade,valor_total});res.json({ok:result?.success!==false,message:result?.message||'Item lançado com sucesso.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
-// Recebe a lista uma única vez; processa sequencialmente para proteger a API de programação.
+app.post('/api/itens',async(req,res)=>{try{const ss=String(req.body?.ss||'').trim(),material=String(req.body?.material||'').trim(),unidade=String(req.body?.unidade||'').trim(),quantidade=String(req.body?.quantidade||'').trim(),valor_total=String(req.body?.valor_total||'').trim();if(!ss||!material||!unidade||!quantidade)return res.status(400).json({ok:false,error:'Preencha material, unidade e quantidade.'});const result=await programacaoFetch('',{inserir_item:'1',ss,material,unidade,quantidade,valor_total});res.json({ok:result?.success!==false,message:result?.message||'Item lanÃ§ado com sucesso.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+// Recebe a lista uma Ãºnica vez; processa sequencialmente para proteger a API de programaÃ§Ã£o.
 app.post('/api/itens/lote',async(req,res)=>{
  const ss=String(req.body?.ss||'').trim(),itens=req.body?.itens;
  if(!ss||!Array.isArray(itens)||!itens.length||itens.length>100)return res.status(400).json({ok:false,error:'Informe a SS e de 1 a 100 itens.'});
@@ -1111,33 +1114,33 @@ app.post('/api/itens/lote',async(req,res)=>{
  for(const i of preparados){try{const r=await programacaoFetch('',{inserir_item:'1',ss,material:i.material,unidade:i.unidade,quantidade:String(i.quantidade),valor_total:i.valor_total});if(r?.success===false)throw new Error(r.message||'Falha ao gravar');resultados.push({index:i.index,ok:true});}catch(e){resultados.push({index:i.index,ok:false,error:e.message});break;}}
  res.json({ok:resultados.length===preparados.length&&resultados.every(i=>i.ok),resultados,gravados:resultados.filter(i=>i.ok).length,total:preparados.length,message:'Confira os itens gravados e os pendentes.'});
 });
-app.delete('/api/itens/:id',async(req,res)=>{try{const item_id=String(req.params.id||'').trim();if(!item_id)return res.status(400).json({ok:false,error:'Item inválido.'});const result=await programacaoFetch('',{excluir_item:'1',item_id});res.json({ok:result?.success!==false,message:result?.message||'Item excluído.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
-// Sincronizar status local SOMENTE após job de baixa oficialmente confirmado.
+app.delete('/api/itens/:id',async(req,res)=>{try{const item_id=String(req.params.id||'').trim();if(!item_id)return res.status(400).json({ok:false,error:'Item invÃ¡lido.'});const result=await programacaoFetch('',{excluir_item:'1',item_id});res.json({ok:result?.success!==false,message:result?.message||'Item excluÃ­do.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+// Sincronizar status local SOMENTE apÃ³s job de baixa oficialmente confirmado.
 app.post('/api/siscom-gateway/sincronizar-baixa',async(req,res)=>{
- if(!gatewayCanWrite(req))return res.status(401).json({ok:false,error:'Não autorizado'});
+ if(!gatewayCanWrite(req))return res.status(401).json({ok:false,error:'NÃ£o autorizado'});
  const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim();
- if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou job inválido'});
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId))return res.status(400).json({ok:false,error:'SS ou job invÃ¡lido'});
  try{
   const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
   const j=jobs[0];
-  if(!j||j.operation!=='baixar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.status_baixa!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Baixa não confirmada oficialmente neste job'});
+  if(!j||j.operation!=='baixar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.status_baixa!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Baixa nÃ£o confirmada oficialmente neste job'});
   const match=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1 ORDER BY t.tsk_id DESC LIMIT 25`,values:[numero],query_timeout:7000});
-  if(!match.rows.length)return res.status(404).json({ok:false,error:'SS não localizada no uMov; baixa SISCOM confirmada, sincronização pendente'});
+  if(!match.rows.length)return res.status(404).json({ok:false,error:'SS nÃ£o localizada no uMov; baixa SISCOM confirmada, sincronizaÃ§Ã£o pendente'});
   const valor=xmlEscape(identificadorSituacao('Baixada'));const resultados=[];
   for(const r of match.rows){try{await postUmovXml('schedule',r.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);resultados.push({tarefa:r.tsk_id,ok:true})}catch(e){resultados.push({tarefa:r.tsk_id,ok:false,error:e.message})}}
   if(resultados.some(x=>x.ok))for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
   const falhas=resultados.filter(x=>!x.ok);
-  return res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'Baixa confirmada, mas atualização do uMov incompleta':null});
- }catch(e){console.error('Sincronização de baixa:',e.message);return res.status(502).json({ok:false,error:'Baixa confirmada, mas falha ao sincronizar status local'});}
+  return res.status(falhas.length?502:200).json({ok:!falhas.length,numero_ss:numero,resultados,error:falhas.length?'Baixa confirmada, mas atualizaÃ§Ã£o do uMov incompleta':null});
+ }catch(e){console.error('SincronizaÃ§Ã£o de baixa:',e.message);return res.status(502).json({ok:false,error:'Baixa confirmada, mas falha ao sincronizar status local'});}
 });
-// SS já encerrada oficialmente: permite apenas sincronizar o status de integração no uMov.
+// SS jÃ¡ encerrada oficialmente: permite apenas sincronizar o status de integraÃ§Ã£o no uMov.
 // Verifica o job de consulta de eventos SISCOM no servidor, sem confiar no navegador.
 app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const usuario=siscomIndividual(req);
- if(!usuario||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'Faça login individual no SISCOM para verificar a baixa.'});
+ if(!usuario||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'FaÃ§a login individual no SISCOM para verificar a baixa.'});
  const numero=String(req.body?.numero_ss||'').trim(),jobId=String(req.body?.job_id||'').trim(),tarefa=Number(req.body?.tarefa);
- if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId)||!Number.isSafeInteger(tarefa)||tarefa<=0)return res.status(400).json({ok:false,error:'Identificação da SS, tarefa ou consulta inválida.'});
+ if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)||!/^[0-9a-f-]{36}$/i.test(jobId)||!Number.isSafeInteger(tarefa)||tarefa<=0)return res.status(400).json({ok:false,error:'IdentificaÃ§Ã£o da SS, tarefa ou consulta invÃ¡lida.'});
  try{
   const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload,created_at&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
   const j=jobs[0];
@@ -1145,30 +1148,30 @@ app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
   const fechado=j?.result?.status_verificado==='encerrada'&&j?.result?.encerramento_oficial&&Array.isArray(eventos)&&eventos.some(e=>Number(e.codigo)===9||/^encerrada$/i.test(String(e.descricao||'').trim()));
   const criado=Date.parse(j?.created_at||'');
   if(!j||j.operation!=='consultar_eventos_ss'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==usuario.sid||!Number.isFinite(criado)||Date.now()-criado>10*60*1000||!fechado)
-   return res.status(409).json({ok:false,error:'Encerramento não confirmado pelo histórico oficial do SISCOM nesta sessão. O uMov não foi alterado.'});
+   return res.status(409).json({ok:false,error:'Encerramento nÃ£o confirmado pelo histÃ³rico oficial do SISCOM nesta sessÃ£o. O uMov nÃ£o foi alterado.'});
   const q=await pool.query({text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
   const row=q.rows[0];
-  if(!row||String(row.numero_ss||'').trim()!==numero)return res.status(409).json({ok:false,error:'A tarefa uMov não corresponde à SS validada.'});
-  if(/^baixad/i.test(String(row.e_situacao||'').trim()))return res.json({ok:true,ja_baixada:true,mensagem:'SS já está marcada como Baixada no uMov.'});
-  if(row.e_situacao&&String(row.e_situacao).trim()&&!/^baixad/i.test(String(row.e_situacao).trim()))return res.status(409).json({ok:false,error:'A SS possui outro status de integração ('+String(row.e_situacao).slice(0,50)+'). Revisão manual necessária.'});
+  if(!row||String(row.numero_ss||'').trim()!==numero)return res.status(409).json({ok:false,error:'A tarefa uMov nÃ£o corresponde Ã  SS validada.'});
+  if(/^baixad/i.test(String(row.e_situacao||'').trim()))return res.json({ok:true,ja_baixada:true,mensagem:'SS jÃ¡ estÃ¡ marcada como Baixada no uMov.'});
+  if(row.e_situacao&&String(row.e_situacao).trim()&&!/^baixad/i.test(String(row.e_situacao).trim()))return res.status(409).json({ok:false,error:'A SS possui outro status de integraÃ§Ã£o ('+String(row.e_situacao).slice(0,50)+'). RevisÃ£o manual necessÃ¡ria.'});
   const valor=xmlEscape(identificadorSituacao('Baixada'));
   await postUmovXml('schedule',tarefa,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);
   for(const k of [...cache.keys()])if(k.startsWith('ss:'))cache.delete(k);
-  return res.json({ok:true,solicitado:true,numero_ss:numero,tarefa,mensagem:'Alteração enviada à API uMov. Confirme após sincronização.'});
- }catch(e){console.error('Sincronização de baixa existente:',e.message);return res.status(502).json({ok:false,error:'Falha ao atualizar o uMov. '+String(e.message||'').slice(0,160)})}
+  return res.json({ok:true,solicitado:true,numero_ss:numero,tarefa,mensagem:'AlteraÃ§Ã£o enviada Ã  API uMov. Confirme apÃ³s sincronizaÃ§Ã£o.'});
+ }catch(e){console.error('SincronizaÃ§Ã£o de baixa existente:',e.message);return res.status(502).json({ok:false,error:'Falha ao atualizar o uMov. '+String(e.message||'').slice(0,160)})}
 });
 
-// Fotos: renderiza apenas imagens do relatório ORIGINAL do uMov, sem copiar o relatório inteiro.
+// Fotos: renderiza apenas imagens do relatÃ³rio ORIGINAL do uMov, sem copiar o relatÃ³rio inteiro.
 app.post('/api/relatorio-fotos',async(req,res)=>{
  res.set('Cache-Control','no-store');
- if(!siscomIndividual(req)||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'Faça login individual no SISCOM para visualizar fotos.'});
+ if(!siscomIndividual(req)||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'FaÃ§a login individual no SISCOM para visualizar fotos.'});
  const tarefa=Number(req.body?.tarefa),ss=String(req.body?.ss||'').trim();
- if(!Number.isSafeInteger(tarefa)||tarefa<=0||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'Informe uma SS válida.'});
+ if(!Number.isSafeInteger(tarefa)||tarefa<=0||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'Informe uma SS vÃ¡lida.'});
  let browser;
  try{
   const q=await pool.query({text:`SELECT d.tss_id,d.tsk_accesstoken,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
   const row=q.rows[0];
-  if(!row||String(row.numero_ss||'').trim()!==ss||Number(row.tss_id)!==50||!row.tsk_accesstoken||!/^[a-zA-Z0-9._~-]+$/.test(String(row.tsk_accesstoken)))return res.status(404).json({ok:false,error:'Relatório original uMov não encontrado para esta SS.'});
+  if(!row||String(row.numero_ss||'').trim()!==ss||Number(row.tss_id)!==50||!row.tsk_accesstoken||!/^[a-zA-Z0-9._~-]+$/.test(String(row.tsk_accesstoken)))return res.status(404).json({ok:false,error:'RelatÃ³rio original uMov nÃ£o encontrado para esta SS.'});
   const link=hostRelatorioUmov()?'https://'+hostRelatorioUmov()+'/CenterWeb/report/schedule/'+tarefa+'/'+row.tsk_accesstoken:'';
   const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
   browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
@@ -1180,7 +1183,7 @@ app.post('/api/relatorio-fotos',async(req,res)=>{
   for(const img of images){
    const info=await img.evaluate(el=>{const r=el.getBoundingClientRect();const style=getComputedStyle(el);return {nw:el.naturalWidth,nh:el.naturalHeight,w:r.width,h:r.height,visible:style.display!=='none'&&style.visibility!=='hidden',src:el.currentSrc||el.src||''}}).catch(()=>null);
    if(!info||!info.visible||info.nw<180||info.nh<120||info.w<90||info.h<70)continue;
-   // Ignora logos e ícones; inclui fotografias do corpo do relatório.
+   // Ignora logos e Ã­cones; inclui fotografias do corpo do relatÃ³rio.
    if(/logo|icone|icon|brasao|banner|assinatura/i.test(info.src))continue;
    candidatas++;
    if(fotos.length>=40)continue;
@@ -1190,7 +1193,7 @@ app.post('/api/relatorio-fotos',async(req,res)=>{
    }catch(e){console.warn('Foto uMov ignorada:',String(e.message).slice(0,100))}
   }
   return res.json({ok:true,fotos,truncado:candidatas>40,total:candidatas});
- }catch(e){console.error('Fotos uMov:',e.message);return res.status(502).json({ok:false,error:'Não foi possível extrair as fotos do relatório original. Verifique se o relatório está acessível.'})}
+ }catch(e){console.error('Fotos uMov:',e.message);return res.status(502).json({ok:false,error:'NÃ£o foi possÃ­vel extrair as fotos do relatÃ³rio original. Verifique se o relatÃ³rio estÃ¡ acessÃ­vel.'})}
  finally{if(browser)await browser.close().catch(()=>{})}
 });
 
@@ -1198,8 +1201,8 @@ app.post('/api/relatorio-fotos',async(req,res)=>{
 app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
- if(!integrationStatuses.has(status))return res.status(400).json({ok:false,error:'Status de integração inválido.'});
- if(status==='Rejeitada')return res.status(403).json({ok:false,error:'Rejeição deve ser confirmada oficialmente no SISCOM antes da sincronização local.'});
+ if(!integrationStatuses.has(status))return res.status(400).json({ok:false,error:'Status de integraÃ§Ã£o invÃ¡lido.'});
+ if(status==='Rejeitada')return res.status(403).json({ok:false,error:'RejeiÃ§Ã£o deve ser confirmada oficialmente no SISCOM antes da sincronizaÃ§Ã£o local.'});
  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
  const resultados=[];
  for(const tarefa of tarefas){
@@ -1213,23 +1216,23 @@ app.post('/api/status-integracao',async(req,res)=>{try{
  const primeiraFalha=resultados.find(item=>!item.ok);
  res.status(sucesso?200:502).json({ok:sucesso>0,status,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
 }catch(error){
- console.error('Status integração:',error);
+ console.error('Status integraÃ§Ã£o:',error);
  const detalhe=String(error?.message||'Erro interno').replace(/\s+/g,' ').trim().slice(0,300);
- res.status(500).json({ok:false,error:`Não foi possível atualizar o status de integração: ${detalhe}`})
+ res.status(500).json({ok:false,error:`NÃ£o foi possÃ­vel atualizar o status de integraÃ§Ã£o: ${detalhe}`})
 }});
-// Retorno para Recepção: solicita a mudança no uMov e só confirma após
+// Retorno para RecepÃ§Ã£o: solicita a mudanÃ§a no uMov e sÃ³ confirma apÃ³s
 // verificar o status real no PostgreSQL. Nunca altera apenas a interface.
-// Desvincular equipe na Recepção sem mudar a situação da SS.
+// Desvincular equipe na RecepÃ§Ã£o sem mudar a situaÃ§Ã£o da SS.
 app.post('/api/remover-equipe',async(req,res)=>{
  try{
   const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
   if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0))
-   return res.status(400).json({ok:false,error:'Selecione de 1 a 100 SS válidas.'});
+   return res.status(400).json({ok:false,error:'Selecione de 1 a 100 SS vÃ¡lidas.'});
   const resultados=[];
   for(const tarefa of tarefas){
    try{
     await postUmovXml('schedule',tarefa,'<schedule><agent><id></id></agent></schedule>');
-    resultados.push({tarefa,ok:true,aviso:'Desvinculação solicitada à API uMov; aguarde a sincronização.'});
+    resultados.push({tarefa,ok:true,aviso:'DesvinculaÃ§Ã£o solicitada Ã  API uMov; aguarde a sincronizaÃ§Ã£o.'});
    }catch(e){resultados.push({tarefa,ok:false,error:String(e.message||e).slice(0,250)})}
   }
   const sucesso=resultados.filter(x=>x.ok).length;
@@ -1244,17 +1247,17 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
   const resultados=[];
   for(const tarefa of tarefas){
    try{
-    // A API uMov valida a tarefa; evitar espera por PostgreSQL antes da operação.
-    // Desvincula o agente e solicita o retorno na mesma operação uMov.
-    // Não modifica diretamente as tabelas espelho do PostgreSQL.
+    // A API uMov valida a tarefa; evitar espera por PostgreSQL antes da operaÃ§Ã£o.
+    // Desvincula o agente e solicita o retorno na mesma operaÃ§Ã£o uMov.
+    // NÃ£o modifica diretamente as tabelas espelho do PostgreSQL.
     const pendenteId=String(process.env.UMOV_PENDENTE_SITUATION_ID||'').trim();
-    if(pendenteId&&!/^[0-9]+$/.test(pendenteId))throw Error('UMOV_PENDENTE_SITUATION_ID deve ser numérico quando configurado.');
-    // A remoção de agente usa o mesmo endpoint comprovado para atribuição.
-    // O ID de situação só é enviado quando foi explicitamente confirmado.
+    if(pendenteId&&!/^[0-9]+$/.test(pendenteId))throw Error('UMOV_PENDENTE_SITUATION_ID deve ser numÃ©rico quando configurado.');
+    // A remoÃ§Ã£o de agente usa o mesmo endpoint comprovado para atribuiÃ§Ã£o.
+    // O ID de situaÃ§Ã£o sÃ³ Ã© enviado quando foi explicitamente confirmado.
     const situacaoXml=pendenteId?`<situation><id>${xmlEscape(pendenteId)}</id></situation>`:'';
     const xml=`<schedule><agent><id></id></agent>${situacaoXml}</schedule>`;
     await postUmovXml('schedule',tarefa,xml);
-    resultados.push({tarefa,ok:true,confirmado:false,situacaoSolicitada:!!pendenteId,aviso:pendenteId?'Requisição aceita pela API; situação solicitada, aguardando atualização do espelho.':'Remoção da equipe solicitada; retorno à Recepção não garantido sem ID da situação.'});
+    resultados.push({tarefa,ok:true,confirmado:false,situacaoSolicitada:!!pendenteId,aviso:pendenteId?'RequisiÃ§Ã£o aceita pela API; situaÃ§Ã£o solicitada, aguardando atualizaÃ§Ã£o do espelho.':'RemoÃ§Ã£o da equipe solicitada; retorno Ã  RecepÃ§Ã£o nÃ£o garantido sem ID da situaÃ§Ã£o.'});
    }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,250)})}
   }
   const sucesso=resultados.filter(x=>x.ok).length,primeiraFalha=resultados.find(x=>!x.ok);
@@ -1264,7 +1267,7 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
 });
 app.post('/api/tags',async(req,res)=>{try{
  const acao=String(req.body?.acao||'adicionar');
- if(!['adicionar','limpar'].includes(acao))return res.status(400).json({ok:false,error:'Ação de tag inválida.'});
+ if(!['adicionar','limpar'].includes(acao))return res.status(400).json({ok:false,error:'AÃ§Ã£o de tag invÃ¡lida.'});
  const tag=acao==='limpar'?'':String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
  const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
  if(acao==='adicionar'&&!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
@@ -1277,7 +1280,7 @@ app.post('/api/tags',async(req,res)=>{try{
  const sucesso=resultados.filter(item=>item.ok).length,primeiraFalha=resultados.find(item=>!item.ok);
  if(sucesso)cache.clear();
  res.status(sucesso?200:502).json({ok:sucesso>0,tag,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
-}catch(error){res.status(500).json({ok:false,error:`Não foi possível gravar a tag: ${String(error?.message||'Erro interno').slice(0,300)}`})}});
+}catch(error){res.status(500).json({ok:false,error:`NÃ£o foi possÃ­vel gravar a tag: ${String(error?.message||'Erro interno').slice(0,300)}`})}});
 require('./duplicidades-index').registrar(app,{
  pool:poolPrincipal,
  autorizado:gatewayAuthorized,
@@ -1292,13 +1295,14 @@ require('./duplicidades-index').registrar(app,{
 require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal});
 require('./busca-ss-fisica').registrar(app,{pool,hostRelatorioUmov});
 // No computador local, mantenha o comportamento original: `npm start`.
-// Na Vercel, o adaptador Node importa este Express app e não abre uma porta.
+// Na Vercel, o adaptador Node importa este Express app e nÃ£o abre uma porta.
 if (require.main === module) {
  app.listen(PORT,async()=>{
-  console.log(`Recepção: http://localhost:${PORT}`);
-  try{await pool.query('SELECT 1');console.log('✓ PostgreSQL/uMov conectado')}
-  catch(e){console.error('✗',e.message)}
+  console.log(`RecepÃ§Ã£o: http://localhost:${PORT}`);
+  try{await pool.query('SELECT 1');console.log('âœ“ PostgreSQL/uMov conectado')}
+  catch(e){console.error('âœ—',e.message)}
  });
 }
 
 module.exports=app;
+
