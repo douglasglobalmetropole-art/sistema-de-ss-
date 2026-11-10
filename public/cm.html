@@ -1,0 +1,109 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Central de Operações | Solicitação de Manutenção</title><style>
+:root{--navy:#102e50;--blue:#0869b5;--bg:#f1f5fa;--line:#dbe5ef;--ink:#183a5b}*{box-sizing:border-box}body{margin:0;font:13px Arial,sans-serif;background:var(--bg);color:var(--ink)}aside{position:fixed;inset:0 auto 0 0;width:195px;background:var(--navy);color:white;padding:20px 13px}aside h2{font-size:15px;margin:0 0 25px}aside p{padding:11px;background:#175488;border-radius:7px}main{margin-left:195px;padding:19px;max-width:1650px}header{display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:21px;margin:0 0 4px}small,.muted{color:#69819a}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:16px 0}.card,.panel{background:#fff;border:1px solid var(--line);border-radius:9px;padding:15px}.card b{font-size:24px;display:block;color:var(--blue);margin-top:8px}.panel{margin-bottom:14px}h3{font-size:15px;margin:0 0 13px}.fields{display:grid;grid-template-columns:repeat(4,1fr);gap:11px}label{font-weight:bold;font-size:12px}input,select,textarea{width:100%;padding:10px;margin-top:5px;border:1px solid #cbd8e4;border-radius:6px;font:inherit;background:white}textarea{min-height:85px;resize:vertical}.span2{grid-column:span 2}.span4{grid-column:span 4}.actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px}button{border:1px solid #b6ccdd;border-radius:6px;padding:10px 15px;background:white;color:var(--navy);cursor:pointer;font-weight:bold}button.primary{background:var(--blue);color:white;border-color:var(--blue)}button:disabled{opacity:.5;cursor:not-allowed}.tools{display:flex;gap:10px;margin:10px 0}.tools input{margin:0;flex:1}.tools select{margin:0;max-width:180px}.scroll{overflow:auto}table{border-collapse:collapse;width:100%;min-width:800px}th{background:#115d9b;color:white;text-align:left;font-size:12px}td,th{padding:11px;border-bottom:1px solid var(--line)}tr:hover td{background:#f4f9ff}.tag{border-radius:20px;background:#eaf2fc;padding:5px 8px;white-space:nowrap}.notice{padding:11px;border-radius:6px;background:#fff8e5;border:1px solid #e7d69e;margin:12px 0}.message{min-height:18px;margin:10px 0;color:#075b93}a{color:#0869b5}dialog{border:1px solid var(--line);border-radius:10px;max-width:600px;width:92%;padding:20px}dialog::backdrop{background:#12283d88}#detail{white-space:pre-wrap;line-height:1.6}@media(max-width:950px){aside{position:static;width:auto;padding:12px}aside h2{margin:0}aside p{display:none}main{margin:0;padding:12px}.grid{grid-template-columns:repeat(2,1fr)}.fields{grid-template-columns:repeat(2,1fr)}.span4{grid-column:span 2}}@media(max-width:520px){.fields{grid-template-columns:1fr}.span2,.span4{grid-column:span 1}.grid{grid-template-columns:repeat(2,1fr)}header{display:block}.tools{flex-wrap:wrap}}
+/* CM - Layout responsivo em tela inteira */
+html, body {
+    width: 100%;
+    min-height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+aside {
+    width: 195px;
+}
+
+main {
+    margin-left: 195px;
+    width: calc(100% - 195px);
+    max-width: none !important;
+    min-height: 100vh;
+    padding: 16px 20px;
+}
+
+main > header,
+main > section,
+main > .notice {
+    width: 100%;
+    max-width: none !important;
+}
+
+.grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    width: 100%;
+}
+
+.fields {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.panel {
+    width: 100%;
+}
+
+.scroll {
+    width: 100%;
+}
+
+table {
+    width: 100%;
+}
+
+@media (max-width: 950px) {
+    aside {
+        position: static;
+        width: 100%;
+    }
+
+    main {
+        margin-left: 0;
+        width: 100%;
+        padding: 12px;
+    }
+
+    .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 520px) {
+    .fields {
+        grid-template-columns: 1fr;
+    }
+
+    .span2,
+    .span4 {
+        grid-column: span 1;
+    }
+}
+</style></head><body><aside><h2>GLOBAL METRÓPOLE</h2><p>Central de Operações</p><p>Solicitação de Manutenção</p></aside><main><header><div><h1>Solicitação de Manutenção</h1><small>Sistema de SS · Central de Operações</small></div><strong id="mode">Prévia sem conexão</strong></header>
+<div class="notice" id="notice">Esta página é uma prévia funcional local. Para salvar permanentemente no Supabase e enviar anexos ao Google Drive, é necessário instalar uma API autenticada no servidor. Nenhum arquivo será enviado ao Drive nesta versão.</div>
+<section class="grid" id="kpis"></section>
+<section class="panel"><h3 id="formtitle">Nova solicitação</h3><form id="form"><div class="fields">
+<label>Número<input id="number" value="Gerado ao salvar" readonly></label><label>Sistema<input value="Sistema de SS" readonly></label>
+<label>Categoria<select name="category" required><option value="">Selecione</option><option>Erro / Falha</option><option>Melhoria</option><option>Integração</option><option>Acesso / Permissão</option><option>Outros</option></select></label>
+<label>Prioridade<select name="priority" required><option>Baixa</option><option selected>Média</option><option>Alta</option><option>Urgente</option></select></label>
+<label class="span2">Solicitante<input name="requester" required maxlength="120"></label><label class="span2">Contato<input name="contact" required maxlength="160"></label>
+<label class="span4">Título<input name="title" required maxlength="180"></label>
+<label class="span4">Descrição<textarea name="description" required maxlength="4000"></textarea></label>
+<label class="span4">Anexos (prévia: somente nomes; não envia arquivos)<input id="files" type="file" multiple accept="image/*,.pdf"></label>
+</div><div class="actions"><button type="button" id="cancel" hidden>Cancelar edição</button><button class="primary" type="submit">Salvar solicitação</button></div></form><div id="msg" class="message" role="status"></div></section>
+<section class="panel"><h3>Acompanhamento de solicitações</h3><div class="tools"><input id="search" placeholder="Buscar número, título ou solicitante"><select id="filter"><option value="">Todos os status</option><option>Aberta</option><option>Em análise</option><option>Em andamento</option><option>Concluída</option></select></div><div class="scroll"><table><thead><tr><th>Número</th><th>Data</th><th>Título</th><th>Solicitante</th><th>Prioridade</th><th>Status</th><th>Ações</th></tr></thead><tbody id="rows"></tbody></table></div></section></main>
+<dialog id="dialog"><h3>Detalhes da solicitação</h3><div id="detail"></div><div class="actions"><button onclick="document.querySelector('#dialog').close()">Fechar</button></div></dialog>
+<script>
+'use strict';const KEY='ss_sm_preview_v1';let editing=null;
+function read(){try{const a=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(a)?a:[]}catch{return []}}
+function save(a){localStorage.setItem(KEY,JSON.stringify(a))}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){let all=read(),counts=['Total','Aberta','Em análise','Em andamento','Concluída'];document.querySelector('#kpis').innerHTML=counts.map(c=>'<div class="card">'+esc(c)+'<b>'+(c==='Total'?all.length:all.filter(x=>x.status===c).length)+'</b></div>').join('');let q=document.querySelector('#search').value.toLowerCase(),f=document.querySelector('#filter').value;let data=all.filter(x=>(!f||x.status===f)&&[x.number,x.title,x.requester].join(' ').toLowerCase().includes(q));document.querySelector('#rows').innerHTML=data.map(x=>'<tr><td><b>'+esc(x.number)+'</b></td><td>'+esc(new Date(x.created).toLocaleDateString('pt-BR'))+'</td><td>'+esc(x.title)+'</td><td>'+esc(x.requester)+'</td><td>'+esc(x.priority)+'</td><td><span class="tag">'+esc(x.status)+'</span></td><td><button data-action="view" data-id="'+esc(x.id)+'">Ver</button> <button data-action="edit" data-id="'+esc(x.id)+'">Editar</button> <button data-action="status" data-id="'+esc(x.id)+'">Status</button></td></tr>').join('')||'<tr><td colspan="7">Nenhuma solicitação encontrada.</td></tr>'}
+const form=document.querySelector('#form');function reset(){editing=null;form.reset();document.querySelector('#number').value='Gerado ao salvar';document.querySelector('#formtitle').textContent='Nova solicitação';document.querySelector('#cancel').hidden=true}
+form.addEventListener('submit',e=>{e.preventDefault();let d=Object.fromEntries(new FormData(form).entries());delete d.files;let a=read(),now=new Date().toISOString();let attached=[...document.querySelector('#files').files].map(x=>({name:x.name,size:x.size}));if(editing){let x=a.find(y=>y.id===editing);if(!x)return;x.category=d.category;x.priority=d.priority;x.requester=d.requester;x.contact=d.contact;x.title=d.title;x.description=d.description;x.updated=now;x.history.push({date:now,text:'Dados atualizados na prévia'});if(attached.length)x.attachments.push(...attached)}else{let next=Math.max(0,...a.map(x=>Number(x.id)||0))+1;let x={...d,id:String(next),number:'SM-'+String(next).padStart(6,'0'),created:now,updated:now,status:'Aberta',attachments:attached,history:[{date:now,text:'Solicitação registrada na prévia'}]};a.unshift(x)}try{save(a);reset();render();document.querySelector('#msg').textContent='Registro salvo somente neste navegador. Nenhum dado foi enviado ao Supabase ou Google Drive.'}catch{document.querySelector('#msg').textContent='Não foi possível salvar no navegador.'}});
+document.querySelector('#rows').addEventListener('click',e=>{let b=e.target.closest('button[data-id]');if(!b)return;let a=read(),x=a.find(y=>y.id===b.dataset.id);if(!x)return;if(b.dataset.action==='view'){document.querySelector('#detail').textContent=`Número: ${x.number}\nStatus: ${x.status}\nCategoria: ${x.category}\nPrioridade: ${x.priority}\nSolicitante: ${x.requester}\nContato: ${x.contact}\nTítulo: ${x.title}\nDescrição: ${x.description}\n\nAnexos (nomes locais):\n${x.attachments.map(y=>y.name).join('\n')||'Nenhum'}\n\nHistórico:\n${x.history.map(y=>new Date(y.date).toLocaleString('pt-BR')+' — '+y.text).join('\n')}`;document.querySelector('#dialog').showModal()}if(b.dataset.action==='edit'){editing=x.id;for(let k of ['category','priority','requester','contact','title','description'])form.elements[k].value=x[k];document.querySelector('#number').value=x.number;document.querySelector('#formtitle').textContent='Editar '+x.number;document.querySelector('#cancel').hidden=false;window.scrollTo({top:0,behavior:'smooth'})}if(b.dataset.action==='status'){let statuses=['Aberta','Em análise','Em andamento','Concluída'];let next=prompt('Informe o status:\n'+statuses.join(' | '),x.status);if(next===null)return;if(!statuses.includes(next))return alert('Status inválido');x.status=next;x.updated=new Date().toISOString();x.history.push({date:x.updated,text:'Status alterado para '+next+' (prévia)'});save(a);render()}});
+document.querySelector('#cancel').onclick=reset;document.querySelector('#search').oninput=render;document.querySelector('#filter').onchange=render;render();
+</script></body></html>
