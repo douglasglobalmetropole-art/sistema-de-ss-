@@ -78,21 +78,36 @@ function statement(params, ids){
  // Filtros são avaliados antes da paginação. Inclui uma linha a mais para hasMore.
  const limitParam=add(limit+1), offsetParam=add(offset);
  const sort=tela==='recepcao'?'p.tsk_insertdatehour':'p.tsk_lastexecutiondatehour';
- const sql=`WITH b AS MATERIALIZED (
-   SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
-    t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
-    t.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,
-    l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
-    l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-    a.age_name AS tecnico,tt.tty_description AS servico
-   FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
-   LEFT JOIN u45468.agent a ON a.age_id=t.age_id
-   LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-   ${base.length?'WHERE '+base.join(' AND '):''}
- ), p AS MATERIALIZED (
-   SELECT b.*,${status} AS status_integracao,${tags} AS tags,${setor} AS setor FROM b
- ) SELECT * FROM p ${final.length?'WHERE '+final.join(' AND '):''}
- ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC LIMIT ${limitParam} OFFSET ${offsetParam}`;
+  const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
+     t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
+     t.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,
+     l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
+     l.loc_street AS logradouro,l.loc_streetnumber AS numero,
+     a.age_name AS tecnico,tt.tty_description AS servico
+    FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
+    LEFT JOIN u45468.agent a ON a.age_id=t.age_id
+    LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
+    ${base.length?'WHERE '+base.join(' AND '):''}`;
+  // Somente Recepcao e Em Campo sem filtros de campos personalizados:
+  // paginar primeiro e consultar status/TAG/setor apenas nas linhas da pagina.
+  // Nos demais casos, os filtros de status/TAG/setor continuam ANTES do LIMIT.
+  const paginaPrimeiro=(tela==='recepcao'||tela==='campo')&&final.length===0;
+  const sql=paginaPrimeiro
+   ? `WITH b AS MATERIALIZED (
+       ${baseSql}
+      ), pagina AS MATERIALIZED (
+       SELECT * FROM b ORDER BY ${sort.replace('p.','b.')} DESC NULLS LAST,b.tsk_id DESC
+       LIMIT ${limitParam} OFFSET ${offsetParam}
+      ) SELECT p.*,${status.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS status_integracao,
+       ${tags.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS tags,
+       ${setor.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS setor
+       FROM pagina p ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC`
+   : `WITH b AS MATERIALIZED (
+       ${baseSql}
+      ), p AS MATERIALIZED (
+       SELECT b.*,${status} AS status_integracao,${tags} AS tags,${setor} AS setor FROM b
+      ) SELECT * FROM p ${final.length?'WHERE '+final.join(' AND '):''}
+      ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC LIMIT ${limitParam} OFFSET ${offsetParam}`;
  return {text:sql,values:val};
 }
 async function extraFields(pool,rows,ids){
@@ -143,7 +158,7 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
   const rows=transform(page,details,hostRelatorioUmov);
   const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
-   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6',detalhes_parciais:detalhesParciais};
+   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
   if(C.size>=100)C.clear();C.set(key,{ts:Date.now(),data});
   res.set('X-Cache','MISS');res.set('X-CP-Search-Plan','fisica-campos-v6');
   res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${Date.now()-t1}`);
