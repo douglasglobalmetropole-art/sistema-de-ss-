@@ -98,10 +98,9 @@ function statement(params, ids){
   // Nos demais casos, os filtros de status/TAG/setor continuam ANTES do LIMIT.
   const paginaPrimeiro=(tela==='recepcao'||tela==='campo')&&final.length===0;
   const sql=paginaPrimeiro
-   ? `WITH b AS (
+   ? `WITH pagina AS MATERIALIZED (
        ${baseSql}
-      ), pagina AS (
-       SELECT * FROM b ORDER BY ${sort.replace('p.','b.')} DESC NULLS LAST,b.tsk_id DESC
+       ORDER BY ${sort.replace('p.','t.')} DESC NULLS LAST,t.tsk_id DESC
        LIMIT ${limitParam} OFFSET ${offsetParam}
       ) SELECT p.*,${status.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS status_integracao,
        ${tags.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS tags,
