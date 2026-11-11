@@ -765,7 +765,7 @@ async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBu
   const situacoes=await pool.query({text:`SELECT tsk_id,tsk_situation,e_situacao FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])`,values:[ids],query_timeout:4000});
   const porId=new Map(situacoes.rows.map(x=>[String(x.tsk_id),x]));
   let cidadesOk=null;
-  if(cidadeBusca.length){const locais=await pool.query({text:`SELECT l.loc_id FROM u45468.local l LEFT JOIN u45468.dbout_local dl ON dl.loc_id=l.loc_id WHERE l.loc_id=ANY($1::bigint[]) AND translate(UPPER(TRIM(COALESCE(NULLIF(TRIM(dl.e_localidade),''),l.loc_city))),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])`,values:[candidatas.rows.map(x=>x.loc_id),cidadeBusca],query_timeout:4000});cidadesOk=new Set(locais.rows.map(x=>String(x.loc_id)))}
+  if(cidadeBusca.length){const locais=await pool.query({text:`SELECT l.loc_id FROM u45468.local l WHERE l.loc_id=ANY($1::bigint[]) AND translate(UPPER(TRIM(l.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])`,values:[candidatas.rows.map(x=>x.loc_id),cidadeBusca],query_timeout:4000});cidadesOk=new Set(locais.rows.map(x=>String(x.loc_id)))}
   for(const t of candidatas.rows){const d=porId.get(String(t.tsk_id));if(!d||String(d.tsk_situation||'').trim().toLowerCase()!=='pendente de envio para campo')continue;if(equipeSet&&!equipeSet.has(String(t.age_id)))continue;if(macroSet&&!macroSet.has(String(t.tty_id)))continue;if(cidadesOk&&!cidadesOk.has(String(t.loc_id)))continue;if(encontradas++>=offset)selecionadas.push({...t,situacao_campo:d.tsk_situation,status_integracao:d.e_situacao});if(selecionadas.length>limit)break}
   if(candidatas.rows.length<chunk){acabou=true;break}
  }
