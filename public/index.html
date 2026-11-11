@@ -887,7 +887,7 @@ load();
   
   const headers={'Content-Type':'application/json'};
   const r=await fetch('/api/siscom-gateway/'+route,{method:'POST',headers,body:JSON.stringify(payload),cache:'no-store'});
-  const j=await r.json();if(!r.ok)throw Error(j.error||'Não foi possível iniciar a consulta');
+  const j=await r.json();if(!r.ok){const e=new Error(j.error||'Não foi possível iniciar a consulta');e.httpStatus=r.status;e.antesDoEnvio=(route==='baixar-ss'&&[400,401,403].includes(r.status));throw e;}
   for(let i=0;i<50;i++){
    if(g!==generation)throw Error('Consulta cancelada');
    await new Promise(resolve=>setTimeout(resolve,i===0?600:i===1?900:1200));
@@ -1170,10 +1170,16 @@ load();
     status('Baixa não confirmada. Não reenvie sem conferir o SISCOM.');
    }
   }catch(e){
-   resultadoIncerto=true;
-   alterarEtapa('Resultado incerto','Não foi possível confirmar o resultado da baixa. Consulte a tentativa oficial; não repita o envio.','warning');
-   status('Envio não confirmado: '+e.message+' — NÃO reenviar.');
-   await mostrarTentativaExistente();
+   if(e.antesDoEnvio){
+    resultadoIncerto=false;
+    alterarEtapa('Envio nao iniciado','A API recusou a solicitacao antes de criar a baixa (HTTP '+e.httpStatus+'): '+e.message+'. Confira os dados e a permissao.','warning');
+    status('Baixa nao enviada: '+e.message+' (HTTP '+e.httpStatus+'). Corrija os dados antes de tentar novamente.');
+   }else{
+    resultadoIncerto=true;
+    alterarEtapa('Resultado incerto','Não foi possível confirmar o resultado da baixa. Consulte a tentativa oficial; não repita o envio.','warning');
+    status('Envio não confirmado: '+e.message+' — NÃO reenviar.');
+    await mostrarTentativaExistente();
+   }
   }finally{baixaEmAndamento=false;atualizarBotoesFluxo();}
  };
  $('sbFinalizar').onclick=async()=>{
