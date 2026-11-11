@@ -1233,7 +1233,7 @@ load();
   btn.hidden=active;logout.hidden=!active;consult.disabled=!active;
   document.body.dataset.siscomAuthenticated=active?'true':'false';
  }
- async function refresh(){try{const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'});const x=await r.json();paint(x)}catch{paint(null)}}
+ async function refresh(){try{await fetch('/api/siscom-individual/logout',{method:'POST',credentials:'same-origin',cache:'no-store'});}catch{}paint(null)}
  btn.addEventListener('click',()=>{feedback.textContent='';modal.classList.add('open');$('siscomLoginPassword').value='';$('siscomLoginUser').focus()});
  $('siscomLoginCancel').addEventListener('click',()=>modal.classList.remove('open'));
  form.addEventListener('submit',async ev=>{
