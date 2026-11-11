@@ -45,72 +45,62 @@ const pool={query:(...args)=>{
 }};
 // O mesmo HTML e utilizado no Lote 1: sem copiar paginas e sem divergir o layout.
 const DIVISOES_SS = {
-  ODVV: { cidades: ['VILA VELHA', 'RECANTO DA SEREIA'], lote1: false },
-  ODCV: { cidades: ['CARIACICA', 'VIANA'], lote1: false },
-  ODLS: { cidades: ['ANCHIETA', 'PIUMA', 'GUARAPARI'], lote1: false },
-  ODVT: { cidades: ['VITORIA'], lote1: true },
-  ODLN: { cidades: ['SERRA', 'FUNDAO', 'ARACRUZ'], lote1: true }
+ ODVV: { cidades: ['VILA VELHA','RECANTO DA SEREIA'], lote1:false },
+ ODCV: { cidades: ['CARIACICA','VIANA'], lote1:false },
+ ODLS: { cidades: ['ANCHIETA','PIUMA','GUARAPARI'], lote1:false },
+ ODVT: { cidades: ['VITORIA'], lote1:true },
+ ODLN: { cidades: ['SERRA','FUNDAO','ARACRUZ'], lote1:true }
 };
 
-app.use((req, res, next) => {
-  const url = req.url.split('?')[0];
-  const match = url.match(/^\/(ODVV|ODCV|ODLS|ODVT|ODLN)(\/api\/.*)?\/?$/i);
+app.use((req,res,next)=>{
+ const pathname=req.url.split('?')[0];
+ const match=pathname.match(/^\/(ODVV|ODCV|ODLS|ODVT|ODLN)(\/api\/.*)?\/?$/i);
+ if(!match)return next();
 
-  if (!match) return next();
+ const divisao=match[1].toUpperCase();
+ const config=DIVISOES_SS[divisao];
 
-  const divisao = match[1].toUpperCase();
-  const config = DIVISOES_SS[divisao];
+ const executar=()=>{
+  if(!match[2]){
+   try{
+    let html=fs.readFileSync(path.join(__dirname,'public','index.html'),'utf8');
+    const antes="const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
+    if(!html.includes(antes))return res.status(503).send('Configuracao de cidades nao encontrada.');
 
-  const executar = () => {
-    if (!match[2]) {
-      try {
-        let html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
-
-        const antes = "const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
-        const depois = 'const CIDADES_CONFIGURADAS=' + JSON.stringify(config.cidades) + ';';
-
-        if (!html.includes(antes)) {
-          return res.status(503).send('Configuracao de cidades nao encontrada no index.html.');
-        }
-
-        html = html.replace(antes, depois);
-        html = html.replaceAll('/api/', '/' + divisao + '/api/');
-
-        res.set('Cache-Control', 'no-store');
-        return res.type('html').send(html);
-      } catch (e) {
-        return res.status(500).send(e.message);
-      }
-    }
-
-    req.url = req.url.replace(
-      new RegExp('^/' + divisao, 'i'),
-      ''
-    );
-
-    if (req.method === 'GET' && /^\/api\/(recepcao|pesquisa-global)$/.test(req.url.split('?')[0])) {
-      const u = new URL(req.url, 'http://local');
-      const cidades = u.searchParams.get('cidade');
-
-      if (cidades) {
-        const selecionadas = cidades.split('\u001f').map(normalizarCidade);
-        if (selecionadas.some(c => !config.cidades.includes(c))) {
-          return res.status(400).json({ ok: false, error: 'Municipio nao permitido nesta divisao.' });
-        }
-      }
-
-      u.searchParams.set('cidade', config.cidades.join('\u001f'));
-      req.url = u.pathname + u.search;
-    }
-
-    next();
-  };
-
-  if (config.lote1) {
-    return loteContext.run({ lote1: true }, executar);
+    html=html.replace(antes,'const CIDADES_CONFIGURADAS='+JSON.stringify(config.cidades)+';');
+    html=html.replaceAll('/api/','/'+divisao+'/api/');
+    res.set('Cache-Control','no-store');
+    return res.type('html').send(html);
+   }catch(e){return res.status(500).send('Erro ao carregar divisao.')}
   }
 
-  return executar();
+  req.url=req.url.replace(new RegExp('^/'+divisao,'i'),'');
+
+  const rota=req.url.split('?')[0];
+
+  // Impede consultar outros municipios nas pesquisas.
+  if(req.method==='GET' && (rota==='/api/pesquisa-global'||rota==='/api/recepcao')){
+   const u=new URL(req.url,'http://local');
+   const cidades=config.cidades.join('\u001f');
+
+   // Filtro imposto pelo servidor, independente do navegador.
+   u.searchParams.set('cidade',cidades);
+   u.searchParams.set('municipios',cidades);
+   req.url=u.pathname+u.search;
+  }
+
+  // Operacoes nao validadas permanecem bloqueadas nas novas rotas.
+  if(req.method!=='GET'){
+   return res.status(403).json({
+    ok:false,
+    error:'Operacao bloqueada ate validar a divisao da SS.'
+   });
+  }
+
+  next();
+ };
+
+ return loteContext.run({lote1:config.lote1},executar);
 });
 app.use((req,res,next)=>{
  const url=req.url.split('?')[0];
