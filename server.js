@@ -54,7 +54,7 @@ const DIVISOES_SS = {
 
 app.use((req, res, next) => {
   const url = req.url.split('?')[0];
-  const match = url.match(/^\/app\/(ODVV|ODCV|ODLS|ODVT|ODLN)(\/api\/.*)?\/?$/i);
+  const match = url.match(/^\/(ODVV|ODCV|ODLS|ODVT|ODLN)(\/api\/.*)?\/?$/i);
 
   if (!match) return next();
 
@@ -74,7 +74,7 @@ app.use((req, res, next) => {
         }
 
         html = html.replace(antes, depois);
-        html = html.replaceAll('/api/', '/app/' + divisao + '/api/');
+        html = html.replaceAll('/api/', '/' + divisao + '/api/');
 
         res.set('Cache-Control', 'no-store');
         return res.type('html').send(html);
@@ -84,7 +84,7 @@ app.use((req, res, next) => {
     }
 
     req.url = req.url.replace(
-      new RegExp('^/app/' + divisao, 'i'),
+      new RegExp('^/' + divisao, 'i'),
       ''
     );
 
