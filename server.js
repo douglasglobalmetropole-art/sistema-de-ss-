@@ -60,6 +60,13 @@ app.use((req,res,next)=>{
  const codigo=match[1].toUpperCase();
  const config=DIVISOES_SS[codigo];
 
+// Contexto obrigatorio para todas as consultas da divisao.
+req.divisaoSS={
+ codigo,
+ lote1:config.lote1,
+ cidades:[...config.cidades]
+};
+
  return loteContext.run({lote1:config.lote1,divisao:codigo},()=>{
 
   res.set('X-SS-Divisao',codigo);
@@ -1081,7 +1088,11 @@ async function getUmovXml(resource,id){
 }
 // Consulta o historico real do formulario de execucao; identifica a chave da tarefa
 // pelo catalogo para nao assumir nomes de colunas entre versoes do uMov.
-const historicosExecucao=['dbout_history_1714185_at_execucaoservico','dbout_history_at_execucaoservicoeteeta'];
+const historicosExecucao=[
+ 'dbout_history_1650496_at_execucaoservico',
+ 'dbout_history_1714185_at_execucaoservico',
+ 'dbout_history_at_execucaoservicoeteeta'
+];
 async function retornoHistorico(tarefa){
  const key='retorno:db:'+(emLote1()?'lote1:':'principal:')+tarefa,hit=getCache(key,60000);if(hit)return hit;
  const saida={servico_executado:'',materiais_bombeiro:'',pavimentacao:''};
