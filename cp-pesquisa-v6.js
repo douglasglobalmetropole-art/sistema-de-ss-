@@ -159,7 +159,7 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
   // Nas divisoes, Notas para Baixar usa a classificacao oficial em blocos pequenos.
   // Demais abas e pagina original mantem a pesquisa existente.
   const t0=Date.now();
-  const q=(req.divisaoSS && params.tela==='baixar')
+  const q=(req.divisaoSS && (params.tela==='baixar'||params.tela==='encerradas'))
    ? await require('./cp-baixar-divisao-fast').query(pool,params,ids)
    : await pool.query({...statement(params,ids),query_timeout:8500});
   const msBanco=Date.now()-t0;
