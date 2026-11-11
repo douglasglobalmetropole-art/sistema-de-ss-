@@ -44,51 +44,6 @@ const pool={query:(...args)=>{
  return poolLote1.query(...args);
 }};
 // O mesmo HTML e utilizado no Lote 1: sem copiar paginas e sem divergir o layout.
-// SISCOM_PAGE_RESET_V1
-// Cada abertura da pagina exige uma nova autenticacao individual.
-const SISCOM_PAGINAS_RESET = new Set([
- '/', '/index.html', '/lote1',
- '/odvv', '/odcv', '/odls', '/odvt', '/odln'
-]);
-
-app.use((req,res,next)=>{
- if(req.method!=='GET')return next();
-
- const destino=String(req.get('Sec-Fetch-Dest')||'');
- if(destino && destino!=='document')return next();
-
- const rota=(req.path||'/').replace(/\/+$/,'').toLowerCase()||'/';
- if(!SISCOM_PAGINAS_RESET.has(rota))return next();
-
- let anterior=null;
- try{
-  anterior=siscomIndividual(req);
- }catch(e){
-  console.warn('[SISCOM] Sessao anterior invalida:',e.message);
- }
-
- // Remove os cookies antes de entregar a pagina.
- cookie(res,SISCOM_USER_COOKIE,'',0);
- cookie(res,SISCOM_PENDING_COOKIE,'',0);
- res.set('Cache-Control','no-store');
-
- // Solicita a limpeza da sessao antiga no worker.
- if(anterior){
-  try{
-   siscomCreateJob(
-    'siscom_logout_individual',
-    signedTask('siscom_logout_individual',{},anterior.sid)
-   ).catch(e=>console.warn(
-    '[SISCOM] Logout anterior pendente:',e.message
-   ));
-  }catch(e){
-   console.warn('[SISCOM] Logout anterior:',e.message);
-  }
- }
-
- next();
-});
-
 const DIVISOES_SS = {
  ODVV: { cidades: ['VILA VELHA','RECANTO DA SEREIA'], lote1:false },
  ODCV: { cidades: ['CARIACICA','VIANA'], lote1:false },
@@ -128,10 +83,6 @@ app.use((req,res,next)=>{
     );
 
     html=html.replaceAll('/api/','/'+codigo+'/api/');
-    // SISCOM individual usa cookie e validacao no servidor principal.
-    // Somente a sincronizacao uMov fica na divisao para preservar o banco/lote.
-    html=html.replaceAll('/'+codigo+'/api/siscom-','/api/siscom-');
-    html=html.replaceAll('/api/siscom-gateway/sincronizar-baixa','/'+codigo+'/api/siscom-gateway/sincronizar-baixa');
     // Busca por SS nas divisões usa V6 com filtro obrigatório antes da paginação.
     const buscaAntiga="const caminho=direta?'/"+codigo+"/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page})";
     const buscaNova="const caminho=direta?'/"+codigo+"/api/pesquisa-global?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page,offset:window.__pageOffset})";
@@ -142,7 +93,7 @@ app.use((req,res,next)=>{
     const bootstrap='<script>(function(){'+
      'const p="/'+codigo+'",original=window.fetch;'+
      'window.fetch=function(url,options){'+
-     'if(typeof url==="string"&&url.startsWith("/api/")&&(!url.startsWith("/api/siscom-")||url.startsWith("/api/siscom-gateway/sincronizar-baixa")))url=p+url;'+
+     'if(typeof url==="string"&&url.startsWith("/api/"))url=p+url;'+
      'return original.call(this,url,options);'+
      '};'+
      '})();</script>';
@@ -169,16 +120,6 @@ app.use((req,res,next)=>{
    '/api/auth/me',
    '/api/siscom-individual/me'
   ]);
-
-  // Apenas sincronizacao de baixas pode escrever no lote da divisao.
-  // A rota valida usuario, job assinado e municipio antes de escrever no uMov.
-  if(req.method==='POST'&&(
-    rota==='/api/siscom-gateway/sincronizar-baixa'||
-    rota==='/api/siscom-gateway/sincronizar-baixa-existente'
-  )){
-    req.divisaoSS={codigo,lote1:config.lote1,cidades:config.cidades.map(normalizarCidade)};
-    return next();
-  }
 
   if(req.method!=='GET'||!consultas.has(rota)){
    return res.status(403).json({
@@ -225,12 +166,16 @@ app.use((req,res,next)=>{
 
    u.searchParams.set('municipios',cidades.join('\u001f'));
 
-   // Divisoes usam a MESMA consulta /api/recepcao do sistema original.
-   // Diferenca unica: req.divisaoSS injeta os municipios no SQL antes do LIMIT.
-   // Nao redirecionar listagens para a pesquisa V6.
+   // Todas as abas das divisoes, inclusive Recepcao, usam a pesquisa V6.
+   // A rota antiga podia devolver pagina incompleta ou cidade divergente.
    if(rota==='/api/recepcao'){
-    if(!u.searchParams.get('tela'))u.searchParams.set('tela','recepcao');
-    res.set('X-SS-Consulta','original-com-divisao');
+    if(process.env.CP_PESQUISA_V6==='false'){
+     return res.status(503).json({ok:false,error:'Pesquisa V6 necessaria para consultar a divisao.'});
+    }
+    u.pathname='/api/pesquisa-global';
+    u.searchParams.set('tela','recepcao');
+    u.searchParams.delete('cidade');
+    res.set('X-SS-Consulta','v6-recepcao');
    }
 
    req.url=u.pathname+u.search;
@@ -378,8 +323,10 @@ app.get('/api/siscom-individual/me',(req,res)=>{
  res.json({configured:!!siscomIndividualReady(),authenticated:!!user,user:user?{idUsuario:user.uid,nome:user.name,login:user.login}:null,writeEnabled:!!(user&&individualWriteAllowed(user)),rejeicaoEnabled:!!(user&&individualWriteAllowed(user)&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true')});
 });
 function individualWriteAllowed(user){
-  return !!(user && String(user.uid??'').trim());
- }
+ if(process.env.SISCOM_INDIVIDUAL_WRITE_ENABLED!=='true')return false;
+ const ids=String(process.env.SISCOM_INDIVIDUAL_WRITE_USERS||'').split(',').map(x=>x.trim()).filter(Boolean);
+ return ids.length>0&&ids.includes(String(user?.uid||''));
+}
 // NÃ£o expor endpoint de login em HTTP nem aceitar chamadas cross-site.
 function siscomSameOrigin(req){
  const origin=req.get('Origin');
@@ -758,14 +705,14 @@ async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBu
   const cursor=cursorData?'AND (t.tsk_insertdatehour,t.tsk_id)<($3::timestamp,$4::bigint)':'';
   const valores=cursorData?[inicio,fim,cursorData,cursorId,chunk]:[inicio,fim,chunk];
   const limite=cursorData?'$5':'$3';
-  const candidatas=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour FROM u45468.task t WHERE ($1::date IS NULL OR t.tsk_insertdatehour >= $1::date) AND ($2::date IS NULL OR t.tsk_insertdatehour < ($2::date + INTERVAL '1 day')) ${cursor} ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC LIMIT ${limite}`,values:valores,query_timeout:4000});
+  const candidatas=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour FROM u45468.task t WHERE t.tsk_insertdatehour >= $1::date AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day') ${cursor} ORDER BY t.tsk_insertdatehour DESC,t.tsk_id DESC LIMIT ${limite}`,values:valores,query_timeout:4000});
   if(!candidatas.rows.length){acabou=true;break}
   const ultima=candidatas.rows[candidatas.rows.length-1];cursorData=ultima.tsk_insertdatehour;cursorId=ultima.tsk_id;
   const ids=candidatas.rows.map(x=>x.tsk_id);
   const situacoes=await pool.query({text:`SELECT tsk_id,tsk_situation,e_situacao FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])`,values:[ids],query_timeout:4000});
   const porId=new Map(situacoes.rows.map(x=>[String(x.tsk_id),x]));
   let cidadesOk=null;
-  if(cidadeBusca.length){const locais=await pool.query({text:`SELECT l.loc_id FROM u45468.local l WHERE l.loc_id=ANY($1::bigint[]) AND translate(UPPER(TRIM(l.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])`,values:[candidatas.rows.map(x=>x.loc_id),cidadeBusca],query_timeout:4000});cidadesOk=new Set(locais.rows.map(x=>String(x.loc_id)))}
+  if(cidadeBusca.length){const locais=await pool.query({text:`SELECT l.loc_id FROM u45468.local l LEFT JOIN u45468.dbout_local dl ON dl.loc_id=l.loc_id WHERE l.loc_id=ANY($1::bigint[]) AND translate(UPPER(TRIM(COALESCE(NULLIF(TRIM(dl.e_localidade),''),l.loc_city))),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])`,values:[candidatas.rows.map(x=>x.loc_id),cidadeBusca],query_timeout:4000});cidadesOk=new Set(locais.rows.map(x=>String(x.loc_id)))}
   for(const t of candidatas.rows){const d=porId.get(String(t.tsk_id));if(!d||String(d.tsk_situation||'').trim().toLowerCase()!=='pendente de envio para campo')continue;if(equipeSet&&!equipeSet.has(String(t.age_id)))continue;if(macroSet&&!macroSet.has(String(t.tty_id)))continue;if(cidadesOk&&!cidadesOk.has(String(t.loc_id)))continue;if(encontradas++>=offset)selecionadas.push({...t,situacao_campo:d.tsk_situation,status_integracao:d.e_situacao});if(selecionadas.length>limit)break}
   if(candidatas.rows.length<chunk){acabou=true;break}
  }
@@ -995,9 +942,7 @@ app.get('/api/localizar-ss', async (req,res)=>{
 app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.query('SELECT current_database() banco,NOW() agora')).rows[0]})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 // Consulta rÃ¡pida: limita task primeiro e sÃ³ consulta dbout_local para atÃ© 100 SS.
 app.get('/api/recepcao',async(req,res)=>{try{
-// SS_NOTAS_UNIFICADAS_V1 - a rota original e as divisoes usam a mesma regra.
- // RECUPERACAO: abas baixar e encerradas usam a consulta original desta rota.
- const inicio=req.query.inicio||null,fim=req.query.fim||null,limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=req.divisaoSS?req.divisaoSS.cidades:String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas','tramitacao']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${emLote1()?'lote1':'lote2'}:${req.divisaoSS?.codigo||'geral'}:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=req.query._refresh?null:getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
+ const inicio=req.query.inicio||'2026-10-01',fim=req.query.fim||'2026-10-05',limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas','tramitacao']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${emLote1()?'lote1':'lote2'}:${req.divisaoSS?.codigo||'geral'}:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=req.query._refresh?null:getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
  const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
  if(tela==='recepcao'){
   const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca});
@@ -1011,14 +956,12 @@ app.get('/api/recepcao',async(req,res)=>{try{
  const equipesIds=equipeBusca?(await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000})).rows.map(x=>String(x.age_id)):[];
  if(equipeBusca&&!equipesIds.length){const vazio={ok:true,count:0,total:0,hasMore:false,offset,limit,ms:Date.now()-started,rows:[]};setCache(key,vazio);return res.json(vazio)}
  const filtraPorUltimaAtividade=tela==='baixar'||tela==='encerradas'||tela==='tramitacao';
- const proximoParametro=(tela==='recepcao'?5:(filtraPorUltimaAtividade?5:3)),parametroEquipe=proximoParametro,parametroMacro=parametroEquipe+(equipeBusca?1:0),parametroCidade=parametroMacro+(macroBusca.length?1:0),equipeSql=equipeBusca?`AND t.age_id=ANY($${parametroEquipe}::bigint[])`:'',macroSql=macroBusca.length?`AND EXISTS (SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY($${parametroMacro}::text[]))`:'',cidadeSql=cidadeBusca.length?`AND EXISTS (SELECT 1 FROM u45468.local cl WHERE cl.loc_id=t.loc_id AND translate(UPPER(TRIM(cl.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($${parametroCidade}::text[]))`:'';
- const sqlRecepcao=`WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE ($1::date IS NULL OR t.tsk_insertdatehour >= $1::date) AND ($2::date IS NULL OR t.tsk_insertdatehour < ($2::date + INTERVAL '1 day')) AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo' ${equipeSql} ${macroSql} ${cidadeSql} ORDER BY t.tsk_insertdatehour DESC, t.tsk_id DESC LIMIT $3 OFFSET $4) SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id ORDER BY data_referencia DESC,t.tsk_id DESC`;
+ const proximoParametro=(tela==='recepcao'?5:(filtraPorUltimaAtividade?5:3)),parametroEquipe=proximoParametro,parametroMacro=parametroEquipe+(equipeBusca?1:0),parametroCidade=parametroMacro+(macroBusca.length?1:0),equipeSql=equipeBusca?`AND t.age_id=ANY($${parametroEquipe}::bigint[])`:'',macroSql=macroBusca.length?`AND EXISTS (SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY($${parametroMacro}::text[]))`:'',cidadeSql=cidadeBusca.length?`AND EXISTS (SELECT 1 FROM u45468.local cl LEFT JOIN u45468.dbout_local dl ON dl.loc_id=cl.loc_id WHERE cl.loc_id=t.loc_id AND translate(UPPER(TRIM(COALESCE(NULLIF(TRIM(dl.e_localidade),''),cl.loc_city))),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($${parametroCidade}::text[]))`:'';
+ const sqlRecepcao=`WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_insertdatehour >= $1::date AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day') AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo' ${equipeSql} ${macroSql} ${cidadeSql} ORDER BY t.tsk_insertdatehour DESC, t.tsk_id DESC LIMIT $3 OFFSET $4) SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id ORDER BY data_referencia DESC,t.tsk_id DESC`;
  const sqlPorStatus='';
  // A tabela dbout_local Ã© enriquecida somente apÃ³s limitar a pÃ¡gina; juntÃ¡-la antes do LIMIT causava timeout.
- const limiteStatus=filtraPorUltimaAtividade?'$3':'$1',deslocamentoStatus=filtraPorUltimaAtividade?'$4':'$2',filtroDataStatus=filtraPorUltimaAtividade?"AND ($1::date IS NULL OR d.tsk_lastexecutiondatehour >= $1::date) AND ($2::date IS NULL OR d.tsk_lastexecutiondatehour < ($2::date + INTERVAL '1 day'))":'';
- const cidadeStatusSql=req.divisaoSS&&cidadeBusca.length?`AND translate(UPPER(TRIM(lf.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($${parametroCidade}::text[])`:cidadeSql;
- const fromStatusSql=req.divisaoSS?'FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id INNER JOIN u45468.local lf ON lf.loc_id=t.loc_id':'FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id';
- const sqlPorStatusRapido=['WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao',fromStatusSql,'WHERE '+condicoes[tela],filtroDataStatus,equipeSql,macroSql,cidadeStatusSql,'ORDER BY d.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC','LIMIT '+limiteStatus+' OFFSET '+deslocamentoStatus+')','SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico','FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id','ORDER BY t.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC'].join(' ');
+ const limiteStatus=filtraPorUltimaAtividade?'$3':'$1',deslocamentoStatus=filtraPorUltimaAtividade?'$4':'$2',filtroDataStatus=filtraPorUltimaAtividade?"AND d.tsk_lastexecutiondatehour >= $1::date AND d.tsk_lastexecutiondatehour < ($2::date + INTERVAL '1 day')":'';
+ const sqlPorStatusRapido=['WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao','FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id','WHERE '+condicoes[tela],filtroDataStatus,equipeSql,macroSql,cidadeSql,'ORDER BY d.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC','LIMIT '+limiteStatus+' OFFSET '+deslocamentoStatus+')','SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico','FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id','ORDER BY t.tsk_lastexecutiondatehour DESC NULLS LAST,t.tsk_id DESC'].join(' ');
  const valoresExtras=[...(equipeBusca?[equipesIds]:[]),...(macroBusca.length?[macroBusca]:[]),...(cidadeBusca.length?[cidadeBusca]:[])];
  const valoresStatus=(filtraPorUltimaAtividade?[inicio,fim,consultaLimit,offset]:[consultaLimit,offset]).concat(valoresExtras);
  const valoresRecepcao=[inicio,fim,consultaLimit,offset].concat(valoresExtras);
@@ -1340,12 +1283,8 @@ app.post('/api/siscom-gateway/sincronizar-baixa',async(req,res)=>{
  try{
   const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
   const j=jobs[0];
-  const usuarioSISCOM=siscomIndividual(req);
-  if(usuarioSISCOM&&j?.payload?.__siscom_identity?.sid!==usuarioSISCOM.sid)
-    return res.status(403).json({ok:false,error:'Baixa pertence a outra sessao SISCOM.'});
   if(!j||j.operation!=='baixar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.status_baixa!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Baixa nÃ£o confirmada oficialmente neste job'});
-  const filtroDiv=req.divisaoSS?` AND translate(UPPER(TRIM(l.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])`:'';
-  const match=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1${filtroDiv} ORDER BY t.tsk_id DESC LIMIT 25`,values:req.divisaoSS?[numero,req.divisaoSS.cidades]:[numero],query_timeout:7000});
+  const match=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1 ORDER BY t.tsk_id DESC LIMIT 25`,values:[numero],query_timeout:7000});
   if(!match.rows.length)return res.status(404).json({ok:false,error:'SS nÃ£o localizada no uMov; baixa SISCOM confirmada, sincronizaÃ§Ã£o pendente'});
   const valor=xmlEscape(identificadorSituacao('Baixada'));const resultados=[];
   for(const r of match.rows){try{await postUmovXml('schedule',r.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);resultados.push({tarefa:r.tsk_id,ok:true})}catch(e){resultados.push({tarefa:r.tsk_id,ok:false,error:e.message})}}
@@ -1370,10 +1309,8 @@ app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
   const criado=Date.parse(j?.created_at||'');
   if(!j||j.operation!=='consultar_eventos_ss'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==usuario.sid||!Number.isFinite(criado)||Date.now()-criado>10*60*1000||!fechado)
    return res.status(409).json({ok:false,error:'Encerramento nÃ£o confirmado pelo histÃ³rico oficial do SISCOM nesta sessÃ£o. O uMov nÃ£o foi alterado.'});
-  const q=await pool.query({text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss,l.loc_city AS cidade FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
+  const q=await pool.query({text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
   const row=q.rows[0];
-  if(req.divisaoSS && !req.divisaoSS.cidades.includes(normalizarCidade(row?.cidade)))
-    return res.status(403).json({ok:false,error:'SS fora dos municipios da divisao.'});
   if(!row||String(row.numero_ss||'').trim()!==numero)return res.status(409).json({ok:false,error:'A tarefa uMov nÃ£o corresponde Ã  SS validada.'});
   if(/^baixad/i.test(String(row.e_situacao||'').trim()))return res.json({ok:true,ja_baixada:true,mensagem:'SS jÃ¡ estÃ¡ marcada como Baixada no uMov.'});
   if(row.e_situacao&&String(row.e_situacao).trim()&&!/^baixad/i.test(String(row.e_situacao).trim()))return res.status(409).json({ok:false,error:'A SS possui outro status de integraÃ§Ã£o ('+String(row.e_situacao).slice(0,50)+'). RevisÃ£o manual necessÃ¡ria.'});

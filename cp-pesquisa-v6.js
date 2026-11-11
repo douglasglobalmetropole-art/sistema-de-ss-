@@ -42,16 +42,13 @@ async function fieldIds(pool,base='principal'){
 function statement(params, ids){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
- const oficial=(tela==='baixar'||tela==='encerradas'||tela==='tramitacao');
  const base=[];
  if(!filters.ss&&isoDate(inicio)&&isoDate(fim)){
-  const col=oficial?'d.tsk_lastexecutiondatehour':'t.tsk_insertdatehour';
+  const col='t.tsk_insertdatehour';
   base.push(`${col} >= ${add(inicio)}::date`,`${col} < (${add(fim)}::date + INTERVAL '1 day')`);
  }
- const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL"};
+ const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'"};
  if(conditions[tela])base.push(conditions[tela]);
- if(tela==='encerradas')base.push("NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL");
- if(tela==='tramitacao')base.push("LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'");
  const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
  if(filters.ss)like('l.loc_integrationid',filters.ss);
  if(filters.logradouro)like('l.loc_street',filters.logradouro);
@@ -62,7 +59,7 @@ function statement(params, ids){
  if(filters.criado_em)like("TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')",filters.criado_em);
  if(filters.data_finalizacao){
   const p=add('%'+filters.data_finalizacao+'%');
-  base.push(`(TO_CHAR(${oficial?'d':'t'}.tsk_lastexecutiondatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p} OR TO_CHAR(t.tsk_realfinaldatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p})`);
+  base.push(`(TO_CHAR(t.tsk_lastexecutiondatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p} OR TO_CHAR(t.tsk_realfinaldatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p})`);
  }
  if(macro.length)base.push(`TRIM(tt.tty_description)=ANY(${add(macro)}::text[])`);
  if(municipios.length){
@@ -72,47 +69,48 @@ function statement(params, ids){
   base.push(`${normCity('l.loc_city')}=ANY(${cityParam}::text[])`);
  }
  if(equipe)like('a.age_name',equipe);
- const statusParam=oficial?null:add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
+ const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
  const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
  const final=[];
- // Os status oficiais ja foram filtrados no banco ANTES da paginacao.
+ if(tela==='baixar')final.push("COALESCE(NULLIF(TRIM(p.status_integracao),''),'')=''",'p.tsk_lastexecutiondatehour IS NOT NULL');
+ else if(tela==='encerradas')final.push("NULLIF(TRIM(p.status_integracao),'') IS NOT NULL");
+ else if(tela==='tramitacao')final.push("LOWER(TRIM(COALESCE(p.status_integracao,''))) LIKE 'baixad%'");
  if(filters.tags)final.push(`p.tags ILIKE ${add('%'+filters.tags+'%')}`);
  if(filters.setor)final.push(`p.setor ILIKE ${add('%'+filters.setor+'%')}`);
  if(filters.status_integracao)final.push(`p.status_integracao ILIKE ${add('%'+filters.status_integracao+'%')}`);
  // Filtros são avaliados antes da paginação. Inclui uma linha a mais para hasMore.
  const limitParam=add(limit+1), offsetParam=add(offset);
- const sort=(tela==='baixar'||tela==='encerradas'||tela==='tramitacao')?'p.tsk_lastexecutiondatehour':'p.tsk_insertdatehour';
+ const sort=tela==='recepcao'?'p.tsk_insertdatehour':'p.tsk_lastexecutiondatehour';
   const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
-     t.tsk_insertdatehour,${oficial?'d':'t'}.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
-     ${oficial?'d':'t'}.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,
-     ${oficial?"COALESCE(d.e_situacao,'') AS status_integracao,":''}
+     t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
+     t.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,
      l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
      l.loc_street AS logradouro,l.loc_streetnumber AS numero,
      a.age_name AS tecnico,tt.tty_description AS servico
     FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
-    ${oficial?'JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id':''}
     LEFT JOIN u45468.agent a ON a.age_id=t.age_id
     LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
     ${base.length?'WHERE '+base.join(' AND '):''}`;
   // Somente Recepcao e Em Campo sem filtros de campos personalizados:
   // paginar primeiro e consultar status/TAG/setor apenas nas linhas da pagina.
   // Nos demais casos, os filtros de status/TAG/setor continuam ANTES do LIMIT.
-  const paginaPrimeiro=(tela==='recepcao'||tela==='campo'||oficial)&&final.length===0;
+  const paginaPrimeiro=(tela==='recepcao'||tela==='campo')&&final.length===0;
   const sql=paginaPrimeiro
-   ? `WITH pagina AS MATERIALIZED (
+   ? `WITH b AS MATERIALIZED (
        ${baseSql}
-       ORDER BY ${oficial?'d.tsk_lastexecutiondatehour':sort.replace('p.','t.')} DESC NULLS LAST,t.tsk_id DESC
+      ), pagina AS MATERIALIZED (
+       SELECT * FROM b ORDER BY ${sort.replace('p.','b.')} DESC NULLS LAST,b.tsk_id DESC
        LIMIT ${limitParam} OFFSET ${offsetParam}
-      ) SELECT p.*,${oficial?'':status.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')+' AS status_integracao,'}
+      ) SELECT p.*,${status.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS status_integracao,
        ${tags.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS tags,
        ${setor.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS setor
        FROM pagina p ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC`
    : `WITH b AS MATERIALIZED (
        ${baseSql}
       ), p AS MATERIALIZED (
-       SELECT b.*,${oficial?'':status+' AS status_integracao,'}${tags} AS tags,${setor} AS setor FROM b
+       SELECT b.*,${status} AS status_integracao,${tags} AS tags,${setor} AS setor FROM b
       ) SELECT * FROM p ${final.length?'WHERE '+final.join(' AND '):''}
       ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC LIMIT ${limitParam} OFFSET ${offsetParam}`;
  return {text:sql,values:val};
@@ -156,26 +154,17 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
   const ids=await fieldIds(pool,(req.divisaoSS?.lote1||req.originalUrl?.startsWith('/lote1/'))?'lote1':'principal');
   if(params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
-  // Nas divisoes, Notas para Baixar usa a classificacao oficial em blocos pequenos.
-  // Demais abas e pagina original mantem a pesquisa existente.
-  const t0=Date.now();
-  const q=(['baixar','encerradas'].includes(params.tela)&&process.env.SS_NOTAS_UNIFICADAS!=='false')
-   ? await require('./cp-baixar-divisao-fast').query(pool,params,ids)
-   : await pool.query({...statement(params,ids),query_timeout:8500});
-  const msBanco=Date.now()-t0;
+  const stmt=statement(params,ids);
+  const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
   const page=q.rows.slice(0,params.limit);
   // Dados auxiliares são opcionais e não devem deixar a LISTAGEM refém de uma view.
   const t1=Date.now();let details=new Map(),detalhesParciais=false;
   try{details=await extraFields(pool,page,ids)}catch(e){detalhesParciais=true;console.warn('[CP V6] metadados locais indisponíveis:',e.message)}
   const rows=transform(page,details,hostRelatorioUmov);
-  // SS_NOTAS_AUDITORIA_V1: compara amostras com dbout_task APENAS sob _audit=1.
-  const auditoria=(req.query._audit==='1'&&['baixar','encerradas'].includes(params.tela)&&process.env.SS_NOTAS_UNIFICADAS!=='false')
-   ? await require('./cp-baixar-divisao-fast').audit(pool,page,params.tela) : null;
-  if(auditoria&&!auditoria.ok)return res.status(503).json({ok:false,error:'Divergencia de classificacao oficial detectada; consulta bloqueada.',auditoria});
 
   const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
-   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais,...(auditoria?{auditoria}:{})};
+   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
   if(C.size>=100)C.clear();C.set(key,{ts:Date.now(),data});
   res.set('X-Cache','MISS');res.set('X-CP-Search-Plan','fisica-campos-v6');
   res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${Date.now()-t1}`);
