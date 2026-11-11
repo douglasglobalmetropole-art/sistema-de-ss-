@@ -166,10 +166,16 @@ app.use((req,res,next)=>{
 
    u.searchParams.set('municipios',cidades.join('\u001f'));
 
-   // A consulta de recepcao usa o parametro cidade.
-   // Na V6 ele nao deve substituir a pesquisa por coluna.
+   // Todas as abas das divisoes, inclusive Recepcao, usam a pesquisa V6.
+   // A rota antiga podia devolver pagina incompleta ou cidade divergente.
    if(rota==='/api/recepcao'){
-    u.searchParams.set('cidade',cidades.join('\u001f'));
+    if(process.env.CP_PESQUISA_V6==='false'){
+     return res.status(503).json({ok:false,error:'Pesquisa V6 necessaria para consultar a divisao.'});
+    }
+    u.pathname='/api/pesquisa-global';
+    u.searchParams.set('tela','recepcao');
+    u.searchParams.delete('cidade');
+    res.set('X-SS-Consulta','v6-recepcao');
    }
 
    req.url=u.pathname+u.search;
