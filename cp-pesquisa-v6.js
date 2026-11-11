@@ -44,7 +44,7 @@ function statement(params, ids){
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
  const base=[];
  if(!filters.ss&&isoDate(inicio)&&isoDate(fim)){
-  const col='t.tsk_insertdatehour';
+  const col=(tela==='baixar'||tela==='encerradas'||tela==='tramitacao')?'t.tsk_lastexecutiondatehour':'t.tsk_insertdatehour';
   base.push(`${col} >= ${add(inicio)}::date`,`${col} < (${add(fim)}::date + INTERVAL '1 day')`);
  }
  const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'"};
@@ -82,7 +82,7 @@ function statement(params, ids){
  if(filters.status_integracao)final.push(`p.status_integracao ILIKE ${add('%'+filters.status_integracao+'%')}`);
  // Filtros são avaliados antes da paginação. Inclui uma linha a mais para hasMore.
  const limitParam=add(limit+1), offsetParam=add(offset);
- const sort='p.tsk_insertdatehour';
+ const sort=(tela==='baixar'||tela==='encerradas'||tela==='tramitacao')?'p.tsk_lastexecutiondatehour':'p.tsk_insertdatehour';
   const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
      t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
      t.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,

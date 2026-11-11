@@ -232,9 +232,9 @@ app.use((req,res,next)=>{
      return res.status(503).json({ok:false,error:'Pesquisa V6 necessaria para consultar a divisao.'});
     }
     u.pathname='/api/pesquisa-global';
-    u.searchParams.set('tela','recepcao');
+    if(!u.searchParams.get('tela'))u.searchParams.set('tela','recepcao');
     u.searchParams.delete('cidade');
-    res.set('X-SS-Consulta','v6-recepcao');
+    res.set('X-SS-Consulta','v6-'+u.searchParams.get('tela'));
    }
 
    req.url=u.pathname+u.search;
