@@ -128,6 +128,12 @@ req.divisaoSS={
    '/api/siscom-individual/me'
   ]);
 
+  const pdfDivisao =
+   req.method==='POST' &&
+   (
+    rota==='/api/relatorio-pdf' ||
+    rota==='/api/relatorio-original-pdf'
+   );
   const retornoEquipeDivisao = req.method==='GET' && /^\/api\/retorno-equipe\/[0-9]+$/.test(rota);
 const sincronizacaoExistenteDivisao =
  req.method==='POST' &&
@@ -169,7 +175,7 @@ const sincronizacaoExistenteDivisao =
    )
   );
 
-  if(!retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -1242,7 +1248,72 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
 
 // Converte a prÃ³pria pÃ¡gina original do relatÃ³rio uMov, inclusive imagens, em PDF.
 // NÃ£o usa os campos resumidos da SS: renderiza o HTML original no Chromium.
-app.post('/api/relatorio-original-pdf',async(req,res)=>{
+async function validarPdfDivisao(req,res,next){
+ if(!req.divisaoSS)return next();
+
+ const tarefa=Number(req.body?.tarefa);
+ const ss=String(req.body?.ss||'').trim();
+
+ if(!Number.isSafeInteger(tarefa)||tarefa<=0||
+    !/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){
+  return res.status(400).json({
+   ok:false,error:'SS ou tarefa invalida.'
+  });
+ }
+
+ try{
+  const schema=req.divisaoSS.lote1?'u46915':'u45468';
+
+  const q=await pool.query({
+   text:`SELECT l.loc_city AS cidade,
+                l.loc_integrationid AS ss
+         FROM ${schema}.task t
+         JOIN ${schema}.local l ON l.loc_id=t.loc_id
+         WHERE t.tsk_id=$1 LIMIT 1`,
+   values:[tarefa],
+   query_timeout:6000
+  });
+
+  const registro=q.rows[0];
+  const cidades=req.divisaoSS.cidades.map(normalizarCidade);
+
+  if(!registro ||
+     String(registro.ss||'').trim()!==ss ||
+     !cidades.includes(normalizarCidade(registro.cidade))){
+   return res.status(403).json({
+    ok:false,error:'SS nao pertence a esta divisao.'
+   });
+  }
+
+  if(req.path==='/api/relatorio-original-pdf'){
+   let url;
+   try{url=new URL(String(req.body?.link||''))}
+   catch(e){
+    return res.status(400).json({
+     ok:false,error:'Link do relatorio invalido.'
+    });
+   }
+
+   const m=url.pathname.match(
+    /^\/CenterWeb\/report\/schedule\/([0-9]+)\/[a-zA-Z0-9._~-]+\/?$/
+   );
+
+   if(!m || Number(m[1])!==tarefa){
+    return res.status(403).json({
+     ok:false,error:'Relatorio nao corresponde a tarefa.'
+    });
+   }
+  }
+
+  return next();
+ }catch(e){
+  console.error('[PDF DIVISAO]',e.message);
+  return res.status(503).json({
+   ok:false,error:'Falha ao validar o relatorio.'
+  });
+ }
+}
+app.post('/api/relatorio-original-pdf',validarPdfDivisao,async(req,res)=>{
  let browser;
  try{
   const link=String(req.body?.link||'');
@@ -1278,7 +1349,7 @@ app.post('/api/relatorio-original-pdf',async(req,res)=>{
   if(!res.headersSent)res.status(502).json({ok:false,error:'NÃ£o foi possÃ­vel converter o relatÃ³rio original. Verifique se o link abre normalmente e se a funÃ§Ã£o possui Chromium disponÃ­vel.'});
  }finally{if(browser)await browser.close().catch(()=>{});}
 });
-app.post('/api/relatorio-pdf',(req,res)=>{
+app.post('/api/relatorio-pdf',validarPdfDivisao,(req,res)=>{
  try{
   const d=req.body||{};if(!d.ss||!Number.isSafeInteger(Number(d.tarefa))||Number(d.tarefa)<=0)return res.status(400).json({ok:false,error:'SS invalida para o relatorio.'});
   const pdf=relatorioPdf(d);
