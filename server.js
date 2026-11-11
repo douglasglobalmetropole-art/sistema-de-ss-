@@ -121,7 +121,15 @@ app.use((req,res,next)=>{
    '/api/siscom-individual/me'
   ]);
 
-  if(req.method!=='GET'||!consultas.has(rota)){
+  const loginSiscomDivisao =
+   (req.method==='POST' && (
+    rota==='/api/siscom-individual/login' ||
+    rota==='/api/siscom-individual/logout'
+   )) ||
+   (req.method==='GET' &&
+    rota==='/api/siscom-individual/login-status');
+
+  if(!loginSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
