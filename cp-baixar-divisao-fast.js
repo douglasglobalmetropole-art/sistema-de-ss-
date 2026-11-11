@@ -36,9 +36,16 @@ async function query(pool,params,ids){
   const p=add(idsForField);
   return `(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${register} AND v.cfd_id=ANY(${p}::bpchar[]) LIMIT 1)`;
  };
- const tagsExpr=fieldExpr('t.tsk_id',ids.tags),setorExpr=fieldExpr('l.loc_id',ids.setor);
- if(str(filters.tags))where.push(`${tagsExpr} ILIKE ${add('%'+filters.tags+'%')}`);
- if(str(filters.setor))where.push(`${setorExpr} ILIKE ${add('%'+filters.setor+'%')}`);
+ // Criar parametros de campos personalizados somente quando usados no SQL.
+ // Caso contrario, o PostgreSQL recebe $2/$3 sem tipo definido (42P18).
+ if(str(filters.tags)){
+  const tagsExpr=fieldExpr('t.tsk_id',ids.tags);
+  where.push(`${tagsExpr} ILIKE ${add('%'+filters.tags+'%')}`);
+ }
+ if(str(filters.setor)){
+  const setorExpr=fieldExpr('l.loc_id',ids.setor);
+  where.push(`${setorExpr} ILIKE ${add('%'+filters.setor+'%')}`);
+ }
  const lp=add(Math.min(100,Math.max(1,Number(limit)||25))+1),op=add(Math.max(0,Number(offset)||0));
  // Replica o SQL original: dbout_task classifica; a ordenacao/limite
  // acontecem ANTES do enriquecimento de TAG e setor.
