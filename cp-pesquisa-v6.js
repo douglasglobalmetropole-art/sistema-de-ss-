@@ -156,8 +156,13 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
   const ids=await fieldIds(pool,(req.divisaoSS?.lote1||req.originalUrl?.startsWith('/lote1/'))?'lote1':'principal');
   if(params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
-  const stmt=statement(params,ids);
-  const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
+  // Nas divisoes, Notas para Baixar usa a classificacao oficial em blocos pequenos.
+  // Demais abas e pagina original mantem a pesquisa existente.
+  const t0=Date.now();
+  const q=(req.divisaoSS && params.tela==='baixar')
+   ? await require('./cp-baixar-divisao-fast').query(pool,params,ids)
+   : await pool.query({...statement(params,ids),query_timeout:8500});
+  const msBanco=Date.now()-t0;
   const page=q.rows.slice(0,params.limit);
   // Dados auxiliares são opcionais e não devem deixar a LISTAGEM refém de uma view.
   const t1=Date.now();let details=new Map(),detalhesParciais=false;
