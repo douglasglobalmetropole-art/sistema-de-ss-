@@ -62,7 +62,15 @@ function statement(params, ids){
   base.push(`(TO_CHAR(t.tsk_lastexecutiondatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p} OR TO_CHAR(t.tsk_realfinaldatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p})`);
  }
  if(macro.length)base.push(`TRIM(tt.tty_description)=ANY(${add(macro)}::text[])`);
- if(municipios.length)base.push(`translate(UPPER(TRIM(l.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY(${add(municipios)}::text[])`);
+ if(municipios.length){
+  const cityParam=add(municipios);
+  // A cidade oficial exibida na Recepcao vem de dbout_local.e_localidade.
+  // O predicado deve usar a mesma fonte ANTES de LIMIT/OFFSET.
+  const normCity=expr=>`translate(UPPER(TRIM(${expr})),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')`;
+  base.push(`EXISTS (SELECT 1 FROM u45468.local lc
+    LEFT JOIN u45468.dbout_local dc ON dc.loc_id=lc.loc_id
+    WHERE lc.loc_id=l.loc_id AND ${normCity("COALESCE(NULLIF(TRIM(dc.e_localidade),''),lc.loc_city)")}=ANY(${cityParam}::text[]))`);
+ }
  if(equipe)like('a.age_name',equipe);
  const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
@@ -142,7 +150,7 @@ function transform(rows,extras,hostRelatorioUmov){
 async function handler(req,res,{pool,hostRelatorioUmov}){
  const started=Date.now();let params;
  try{params=parse(req)}catch(e){return res.status(e.status||400).json({ok:false,error:e.message})}
- const key=req.originalUrl||req.url||'';
+ const key=(req.divisaoSS?.codigo||'geral')+':'+(req.originalUrl||req.url||'');
  const cached=!req.query._refresh&&C.get(key);
  if(cached&&Date.now()-cached.ts<30000){res.set('X-Cache','HIT');res.set('X-CP-Search-Plan','fisica-campos-v6/cache');return res.json({...cached.data,ms:Date.now()-started})}
  try{
@@ -156,6 +164,12 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
   const t1=Date.now();let details=new Map(),detalhesParciais=false;
   try{details=await extraFields(pool,page,ids)}catch(e){detalhesParciais=true;console.warn('[CP V6] metadados locais indisponíveis:',e.message)}
   const rows=transform(page,details,hostRelatorioUmov);
+  if(req.divisaoSS&&rows.length){
+   const locIds=[...new Set(rows.map(x=>String(x.local)).filter(Boolean))];
+   const cityRows=await pool.query({text:`SELECT loc_id,e_localidade AS cidade FROM u45468.dbout_local WHERE loc_id=ANY($1::bigint[])`,values:[locIds],query_timeout:5000});
+   const cityMap=new Map(cityRows.rows.map(x=>[String(x.loc_id),str(x.cidade)]));
+   for(const row of rows)row.cidade=cityMap.get(String(row.local))||row.cidade;
+  }
   const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
    tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};

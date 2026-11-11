@@ -83,6 +83,11 @@ app.use((req,res,next)=>{
     );
 
     html=html.replaceAll('/api/','/'+codigo+'/api/');
+    // Busca por SS nas divisões usa V6 com filtro obrigatório antes da paginação.
+    const buscaAntiga="const caminho=direta?'/"+codigo+"/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page})";
+    const buscaNova="const caminho=direta?'/"+codigo+"/api/pesquisa-global?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page,offset:window.__pageOffset})";
+    if(!html.includes(buscaAntiga))return res.status(503).send('Busca por SS da divisao nao configurada.');
+    html=html.replace(buscaAntiga,buscaNova);
 
     // Inclui scripts externos no encaminhamento da divisao.
     const bootstrap='<script>(function(){'+
@@ -180,16 +185,9 @@ app.use((req,res,next)=>{
      );
 
      if(rows.length!==dados.rows.length){
-      res.set(
-       'X-SS-Registros-Bloqueados',
-       String(dados.rows.length-rows.length)
-      );
-
-      return jsonOriginal({
-       ...dados,
-       rows,
-       count:rows.length
-      });
+      console.error('[DIVISOES] Divergencia de municipio na consulta',codigo,rota,
+        dados.rows.length-rows.length);
+      res.status(503);return jsonOriginal({ok:false,error:'Inconsistencia no filtro de municipios. Consulta bloqueada para evitar SS de outra divisao.'});
      }
     }
 
@@ -938,7 +936,7 @@ app.get('/api/localizar-ss', async (req,res)=>{
 app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.query('SELECT current_database() banco,NOW() agora')).rows[0]})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 // Consulta rÃ¡pida: limita task primeiro e sÃ³ consulta dbout_local para atÃ© 100 SS.
 app.get('/api/recepcao',async(req,res)=>{try{
- const inicio=req.query.inicio||'2026-10-01',fim=req.query.fim||'2026-10-05',limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas','tramitacao']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=req.query._refresh?null:getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
+ const inicio=req.query.inicio||'2026-10-01',fim=req.query.fim||'2026-10-05',limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas','tramitacao']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${emLote1()?'lote1':'lote2'}:${req.divisaoSS?.codigo||'geral'}:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=req.query._refresh?null:getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
  const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
  if(tela==='recepcao'){
   const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca});
