@@ -128,6 +128,11 @@ req.divisaoSS={
    '/api/siscom-individual/me'
   ]);
 
+  const equipesDivisao =
+   req.method==='GET' && rota==='/api/equipes';
+
+  const enviarEquipeDivisao =
+   req.method==='POST' && rota==='/api/enviar-equipe';
   const pdfDivisao =
    req.method==='POST' &&
    (
@@ -175,7 +180,7 @@ const sincronizacaoExistenteDivisao =
    )
   );
 
-  if(!pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -1029,7 +1034,7 @@ app.get('/api/recepcao',async(req,res)=>{try{
 }catch(e){console.error('RecepÃ§Ã£o:',e);res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/macros',async(req,res)=>{try{const hit=getCache('macros',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(tty_description) AS macro FROM u45468.tasktype WHERE tty_description IS NOT NULL AND TRIM(tty_description)<>'' ORDER BY 1`,query_timeout:6000});setCache('macros',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 app.get('/api/cidades',async(req,res)=>{try{const hit=getCache('cidades',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(e_localidade) AS cidade FROM u45468.dbout_local WHERE e_localidade IS NOT NULL AND TRIM(e_localidade)<>'' ORDER BY 1`,query_timeout:6000});setCache('cidades',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
-app.get('/api/equipes',async(req,res)=>{try{const q=String(req.query.q||'').trim(),key='eq:'+q.toLowerCase(),hit=getCache(key,60000);if(hit)return res.json({ok:true,rows:hit});const values=[],where=['age_name IS NOT NULL',"TRIM(age_name)<>''"];if(q){values.push('%'+q+'%');where.push('(age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1)')}const r=await pool.query({text:`SELECT DISTINCT age_id AS id,age_name AS nome FROM u45468.agent WHERE ${where.join(' AND ')} ORDER BY age_name LIMIT 80`,values,query_timeout:6000});setCache(key,r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
+app.get('/api/equipes',async(req,res)=>{try{const q=String(req.query.q||'').trim(),key='eq:'+(emLote1()?'lote1':'principal')+':'+q.toLowerCase(),hit=getCache(key,60000);if(hit)return res.json({ok:true,rows:hit});const values=[],where=['age_name IS NOT NULL',"TRIM(age_name)<>''"];if(q){values.push('%'+q+'%');where.push('(age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1)')}const r=await pool.query({text:`SELECT DISTINCT age_id AS id,age_name AS nome FROM u45468.agent WHERE ${where.join(' AND ')} ORDER BY age_name LIMIT 80`,values,query_timeout:6000});setCache(key,r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 
 // Envio de SS para equipe: grava no uMov, nunca apenas na interface.
 app.post('/api/enviar-equipe',async(req,res)=>{
@@ -1037,6 +1042,47 @@ app.post('/api/enviar-equipe',async(req,res)=>{
   const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
   const agente=Number(req.body?.agente);
   if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0)||!Number.isSafeInteger(agente)||agente<=0)return res.status(400).json({ok:false,error:'Selecione uma equipe vÃ¡lida e atÃ© 100 SS.'});
+  if(req.divisaoSS){
+   const permitidas=new Set(req.divisaoSS.cidades.map(normalizarCidade));
+
+   const [tarefasDb,agenteDb]=await Promise.all([
+    pool.query({
+     text:`SELECT t.tsk_id,l.loc_city AS cidade
+           FROM u45468.task t
+           JOIN u45468.local l ON l.loc_id=t.loc_id
+           WHERE t.tsk_id=ANY($1::bigint[])`,
+     values:[tarefas],
+     query_timeout:7000
+    }),
+    pool.query({
+     text:`SELECT age_id FROM u45468.agent
+           WHERE age_id=$1 LIMIT 1`,
+     values:[agente],
+     query_timeout:5000
+    })
+   ]);
+
+   if(!agenteDb.rows.length){
+    return res.status(400).json({
+     ok:false,
+     error:'Equipe nao localizada no banco desta divisao.'
+    });
+   }
+
+   const idsValidos=new Set(
+    tarefasDb.rows
+     .filter(x=>permitidas.has(normalizarCidade(x.cidade)))
+     .map(x=>String(x.tsk_id))
+   );
+
+   if(idsValidos.size!==tarefas.length ||
+      tarefas.some(id=>!idsValidos.has(String(id)))){
+    return res.status(403).json({
+     ok:false,
+     error:'Uma ou mais SS nao pertencem a esta divisao. Nenhuma tarefa foi enviada.'
+    });
+   }
+  }
   // A atribuiÃ§Ã£o do agente foi confirmada em uma requisiÃ§Ã£o real do VilaBoa.
   // ID de situaÃ§Ã£o Ã© opcional: nunca inventar um valor.
   const situacaoId=String(process.env.UMOV_EM_CAMPO_SITUATION_ID||'').trim();
