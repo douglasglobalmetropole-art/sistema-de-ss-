@@ -129,7 +129,33 @@ app.use((req,res,next)=>{
    (req.method==='GET' &&
     rota==='/api/siscom-individual/login-status');
 
-  if(!loginSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  // Consultas SISCOM permitidas nas divisoes.
+  // Operacoes que alteram dados continuam bloqueadas.
+  const consultasSiscomDivisao = (
+   req.method==='POST' &&
+   (
+    [
+     '/api/siscom-gateway/consultar-ss',
+     '/api/siscom-gateway/consultar-ss-baixa',
+     '/api/siscom-gateway/consultar-eventos-ss',
+     '/api/siscom-gateway/equipes',
+     '/api/siscom-gateway/micros',
+     '/api/siscom-gateway/causas',
+     '/api/siscom-gateway/complementar-areas',
+     '/api/siscom-gateway/complementar-servicos',
+     '/api/siscom-gateway/complementar-consultar',
+     '/api/siscom-gateway/tramitacao'
+    ].includes(rota)
+   )
+  ) || (
+   req.method==='GET' &&
+   (
+    /^\/api\/siscom-gateway\/jobs\/[0-9a-f-]+$/i.test(rota) ||
+    rota==='/api/siscom-gateway/anexo-permissao'
+   )
+  );
+
+  if(!loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
