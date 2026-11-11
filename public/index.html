@@ -615,7 +615,7 @@ $('refreshBtn').onclick=async()=>{const b=$('refreshBtn');if(b.disabled)return;b
 let dateFilterTimer;
 ['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
   clearTimeout(dateFilterTimer);
-  dateFilterTimer=setTimeout(()=>{if(currentScreen==='campo'||($('dateIni').value&&$('dateFim').value)){window.__pageOffset=0;load()}},250);
+  dateFilterTimer=setTimeout(()=>{if((!$('dateIni').value&&!$('dateFim').value)||($('dateIni').value&&$('dateFim').value)){window.__pageOffset=0;load()}},250);
 }));
 let equipeFilterTimer;
 ['teamFilter','lastFilter'].forEach(id=>$(id).oninput=()=>{
