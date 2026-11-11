@@ -159,7 +159,7 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
   // Nas divisoes, Notas para Baixar usa a classificacao oficial em blocos pequenos.
   // Demais abas e pagina original mantem a pesquisa existente.
   const t0=Date.now();
-  const q=(req.divisaoSS && (params.tela==='baixar'||params.tela==='encerradas'))
+  const q=(['baixar','encerradas'].includes(params.tela)&&process.env.SS_NOTAS_UNIFICADAS!=='false')
    ? await require('./cp-baixar-divisao-fast').query(pool,params,ids)
    : await pool.query({...statement(params,ids),query_timeout:8500});
   const msBanco=Date.now()-t0;
@@ -168,10 +168,14 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
   const t1=Date.now();let details=new Map(),detalhesParciais=false;
   try{details=await extraFields(pool,page,ids)}catch(e){detalhesParciais=true;console.warn('[CP V6] metadados locais indisponíveis:',e.message)}
   const rows=transform(page,details,hostRelatorioUmov);
+  // SS_NOTAS_AUDITORIA_V1: compara amostras com dbout_task APENAS sob _audit=1.
+  const auditoria=(req.query._audit==='1'&&['baixar','encerradas'].includes(params.tela)&&process.env.SS_NOTAS_UNIFICADAS!=='false')
+   ? await require('./cp-baixar-divisao-fast').audit(pool,page,params.tela) : null;
+  if(auditoria&&!auditoria.ok)return res.status(503).json({ok:false,error:'Divergencia de classificacao oficial detectada; consulta bloqueada.',auditoria});
 
   const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
-   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
+   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais,...(auditoria?{auditoria}:{})};
   if(C.size>=100)C.clear();C.set(key,{ts:Date.now(),data});
   res.set('X-Cache','MISS');res.set('X-CP-Search-Plan','fisica-campos-v6');
   res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${Date.now()-t1}`);
