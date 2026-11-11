@@ -153,7 +153,9 @@ app.use((req,res,next)=>{
    req.method==='GET' &&
    (
     /^\/api\/siscom-gateway\/jobs\/[0-9a-f-]+$/i.test(rota) ||
-    rota==='/api/siscom-gateway/anexo-permissao'
+    (rota==='/api/siscom-gateway/anexo-permissao' ||
+     /^\/api\/siscom-gateway\/tentativa-baixa\/[0-9]{2}%2F[0-9]{2}-[0-9]{6}-[0-9]{2}$/i.test(rota) ||
+     /^\/api\/siscom-gateway\/tentativa-baixa\/[0-9]{2}\/[0-9]{2}-[0-9]{6}-[0-9]{2}$/.test(rota))
    )
   );
 
