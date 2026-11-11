@@ -82,7 +82,7 @@ function statement(params, ids){
  if(filters.status_integracao)final.push(`p.status_integracao ILIKE ${add('%'+filters.status_integracao+'%')}`);
  // Filtros são avaliados antes da paginação. Inclui uma linha a mais para hasMore.
  const limitParam=add(limit+1), offsetParam=add(offset);
- const sort=tela==='recepcao'?'p.tsk_insertdatehour':'p.tsk_lastexecutiondatehour';
+ const sort='p.tsk_insertdatehour';
   const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
      t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
      t.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,
