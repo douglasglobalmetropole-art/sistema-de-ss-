@@ -121,6 +121,8 @@ app.use((req,res,next)=>{
    '/api/siscom-individual/me'
   ]);
 
+  const retornoEquipeDivisao = req.method==='GET' && /^\/api\/retorno-equipe\/[0-9]+$/.test(rota);
+
   const loginSiscomDivisao =
    (req.method==='POST' && (
     rota==='/api/siscom-individual/login' ||
@@ -155,7 +157,7 @@ app.use((req,res,next)=>{
    )
   );
 
-  if(!loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!retornoEquipeDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -1074,20 +1076,20 @@ async function getUmovXml(resource,id){
 }
 // Consulta o historico real do formulario de execucao; identifica a chave da tarefa
 // pelo catalogo para nao assumir nomes de colunas entre versoes do uMov.
-const historicosExecucao=['dbout_history_1650496_at_execucaoservico','dbout_history_at_execucaoservicoeteeta'];
+const historicosExecucao=['dbout_history_1714185_at_execucaoservico','dbout_history_at_execucaoservicoeteeta'];
 async function retornoHistorico(tarefa){
- const key='retorno:db:'+tarefa,hit=getCache(key,60000);if(hit)return hit;
+ const key='retorno:db:'+(emLote1()?'lote1:':'principal:')+tarefa,hit=getCache(key,60000);if(hit)return hit;
  const saida={servico_executado:'',materiais_bombeiro:'',pavimentacao:''};
  for(const tabela of historicosExecucao){
   try{
-   const meta=await pool.query({text:`SELECT column_name FROM information_schema.columns WHERE table_schema='u45468' AND table_name=$1`,values:[tabela],query_timeout:4000});
+   const meta=await pool.query({text:`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2`,values:[emLote1()?'u46915':'u45468',tabela],query_timeout:4000});
    const nomes=new Set(meta.rows.map(r=>r.column_name));
    const chave=['tsk_id','task_id','tsk_id_task','hts_tsk_id'].find(n=>nomes.has(n));
    if(!chave){console.warn('Historico sem chave de tarefa conhecida:',tabela);continue}
    const campos=['e_cp_servicoexecutado','e_cp_material','e_cp_pavimentacao'];
    const selecionados=campos.filter(n=>nomes.has(n));if(!selecionados.length)continue;
    const ordenacao=['hts_id','htr_id','his_id','id'].find(n=>nomes.has(n));
-   const sql=`SELECT ${selecionados.map(n=>'"'+n+'"').join(',')} FROM u45468."${tabela}" WHERE "${chave}"=$1 ${ordenacao?'ORDER BY "'+ordenacao+'" DESC':''} LIMIT 30`;
+   const sql=`SELECT ${selecionados.map(n=>'"'+n+'"').join(',')} FROM ${emLote1()?"u46915":"u45468"}."${tabela}" WHERE "${chave}"=$1 ${ordenacao?'ORDER BY "'+ordenacao+'" DESC':''} LIMIT 30`;
    const resultado=await pool.query({text:sql,values:[tarefa],query_timeout:6000});
    for(const r of resultado.rows){
     if(!saida.servico_executado&&r.e_cp_servicoexecutado?.trim())saida.servico_executado=r.e_cp_servicoexecutado;
@@ -1269,7 +1271,21 @@ app.post('/api/relatorio-pdf',(req,res)=>{
 });
 app.get('/api/retorno-equipe/:tarefa',async(req,res)=>{try{
  const tarefa=Number(req.params.tarefa);if(!Number.isSafeInteger(tarefa)||tarefa<=0)return res.status(400).json({ok:false,error:'Tarefa invalida.'});
- const dados=await retornoHistorico(tarefa);
+ if(req.divisaoSS){
+ const schema=req.divisaoSS.lote1?'u46915':'u45468';
+ const verificacao=await pool.query({
+  text:`SELECT l.loc_city AS cidade FROM ${schema}.task t JOIN ${schema}.local l ON l.loc_id=t.loc_id WHERE t.tsk_id=$1 LIMIT 1`,
+  values:[tarefa],
+  query_timeout:4000
+ });
+ const normalizar=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+ const cidade=normalizar(verificacao.rows[0]?.cidade);
+ const permitidas=req.divisaoSS.cidades.map(normalizar);
+ if(!cidade||!permitidas.includes(cidade)){
+  return res.status(403).json({ok:false,error:'Tarefa nao pertence a esta divisao.'});
+ }
+}
+const dados=await retornoHistorico(tarefa);
  // O banco e a fonte principal. API opcional apenas quando faltarem campos.
  if(!dados.servico_executado||!dados.materiais_bombeiro||!dados.pavimentacao){
   try{
