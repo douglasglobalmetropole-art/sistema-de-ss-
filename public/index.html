@@ -519,7 +519,7 @@ $('generatePdfBtn').onclick=async()=>{
   try{
     const r=await fetch('/api/relatorio-original-pdf',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({link:x.link,ss:x.ss})
+      body:JSON.stringify({link:x.link,ss:x.ss,tarefa:x.tarefa})
     });
     if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Falha ao converter relatório original em PDF.');}
     const blob=await r.blob();
