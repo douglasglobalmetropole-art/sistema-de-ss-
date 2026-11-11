@@ -14,7 +14,7 @@ const CAMPOS={
  tramitacao:['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou','data_finalizacao','status_integracao','criado_em']
 };
 const C=new Map();
-let fieldCache={timestamp:0,fields:null};
+const fieldCache=new Map();
 const str=x=>String(x??'').trim();
 const norm=x=>str(x).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
 const isoDate=x=>/^\d{4}-\d{2}-\d{2}$/.test(str(x));
@@ -27,17 +27,17 @@ function parse(req){
  const inicio=str(req.query.inicio),fim=str(req.query.fim);
  if ((inicio&&!isoDate(inicio))||(fim&&!isoDate(fim)))throw Object.assign(new Error('Período inválido.'),{status:400});
  const macro=str(req.query.macro).split('\u001f').map(str).filter(Boolean).slice(0,30);
- const municipios=str(req.query.municipios||req.query.cidade).split('\u001f').map(norm).filter(Boolean).slice(0,30);
+ const municipios=(Array.isArray(req.divisaoSS?.cidades)?req.divisaoSS.cidades:str(req.query.municipios||req.query.cidade).split('\u001f')).map(norm).filter(Boolean).slice(0,30);
  return {tela,filters,inicio,fim,macro,municipios,equipe:str(req.query.equipe).slice(0,100),limit:Math.max(1,bounded(req.query.limit,25,100)),offset:bounded(req.query.offset,0,100000)};
 }
-async function fieldIds(pool){
- if(fieldCache.fields&&Date.now()-fieldCache.timestamp<300000)return fieldCache.fields;
+async function fieldIds(pool,base='principal'){
+ const cached=fieldCache.get(base);if(cached&&Date.now()-cached.timestamp<300000)return cached.fields;
  const q=await pool.query({text:`SELECT cfd_id,cfd_table,cfd_integrationid FROM u45468.customfield WHERE cfd_table IN ('task','local') AND LOWER(TRIM(cfd_integrationid)) IN ('situacao','tag','tags','setor','hidrometro','reflocalizacao','informacaosolicitante','esclarecimentosolicitante','servicoexecutadosiscom','informacaoexecucaosiscom','materialusado','material','materiais')`,query_timeout:4000});
  const find=(table,...keys)=>q.rows.filter(x=>str(x.cfd_table)===table&&keys.includes(str(x.cfd_integrationid).toLowerCase())).map(x=>str(x.cfd_id)).filter(Boolean);
  const fields={status:find('task','situacao'),tags:find('task','tag','tags'),setor:find('local','setor'),hidrometro:find('local','hidrometro'),referencia:find('local','reflocalizacao'),info:find('local','informacaosolicitante'),esclarecimento:find('local','esclarecimentosolicitante'),servicoExecutado:find('local','servicoexecutadosiscom','informacaoexecucaosiscom'),materiais:find('local','materialusado','material','materiais')};
  // Sem metadado não é possível classificar "Notas Baixadas" com segurança.
  if(!fields.status.length)throw Object.assign(new Error('Campo oficial de situação não localizado no uMov; pesquisa V6 não ativada para evitar classificação incorreta.'),{status:503});
- fieldCache={timestamp:Date.now(),fields};return fields;
+ fieldCache.set(base,{timestamp:Date.now(),fields});return fields;
 }
 function statement(params, ids){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
@@ -146,7 +146,7 @@ async function handler(req,res,{pool,hostRelatorioUmov}){
  const cached=!req.query._refresh&&C.get(key);
  if(cached&&Date.now()-cached.ts<30000){res.set('X-Cache','HIT');res.set('X-CP-Search-Plan','fisica-campos-v6/cache');return res.json({...cached.data,ms:Date.now()-started})}
  try{
-  const ids=await fieldIds(pool);
+  const ids=await fieldIds(pool,(req.divisaoSS?.lote1||req.originalUrl?.startsWith('/lote1/'))?'lote1':'principal');
   if(params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   const stmt=statement(params,ids);

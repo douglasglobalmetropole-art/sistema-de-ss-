@@ -54,53 +54,151 @@ const DIVISOES_SS = {
 
 app.use((req,res,next)=>{
  const pathname=req.url.split('?')[0];
- const match=pathname.match(/^\/(ODVV|ODCV|ODLS|ODVT|ODLN)(\/api\/.*)?\/?$/i);
+ const match=pathname.match(/^\/(ODVV|ODCV|ODLS|ODVT|ODLN)(\/api(?:\/.*)?)?\/?$/i);
  if(!match)return next();
 
- const divisao=match[1].toUpperCase();
- const config=DIVISOES_SS[divisao];
+ const codigo=match[1].toUpperCase();
+ const config=DIVISOES_SS[codigo];
 
- const executar=()=>{
+ return loteContext.run({lote1:config.lote1,divisao:codigo},()=>{
+
+  res.set('X-SS-Divisao',codigo);
+  res.set('Cache-Control','no-store');
+
   if(!match[2]){
    try{
-    let html=fs.readFileSync(path.join(__dirname,'public','index.html'),'utf8');
-    const antes="const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
-    if(!html.includes(antes))return res.status(503).send('Configuracao de cidades nao encontrada.');
+    let html=fs.readFileSync(
+     path.join(__dirname,'public','index.html'),'utf8'
+    );
 
-    html=html.replace(antes,'const CIDADES_CONFIGURADAS='+JSON.stringify(config.cidades)+';');
-    html=html.replaceAll('/api/','/'+divisao+'/api/');
-    res.set('Cache-Control','no-store');
+    const antes="const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
+
+    if(!html.includes(antes)){
+     return res.status(503).send('Configuracao de cidades nao encontrada.');
+    }
+
+    html=html.replace(
+     antes,
+     'const CIDADES_CONFIGURADAS='+JSON.stringify(config.cidades)+';'
+    );
+
+    html=html.replaceAll('/api/','/'+codigo+'/api/');
+
+    // Inclui scripts externos no encaminhamento da divisao.
+    const bootstrap='<script>(function(){'+
+     'const p="/'+codigo+'",original=window.fetch;'+
+     'window.fetch=function(url,options){'+
+     'if(typeof url==="string"&&url.startsWith("/api/"))url=p+url;'+
+     'return original.call(this,url,options);'+
+     '};'+
+     '})();</script>';
+
+    html=html.replace('<head>','<head>'+bootstrap);
+
     return res.type('html').send(html);
-   }catch(e){return res.status(500).send('Erro ao carregar divisao.')}
+
+   }catch(e){
+    return res.status(500).send('Falha ao carregar a divisao.');
+   }
   }
 
-  req.url=req.url.replace(new RegExp('^/'+divisao,'i'),'');
-
+  req.url=req.url.replace(new RegExp('^/'+codigo,'i'),'');
   const rota=req.url.split('?')[0];
 
-  // Impede consultar outros municipios nas pesquisas.
-  if(req.method==='GET' && (rota==='/api/pesquisa-global'||rota==='/api/recepcao')){
-   const u=new URL(req.url,'http://local');
-   const cidades=config.cidades.join('\u001f');
+  // Somente consultas que podem ser isoladas com seguranca.
+  const consultas=new Set([
+   '/api/recepcao',
+   '/api/pesquisa-global',
+   '/api/macros',
+   '/api/cidades',
+   '/api/auth/config',
+   '/api/auth/me',
+   '/api/siscom-individual/me'
+  ]);
 
-   // Filtro imposto pelo servidor, independente do navegador.
-   u.searchParams.set('cidade',cidades);
-   u.searchParams.set('municipios',cidades);
-   req.url=u.pathname+u.search;
-  }
-
-  // Operacoes nao validadas permanecem bloqueadas nas novas rotas.
-  if(req.method!=='GET'){
+  if(req.method!=='GET'||!consultas.has(rota)){
    return res.status(403).json({
     ok:false,
-    error:'Operacao bloqueada ate validar a divisao da SS.'
+    error:'Rota ainda nao liberada para operacao por divisao.'
    });
   }
 
-  next();
- };
+  const permitidas=config.cidades.map(normalizarCidade);
 
- return loteContext.run({lote1:config.lote1},executar);
+  if(rota==='/api/cidades'){
+   return res.json({
+    ok:true,
+    rows:config.cidades.map(cidade=>({cidade}))
+   });
+  }
+
+  if(rota==='/api/recepcao'||rota==='/api/pesquisa-global'){
+
+   const u=new URL(req.url,'http://local');
+
+   // O filtro selecionado so pode conter cidades da propria divisao.
+   const solicitadas=String(
+    u.searchParams.get('municipios')||''
+   ).split('\u001f').map(normalizarCidade).filter(Boolean);
+
+   if(solicitadas.some(c=>!permitidas.includes(c))){
+    return res.status(403).json({
+     ok:false,
+     error:'Municipio nao pertence a esta divisao.'
+    });
+   }
+
+   const cidades=solicitadas.length
+    ? [...new Set(solicitadas)]
+    : permitidas;
+
+   // Escopo interno: a pesquisa V6 nao depende do navegador.
+   req.divisaoSS={
+    codigo,
+    lote1:config.lote1,
+    cidades
+   };
+
+   u.searchParams.set('municipios',cidades.join('\u001f'));
+
+   // A consulta de recepcao usa o parametro cidade.
+   // Na V6 ele nao deve substituir a pesquisa por coluna.
+   if(rota==='/api/recepcao'){
+    u.searchParams.set('cidade',cidades.join('\u001f'));
+   }
+
+   req.url=u.pathname+u.search;
+
+   // Segunda protecao: nao entregar SS fora da divisao,
+   // mesmo se uma consulta retornar uma cidade inesperada.
+   const jsonOriginal=res.json.bind(res);
+
+   res.json=function(dados){
+    if(dados&&Array.isArray(dados.rows)){
+     const rows=dados.rows.filter(item=>
+      cidades.includes(normalizarCidade(item.cidade))
+     );
+
+     if(rows.length!==dados.rows.length){
+      res.set(
+       'X-SS-Registros-Bloqueados',
+       String(dados.rows.length-rows.length)
+      );
+
+      return jsonOriginal({
+       ...dados,
+       rows,
+       count:rows.length
+      });
+     }
+    }
+
+    return jsonOriginal(dados);
+   };
+  }
+
+  next();
+ });
 });
 app.use((req,res,next)=>{
  const url=req.url.split('?')[0];
@@ -610,7 +708,7 @@ async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBu
   const situacoes=await pool.query({text:`SELECT tsk_id,tsk_situation,e_situacao FROM u45468.dbout_task WHERE tsk_id=ANY($1::bigint[])`,values:[ids],query_timeout:4000});
   const porId=new Map(situacoes.rows.map(x=>[String(x.tsk_id),x]));
   let cidadesOk=null;
-  if(cidadeBusca.length){const locais=await pool.query({text:`SELECT loc_id FROM u45468.local WHERE loc_id=ANY($1::bigint[]) AND loc_city=ANY($2::text[])`,values:[candidatas.rows.map(x=>x.loc_id),cidadeBusca],query_timeout:4000});cidadesOk=new Set(locais.rows.map(x=>String(x.loc_id)))}
+  if(cidadeBusca.length){const locais=await pool.query({text:`SELECT loc_id FROM u45468.local WHERE loc_id=ANY($1::bigint[]) AND translate(UPPER(TRIM(loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])`,values:[candidatas.rows.map(x=>x.loc_id),cidadeBusca],query_timeout:4000});cidadesOk=new Set(locais.rows.map(x=>String(x.loc_id)))}
   for(const t of candidatas.rows){const d=porId.get(String(t.tsk_id));if(!d||String(d.tsk_situation||'').trim().toLowerCase()!=='pendente de envio para campo')continue;if(equipeSet&&!equipeSet.has(String(t.age_id)))continue;if(macroSet&&!macroSet.has(String(t.tty_id)))continue;if(cidadesOk&&!cidadesOk.has(String(t.loc_id)))continue;if(encontradas++>=offset)selecionadas.push({...t,situacao_campo:d.tsk_situation,status_integracao:d.e_situacao});if(selecionadas.length>limit)break}
   if(candidatas.rows.length<chunk){acabou=true;break}
  }
@@ -854,7 +952,7 @@ app.get('/api/recepcao',async(req,res)=>{try{
  const equipesIds=equipeBusca?(await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1',values:['%'+equipeBusca+'%'],query_timeout:4000})).rows.map(x=>String(x.age_id)):[];
  if(equipeBusca&&!equipesIds.length){const vazio={ok:true,count:0,total:0,hasMore:false,offset,limit,ms:Date.now()-started,rows:[]};setCache(key,vazio);return res.json(vazio)}
  const filtraPorUltimaAtividade=tela==='baixar'||tela==='encerradas'||tela==='tramitacao';
- const proximoParametro=(tela==='recepcao'?5:(filtraPorUltimaAtividade?5:3)),parametroEquipe=proximoParametro,parametroMacro=parametroEquipe+(equipeBusca?1:0),parametroCidade=parametroMacro+(macroBusca.length?1:0),equipeSql=equipeBusca?`AND t.age_id=ANY($${parametroEquipe}::bigint[])`:'',macroSql=macroBusca.length?`AND EXISTS (SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY($${parametroMacro}::text[]))`:'',cidadeSql=cidadeBusca.length?`AND EXISTS (SELECT 1 FROM u45468.local cl WHERE cl.loc_id=t.loc_id AND UPPER(TRIM(cl.loc_city))=ANY($${parametroCidade}::text[]))`:'';
+ const proximoParametro=(tela==='recepcao'?5:(filtraPorUltimaAtividade?5:3)),parametroEquipe=proximoParametro,parametroMacro=parametroEquipe+(equipeBusca?1:0),parametroCidade=parametroMacro+(macroBusca.length?1:0),equipeSql=equipeBusca?`AND t.age_id=ANY($${parametroEquipe}::bigint[])`:'',macroSql=macroBusca.length?`AND EXISTS (SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY($${parametroMacro}::text[]))`:'',cidadeSql=cidadeBusca.length?`AND EXISTS (SELECT 1 FROM u45468.local cl WHERE cl.loc_id=t.loc_id AND translate(UPPER(TRIM(cl.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($${parametroCidade}::text[]))`:'';
  const sqlRecepcao=`WITH tarefas AS MATERIALIZED(SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE t.tsk_insertdatehour >= $1::date AND t.tsk_insertdatehour < ($2::date + INTERVAL '1 day') AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo' ${equipeSql} ${macroSql} ${cidadeSql} ORDER BY t.tsk_insertdatehour DESC, t.tsk_id DESC LIMIT $3 OFFSET $4) SELECT t.tsk_id,t.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,t.tsk_insertdatehour AS data_referencia,t.situacao_campo,t.status_integracao,a.age_name AS tecnico,tt.tty_description AS servico FROM tarefas t LEFT JOIN u45468.local l ON l.loc_id=t.loc_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id ORDER BY data_referencia DESC,t.tsk_id DESC`;
  const sqlPorStatus='';
  // A tabela dbout_local Ã© enriquecida somente apÃ³s limitar a pÃ¡gina; juntÃ¡-la antes do LIMIT causava timeout.
