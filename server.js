@@ -1089,7 +1089,8 @@ async function retornoHistorico(tarefa){
    const campos=['e_cp_servicoexecutado','e_cp_material','e_cp_pavimentacao'];
    const selecionados=campos.filter(n=>nomes.has(n));if(!selecionados.length)continue;
    const ordenacao=['hts_id','htr_id','his_id','id'].find(n=>nomes.has(n));
-   const sql=`SELECT ${selecionados.map(n=>'"'+n+'"').join(',')} FROM ${emLote1()?"u46915":"u45468"}."${tabela}" WHERE "${chave}"=$1 ${ordenacao?'ORDER BY "'+ordenacao+'" DESC':''} LIMIT 30`;
+   const preenchidos=selecionados.map(n=>`NULLIF(BTRIM("${n}"::text),'') IS NOT NULL`).join(' OR ');
+    const sql=`SELECT ${selecionados.map(n=>'"'+n+'"').join(',')} FROM ${emLote1()?"u46915":"u45468"}."${tabela}" WHERE "${chave}"=$1 AND (${preenchidos}) ${ordenacao?'ORDER BY "'+ordenacao+'" DESC':''} LIMIT 30`;
    const resultado=await pool.query({text:sql,values:[tarefa],query_timeout:6000});
    for(const r of resultado.rows){
     if(!saida.servico_executado&&r.e_cp_servicoexecutado?.trim())saida.servico_executado=r.e_cp_servicoexecutado;
