@@ -83,6 +83,10 @@ app.use((req,res,next)=>{
     );
 
     html=html.replaceAll('/api/','/'+codigo+'/api/');
+    // SISCOM individual usa cookie e validacao no servidor principal.
+    // Somente a sincronizacao uMov fica na divisao para preservar o banco/lote.
+    html=html.replaceAll('/'+codigo+'/api/siscom-','/api/siscom-');
+    html=html.replaceAll('/api/siscom-gateway/sincronizar-baixa','/'+codigo+'/api/siscom-gateway/sincronizar-baixa');
     // Busca por SS nas divisões usa V6 com filtro obrigatório antes da paginação.
     const buscaAntiga="const caminho=direta?'/"+codigo+"/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page})";
     const buscaNova="const caminho=direta?'/"+codigo+"/api/pesquisa-global?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page,offset:window.__pageOffset})";
@@ -93,7 +97,7 @@ app.use((req,res,next)=>{
     const bootstrap='<script>(function(){'+
      'const p="/'+codigo+'",original=window.fetch;'+
      'window.fetch=function(url,options){'+
-     'if(typeof url==="string"&&url.startsWith("/api/"))url=p+url;'+
+     'if(typeof url==="string"&&url.startsWith("/api/")&&(!url.startsWith("/api/siscom-")||url.startsWith("/api/siscom-gateway/sincronizar-baixa")))url=p+url;'+
      'return original.call(this,url,options);'+
      '};'+
      '})();</script>';
@@ -120,6 +124,16 @@ app.use((req,res,next)=>{
    '/api/auth/me',
    '/api/siscom-individual/me'
   ]);
+
+  // Apenas sincronizacao de baixas pode escrever no lote da divisao.
+  // A rota valida usuario, job assinado e municipio antes de escrever no uMov.
+  if(req.method==='POST'&&(
+    rota==='/api/siscom-gateway/sincronizar-baixa'||
+    rota==='/api/siscom-gateway/sincronizar-baixa-existente'
+  )){
+    req.divisaoSS={codigo,lote1:config.lote1,cidades:config.cidades.map(normalizarCidade)};
+    return next();
+  }
 
   if(req.method!=='GET'||!consultas.has(rota)){
    return res.status(403).json({
@@ -323,10 +337,8 @@ app.get('/api/siscom-individual/me',(req,res)=>{
  res.json({configured:!!siscomIndividualReady(),authenticated:!!user,user:user?{idUsuario:user.uid,nome:user.name,login:user.login}:null,writeEnabled:!!(user&&individualWriteAllowed(user)),rejeicaoEnabled:!!(user&&individualWriteAllowed(user)&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true')});
 });
 function individualWriteAllowed(user){
- if(process.env.SISCOM_INDIVIDUAL_WRITE_ENABLED!=='true')return false;
- const ids=String(process.env.SISCOM_INDIVIDUAL_WRITE_USERS||'').split(',').map(x=>x.trim()).filter(Boolean);
- return ids.length>0&&ids.includes(String(user?.uid||''));
-}
+  return !!(user && String(user.uid??'').trim());
+ }
 // NÃ£o expor endpoint de login em HTTP nem aceitar chamadas cross-site.
 function siscomSameOrigin(req){
  const origin=req.get('Origin');
@@ -1283,8 +1295,12 @@ app.post('/api/siscom-gateway/sincronizar-baixa',async(req,res)=>{
  try{
   const jobs=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,payload&id=eq.'+encodeURIComponent(jobId)+'&limit=1');
   const j=jobs[0];
+  const usuarioSISCOM=siscomIndividual(req);
+  if(usuarioSISCOM&&j?.payload?.__siscom_identity?.sid!==usuarioSISCOM.sid)
+    return res.status(403).json({ok:false,error:'Baixa pertence a outra sessao SISCOM.'});
   if(!j||j.operation!=='baixar_ss_real'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.status_baixa!=='CONFIRMADA')return res.status(409).json({ok:false,error:'Baixa nÃ£o confirmada oficialmente neste job'});
-  const match=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1 ORDER BY t.tsk_id DESC LIMIT 25`,values:[numero],query_timeout:7000});
+  const filtroDiv=req.divisaoSS?` AND translate(UPPER(TRIM(l.loc_city)),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY($2::text[])`:'';
+  const match=await pool.query({text:`SELECT t.tsk_id FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id WHERE l.loc_integrationid=$1${filtroDiv} ORDER BY t.tsk_id DESC LIMIT 25`,values:req.divisaoSS?[numero,req.divisaoSS.cidades]:[numero],query_timeout:7000});
   if(!match.rows.length)return res.status(404).json({ok:false,error:'SS nÃ£o localizada no uMov; baixa SISCOM confirmada, sincronizaÃ§Ã£o pendente'});
   const valor=xmlEscape(identificadorSituacao('Baixada'));const resultados=[];
   for(const r of match.rows){try{await postUmovXml('schedule',r.tsk_id,`<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);resultados.push({tarefa:r.tsk_id,ok:true})}catch(e){resultados.push({tarefa:r.tsk_id,ok:false,error:e.message})}}
@@ -1309,8 +1325,10 @@ app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
   const criado=Date.parse(j?.created_at||'');
   if(!j||j.operation!=='consultar_eventos_ss'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==usuario.sid||!Number.isFinite(criado)||Date.now()-criado>10*60*1000||!fechado)
    return res.status(409).json({ok:false,error:'Encerramento nÃ£o confirmado pelo histÃ³rico oficial do SISCOM nesta sessÃ£o. O uMov nÃ£o foi alterado.'});
-  const q=await pool.query({text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
+  const q=await pool.query({text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss,l.loc_city AS cidade FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
   const row=q.rows[0];
+  if(req.divisaoSS && !req.divisaoSS.cidades.includes(normalizarCidade(row?.cidade)))
+    return res.status(403).json({ok:false,error:'SS fora dos municipios da divisao.'});
   if(!row||String(row.numero_ss||'').trim()!==numero)return res.status(409).json({ok:false,error:'A tarefa uMov nÃ£o corresponde Ã  SS validada.'});
   if(/^baixad/i.test(String(row.e_situacao||'').trim()))return res.json({ok:true,ja_baixada:true,mensagem:'SS jÃ¡ estÃ¡ marcada como Baixada no uMov.'});
   if(row.e_situacao&&String(row.e_situacao).trim()&&!/^baixad/i.test(String(row.e_situacao).trim()))return res.status(409).json({ok:false,error:'A SS possui outro status de integraÃ§Ã£o ('+String(row.e_situacao).slice(0,50)+'). RevisÃ£o manual necessÃ¡ria.'});
