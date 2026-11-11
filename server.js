@@ -122,6 +122,9 @@ app.use((req,res,next)=>{
   ]);
 
   const retornoEquipeDivisao = req.method==='GET' && /^\/api\/retorno-equipe\/[0-9]+$/.test(rota);
+const sincronizacaoExistenteDivisao =
+ req.method==='POST' &&
+ rota==='/api/siscom-gateway/sincronizar-baixa-existente';
 
   const loginSiscomDivisao =
    (req.method==='POST' && (
@@ -159,7 +162,7 @@ app.use((req,res,next)=>{
    )
   );
 
-  if(!retornoEquipeDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -1362,9 +1365,25 @@ app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
   const criado=Date.parse(j?.created_at||'');
   if(!j||j.operation!=='consultar_eventos_ss'||j.status!=='concluido'||j.payload?.numero_ss!==numero||j.result?.numero_ss!==numero||j.payload?.__siscom_identity?.sid!==usuario.sid||!Number.isFinite(criado)||Date.now()-criado>10*60*1000||!fechado)
    return res.status(409).json({ok:false,error:'Encerramento nÃ£o confirmado pelo histÃ³rico oficial do SISCOM nesta sessÃ£o. O uMov nÃ£o foi alterado.'});
-  const q=await pool.query({text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
+  const schema=req.divisaoSS?.lote1?'u46915':'u45468';
+   const q=await pool.query({
+    text:`SELECT d.tsk_id,d.e_situacao,l.loc_integrationid AS numero_ss,l.loc_city AS cidade
+          FROM ${schema}.dbout_task d
+          JOIN ${schema}.task t ON t.tsk_id=d.tsk_id
+          JOIN ${schema}.local l ON l.loc_id=t.loc_id
+          WHERE d.tsk_id=$1 LIMIT 1`,
+    values:[tarefa],
+    query_timeout:7000
+   });
   const row=q.rows[0];
-  if(!row||String(row.numero_ss||'').trim()!==numero)return res.status(409).json({ok:false,error:'A tarefa uMov nÃ£o corresponde Ã  SS validada.'});
+  if(req.divisaoSS && (
+    !row ||
+    !req.divisaoSS.cidades.map(normalizarCidade).includes(normalizarCidade(row.cidade))
+   ))return res.status(403).json({
+    ok:false,
+    error:'Tarefa nao pertence aos municipios autorizados desta divisao.'
+   });
+   if(!row||String(row.numero_ss||'').trim()!==numero)return res.status(409).json({ok:false,error:'A tarefa uMov nÃ£o corresponde Ã  SS validada.'});
   if(/^baixad/i.test(String(row.e_situacao||'').trim()))return res.json({ok:true,ja_baixada:true,mensagem:'SS jÃ¡ estÃ¡ marcada como Baixada no uMov.'});
   if(row.e_situacao&&String(row.e_situacao).trim()&&!/^baixad/i.test(String(row.e_situacao).trim()))return res.status(409).json({ok:false,error:'A SS possui outro status de integraÃ§Ã£o ('+String(row.e_situacao).slice(0,50)+'). RevisÃ£o manual necessÃ¡ria.'});
   const valor=xmlEscape(identificadorSituacao('Baixada'));
