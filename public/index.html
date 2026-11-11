@@ -155,6 +155,25 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
  </style>
 <link rel="stylesheet" href="/siscom-consulta-baixa-v7.css?v=20261023v7">
 <script defer src="/siscom-consulta-baixa-v7.js?v=20261023v7"></script>
+<script id="ss-siscom-login-limpo">
+document.addEventListener('DOMContentLoaded',()=>{
+ const form=document.getElementById('siscomLoginForm');
+ const usuario=document.getElementById('siscomLoginUser');
+ const senha=document.getElementById('siscomLoginPassword');
+ const botao=document.getElementById('siscomLoginTop');
+
+ if(!form||!usuario||!senha||!botao)return;
+
+ const limpar=()=>{
+  form.reset();
+  usuario.value='';
+  senha.value='';
+ };
+
+ limpar();
+ botao.addEventListener('click',limpar,true);
+});
+</script>
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
@@ -163,8 +182,8 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 <div class="modalBg" id="siscomLoginModal" role="dialog" aria-modal="true" aria-labelledby="siscomLoginTitle">
  <div class="modalBox siscomLoginDialog"><h3 id="siscomLoginTitle">Login individual SISCOM</h3>
  <p>Utilize seu usuário e senha do SISCOM. A senha é criptografada antes de seguir para o worker Windows. Nenhuma SS será alterada pelo login.</p>
- <form id="siscomLoginForm" autocomplete="on"><label for="siscomLoginUser">Usuário SISCOM</label><input id="siscomLoginUser" name="username" autocomplete="username" required maxlength="80" placeholder="usuario.cgm"/>
- <label for="siscomLoginPassword">Senha SISCOM</label><input id="siscomLoginPassword" type="password" name="password" autocomplete="current-password" required maxlength="256"/>
+ <form id="siscomLoginForm" autocomplete="off"><label for="siscomLoginUser">Usuário SISCOM</label><input id="siscomLoginUser" name="username" autocomplete="off" required maxlength="80" placeholder="usuario.cgm"/>
+ <label for="siscomLoginPassword">Senha SISCOM</label><input id="siscomLoginPassword" type="password" name="password" autocomplete="off" required maxlength="256"/>
  <div id="siscomLoginFeedback" aria-live="polite"></div>
  <div class="modalBtns"><button type="button" class="btn" id="siscomLoginCancel">Cancelar</button><button type="submit" class="btn primary" id="siscomLoginSubmit">Entrar no SISCOM</button></div></form>
  </div>

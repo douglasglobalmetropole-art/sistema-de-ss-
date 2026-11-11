@@ -44,6 +44,51 @@ const pool={query:(...args)=>{
  return poolLote1.query(...args);
 }};
 // O mesmo HTML e utilizado no Lote 1: sem copiar paginas e sem divergir o layout.
+// SISCOM_PAGE_RESET_V1
+// Cada abertura da pagina exige uma nova autenticacao individual.
+const SISCOM_PAGINAS_RESET = new Set([
+ '/', '/index.html', '/lote1',
+ '/odvv', '/odcv', '/odls', '/odvt', '/odln'
+]);
+
+app.use((req,res,next)=>{
+ if(req.method!=='GET')return next();
+
+ const destino=String(req.get('Sec-Fetch-Dest')||'');
+ if(destino && destino!=='document')return next();
+
+ const rota=(req.path||'/').replace(/\/+$/,'').toLowerCase()||'/';
+ if(!SISCOM_PAGINAS_RESET.has(rota))return next();
+
+ let anterior=null;
+ try{
+  anterior=siscomIndividual(req);
+ }catch(e){
+  console.warn('[SISCOM] Sessao anterior invalida:',e.message);
+ }
+
+ // Remove os cookies antes de entregar a pagina.
+ cookie(res,SISCOM_USER_COOKIE,'',0);
+ cookie(res,SISCOM_PENDING_COOKIE,'',0);
+ res.set('Cache-Control','no-store');
+
+ // Solicita a limpeza da sessao antiga no worker.
+ if(anterior){
+  try{
+   siscomCreateJob(
+    'siscom_logout_individual',
+    signedTask('siscom_logout_individual',{},anterior.sid)
+   ).catch(e=>console.warn(
+    '[SISCOM] Logout anterior pendente:',e.message
+   ));
+  }catch(e){
+   console.warn('[SISCOM] Logout anterior:',e.message);
+  }
+ }
+
+ next();
+});
+
 const DIVISOES_SS = {
  ODVV: { cidades: ['VILA VELHA','RECANTO DA SEREIA'], lote1:false },
  ODCV: { cidades: ['CARIACICA','VIANA'], lote1:false },
