@@ -154,6 +154,12 @@ const sincronizacaoExistenteDivisao =
 
   // Consultas SISCOM permitidas nas divisoes.
   // Operacoes que alteram dados continuam bloqueadas.
+  const baixaSiscomDivisao =
+   req.method==='POST' &&
+   (
+    rota==='/api/siscom-gateway/baixar-ss' ||
+    rota==='/api/siscom-gateway/sincronizar-baixa'
+   );
   const consultasSiscomDivisao = (
    req.method==='POST' &&
    (
@@ -180,13 +186,53 @@ const sincronizacaoExistenteDivisao =
    )
   );
 
-  if(!equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
    });
   }
 
+  if(baixaSiscomDivisao){
+   const numero=String(req.body?.numero_ss||'').trim();
+
+   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)){
+    return res.status(400).json({
+     ok:false,
+     error:'Numero da SS invalido.'
+    });
+   }
+
+   const schema=config.lote1?'u46915':'u45468';
+
+   return pool.query({
+    text:`SELECT l.loc_city AS cidade
+          FROM ${schema}.task t
+          JOIN ${schema}.local l ON l.loc_id=t.loc_id
+          WHERE l.loc_integrationid=$1
+          LIMIT 1`,
+    values:[numero],
+    query_timeout:7000
+   }).then(resultado=>{
+    const cidade=normalizarCidade(resultado.rows[0]?.cidade||'');
+    const cidadesPermitidas=config.cidades.map(normalizarCidade);
+
+    if(!cidade||!cidadesPermitidas.includes(cidade)){
+     return res.status(403).json({
+      ok:false,
+      error:'SS nao localizada ou nao pertence a esta divisao. Nenhuma baixa enviada.'
+     });
+    }
+
+    return next();
+   }).catch(erro=>{
+    console.error('Validacao da divisao antes da baixa:',erro.message);
+    return res.status(503).json({
+     ok:false,
+     error:'Nao foi possivel validar a divisao da SS. Nenhuma baixa enviada.'
+    });
+   });
+  }
   const permitidas=config.cidades.map(normalizarCidade);
 
   if(rota==='/api/cidades'){
