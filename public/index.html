@@ -900,6 +900,42 @@ load();
   }
   throw Error('Tempo excedido. Confira o worker VPN.');
  }
+ const catalogoCache=new Map();
+ const catalogoPendente=new Map();
+ const CATALOGO_TTL=10*60*1000;
+
+ async function catalogoRapido(tipo,codigo,consulta){
+  const chave=tipo+':'+String(codigo);
+  const salvo=catalogoCache.get(chave);
+
+  if(salvo && Date.now()-salvo.hora<CATALOGO_TTL)
+   return salvo.dados;
+
+  if(catalogoPendente.has(chave))
+   return catalogoPendente.get(chave);
+
+  const pendente=(async()=>{
+   const dados=await consulta();
+   if(!Array.isArray(dados)||!dados.length)
+    throw Error('Catalogo oficial vazio: '+tipo);
+
+   catalogoCache.set(chave,{
+    hora:Date.now(),
+    dados
+   });
+
+   return dados;
+  })();
+
+  catalogoPendente.set(chave,pendente);
+
+  try{
+   return await pendente;
+  }finally{
+   if(catalogoPendente.get(chave)===pendente)
+    catalogoPendente.delete(chave);
+  }
+ }
  function renderEquipes(){
   const q=$('sbEquipeBusca').value.trim(),chosen=$('sbEquipes').value;
   options('sbEquipes',equipes.filter(e=>String(e.cdEquipe).includes(q)),'Selecione a equipe',e=>e.cdEquipe,e=>String(e.cdEquipe)+(e.nomeEquipe?" — "+e.nomeEquipe:""));
@@ -907,7 +943,10 @@ load();
   else if([...$('sbEquipes').options].some(o=>o.value===chosen))$('sbEquipes').value=chosen;
  }
  async function loadEquipes(executor,g){
-  const rows=unwrap(await job('equipes',{cd_executor:executor},g));
+  const rows=await catalogoRapido('equipes',executor,async()=>
+   unwrap(await job('equipes',{cd_executor:executor},g))
+  );
+  if(g!==generation)return;
   equipes=[...new Map(rows.filter(x=>x.cdEquipe!=null).map(x=>[String(x.cdEquipe),x])).values()].sort((a,b)=>Number(a.cdEquipe)-Number(b.cdEquipe));
   renderEquipes();
   const selecionada=equipes.find(e=>String(e.cdEquipe)===$('sbEquipeBusca').value);
@@ -915,7 +954,11 @@ load();
   if(!equipes.length)throw Error('GET de equipes retornou lista vazia');
  }
  async function loadMicros(macro,g){
-  micros=unwrap(await job('micros',{cd_macro:macro},g));
+  const rows=await catalogoRapido('micros',macro,async()=>
+   unwrap(await job('micros',{cd_macro:macro},g))
+  );
+  if(g!==generation)return;
+  micros=rows;
   options('sbMicro',micros,'Selecione o serviço executado',m=>m.cdServico,m=>m.cdServico+' — '+(m.dcServico||''));
   if(!micros.length)throw Error('GET de serviços executados retornou lista vazia');
  }
