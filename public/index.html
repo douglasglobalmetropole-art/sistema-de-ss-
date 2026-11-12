@@ -1751,6 +1751,41 @@ alternarModalidadeRejeicao();
    botao.disabled=false;
   }
  });
+
+function atualizarTextosDuplicidade(){
+ const duplicidade=
+  document.querySelector('input[name="rejMotivo"]:checked')?.value==='DUPLICIDADE';
+
+ const observacao=$('rejObservacao');
+
+ if(observacao){
+  observacao.placeholder=duplicidade
+   ? 'Explique por que esta SS e duplicada e identifique a SS original.'
+   : 'Descreva a razao da nao execucao.';
+
+  const secao=observacao.closest('.rejSection');
+  const titulo=secao?.querySelector('.rejTitle');
+  const rotulo=secao?.querySelector('label');
+
+  if(titulo){
+   titulo.textContent=duplicidade
+    ? 'Justificativa da duplicidade'
+    : 'Observacao obrigatoria';
+  }
+
+  if(rotulo){
+   rotulo.textContent=duplicidade
+    ? 'Justificativa da duplicidade'
+    : 'Motivo detalhado';
+  }
+ }
+}
+
+document.querySelectorAll('input[name="rejMotivo"]').forEach(radio=>{
+ radio.addEventListener('change',atualizarTextosDuplicidade);
+});
+
+atualizarTextosDuplicidade();
 })();
 </script>
 <div id="tramDetailOverlay" class="tramDetailOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="tramDetailTitle">
