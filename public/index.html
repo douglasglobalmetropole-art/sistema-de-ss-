@@ -1786,6 +1786,60 @@ document.querySelectorAll('input[name="rejMotivo"]').forEach(radio=>{
 });
 
 atualizarTextosDuplicidade();
+
+ // Validacao automatica da SS original na modalidade Duplicidade.
+ let temporizadorOriginalAutomatico=null;
+
+ function agendarValidacaoOriginalAutomatica(){
+  clearTimeout(temporizadorOriginalAutomatico);
+
+  const modalidade=
+   document.querySelector('input[name="rejMotivo"]:checked')?.value;
+
+  if(modalidade!=='DUPLICIDADE')return;
+
+  const original=$('rejSsOriginal').value.trim();
+  const atual=$('rejNumero').value.trim();
+
+  if(!ssValida(original)||original===atual)return;
+
+  temporizadorOriginalAutomatico=setTimeout(()=>{
+   const modalidadeAtual=
+    document.querySelector('input[name="rejMotivo"]:checked')?.value;
+
+   if(modalidadeAtual!=='DUPLICIDADE')return;
+   if($('rejSsOriginal').value.trim()!==original)return;
+
+   $('rejValidarOriginal').click();
+  },600);
+ }
+
+ $('rejSsOriginal').addEventListener(
+  'input',agendarValidacaoOriginalAutomatica
+ );
+
+ document.querySelectorAll('input[name="rejMotivo"]').forEach(radio=>{
+  radio.addEventListener(
+   'change',agendarValidacaoOriginalAutomatica
+  );
+ });
+
+ // Ao abrir o modal, aguardar a interface receber os dados da SS.
+ const observarAberturaDuplicidade=new MutationObserver(()=>{
+  if(modal.classList.contains('open')){
+   agendarValidacaoOriginalAutomatica();
+  }else{
+   clearTimeout(temporizadorOriginalAutomatico);
+  }
+ });
+
+ observarAberturaDuplicidade.observe(modal,{
+  attributes:true,
+  attributeFilter:['class']
+ });
+
+ // O botao continua disponivel como opcao de nova consulta.
+ agendarValidacaoOriginalAutomatica();
 })();
 </script>
 <div id="tramDetailOverlay" class="tramDetailOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="tramDetailTitle">
