@@ -891,7 +891,7 @@ load();
   const j=await r.json();if(!r.ok){const e=new Error(j.error||'Não foi possível iniciar a consulta');e.httpStatus=r.status;e.antesDoEnvio=(route==='baixar-ss'&&[400,401,403].includes(r.status));throw e;}
   for(let i=0;i<50;i++){
    if(g!==generation)throw Error('Consulta cancelada');
-   await new Promise(resolve=>setTimeout(resolve,i===0?700:i===1?1200:2000));
+   await new Promise(resolve=>setTimeout(resolve,i===0?600:i===1?900:1200));
    const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{cache:'no-store'});
    const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
    const state=String(x.status).toLowerCase();
@@ -1454,7 +1454,7 @@ load();
    <div class="rejButtons"><button type="button" id="rejConsultar">⌕ &nbsp;Pesquisar e validar SS</button><button type="button" id="rejTentativa">◴ &nbsp;Consultar tentativa anterior</button><button type="button" id="rejSincronizar" hidden>Sincronizar confirmação com uMov</button></div>
    <div id="rejResumo">Nenhuma SS validada.</div>
   </div></section>
-  <section class="rejSection"><div class="rejTitle">▣ &nbsp;Motivo da rejeição</div><div class="rejContent rejRadios"><label><input type="radio" name="rejMotivo" value="NAO_EXECUCAO" checked> Não Execução</label><label title="Aguardando payload oficial de duplicidade"><input type="radio" name="rejMotivo" value="DUPLICIDADE" disabled> Duplicidade (aguardando integração)</label></div></section>
+  <section class="rejSection"><div class="rejTitle">▣ &nbsp;Motivo da rejeição</div><div class="rejContent rejRadios"><label><input type="radio" name="rejMotivo" value="NAO_EXECUCAO" checked> Não Execução</label><label title="Aguardando payload oficial de duplicidade"><input type="radio" name="rejMotivo" value="DUPLICIDADE"> Duplicidade</label></div></section>
   <section class="rejSection">
  <div class="rejTitle">Motivo da Não Execução — SISCOM</div>
  <div class="rejContent">
@@ -1463,6 +1463,22 @@ load();
    style="width:100%;padding:10px;border:1px solid #bfd2e5;border-radius:5px">
    <option value="">Aguardando consulta oficial</option>
   </select>
+ </div>
+</section>
+<section class="rejSection" id="rejDuplicidadeCampos" hidden>
+ <div class="rejTitle">Duplicidade — SISCOM</div>
+ <div class="rejContent">
+  <label for="rejSsOriginal">SS original que deve permanecer válida</label>
+  <input id="rejSsOriginal" placeholder="00/00-000000-00" autocomplete="off">
+  <div class="rejButtons">
+   <button type="button" id="rejValidarOriginal">Consultar e validar SS original</button>
+  </div>
+  <div id="rejResultadoOriginal" role="status" aria-live="polite">
+   Aguardando consulta.
+  </div>
+  <div id="rejDuplicidadeAviso" style="padding-top:10px;color:#365d80">
+   Informe a SS original. A confirmação oficial permanece bloqueada.
+  </div>
  </div>
 </section>
 <section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="datetime-local"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="datetime-local"></div></div></section>
@@ -1480,7 +1496,16 @@ load();
  const setStatus=s=>{$('rejStatus').textContent=s};
  const ssValida=s=>/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(s);
  const wait=ms=>new Promise(r=>setTimeout(r,ms));
- function atualizarBotao(){ $('rejConfirmar').disabled=ocupado||!permissao||!validada||!$('rejMotivoOficial').value||validada.numero_ss!==$('rejNumero').value.trim(); }
+ function atualizarBotao(){
+ const modalidade=document.querySelector('input[name="rejMotivo"]:checked')?.value;
+ $('rejConfirmar').disabled=
+  ocupado||
+  !permissao||
+  !validada||
+  modalidade!=='NAO_EXECUCAO'||
+  !$('rejMotivoOficial').value||
+  validada.numero_ss!==$('rejNumero').value.trim();
+}
  async function api(url,payload){
   const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(payload),cache:'no-store'});
   const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Falha ao comunicar com o gateway');return j;
@@ -1618,6 +1643,114 @@ if(!Number.isSafeInteger(motivoId)||motivoId<1)
   }catch(e){setStatus('Não foi possível confirmar o resultado: '+e.message+'. Se o envio foi iniciado, NÃO tente novamente sem verificar a tentativa oficial.');}
   finally{ocupado=false;$('rejConsultar').disabled=false;atualizarBotao()}
  };
+
+function alternarModalidadeRejeicao(){
+ const duplicidade=
+  document.querySelector('input[name="rejMotivo"]:checked')?.value==='DUPLICIDADE';
+
+ $('rejDuplicidadeCampos').hidden=!duplicidade;
+ $('rejMotivoOficial').closest('.rejSection').hidden=duplicidade;
+
+ if(duplicidade){
+  setStatus('Duplicidade: informe a SS original. Envio oficial bloqueado.');
+ }else{
+  setStatus('Não Execução: confira os dados antes de confirmar.');
+ }
+
+ atualizarBotao();
+}
+
+document.querySelectorAll('input[name="rejMotivo"]').forEach(radio=>{
+ radio.addEventListener('change',alternarModalidadeRejeicao);
+});
+
+$('rejSsOriginal').addEventListener('input',()=>{
+ const original=$('rejSsOriginal').value.trim();
+ const atual=$('rejNumero').value.trim();
+
+ $('rejDuplicidadeAviso').textContent=
+  !ssValida(original)
+   ? 'Informe uma SS original válida.'
+   : original===atual
+    ? 'A SS original deve ser diferente da SS selecionada.'
+    : 'Formato válido. A duplicidade ainda precisa de validação oficial.';
+});
+
+alternarModalidadeRejeicao();
+
+ // Consulta independente da SS original.
+ // Nao autoriza rejeicao oficial por duplicidade.
+ let rejOriginalValidada=null;
+ let rejOriginalConsulta=0;
+
+ function rejLimparOriginal(){
+  rejOriginalConsulta++;
+  rejOriginalValidada=null;
+  $('rejResultadoOriginal').textContent='Aguardando consulta.';
+ }
+
+ $('rejSsOriginal').addEventListener('input',rejLimparOriginal);
+
+ $('rejNumero').addEventListener('input',rejLimparOriginal);
+
+ $('rejValidarOriginal').addEventListener('click',async()=>{
+  const original=$('rejSsOriginal').value.trim();
+  const atual=$('rejNumero').value.trim();
+
+  if(!ssValida(original)){
+   $('rejResultadoOriginal').textContent=
+    'Informe uma SS original no formato 00/00-000000-00.';
+   return;
+  }
+
+  if(original===atual){
+   $('rejResultadoOriginal').textContent=
+    'A SS original precisa ser diferente da SS selecionada.';
+   return;
+  }
+
+  const geracao=++rejOriginalConsulta;
+  const botao=$('rejValidarOriginal');
+
+  botao.disabled=true;
+  $('rejResultadoOriginal').textContent=
+   'Consultando SS original no SISCOM...';
+
+  try{
+   const job=await api(
+    '/api/siscom-gateway/rejeicao-validar',
+    {numero_ss:original}
+   );
+
+   const resultado=await acompanhar(job.id);
+
+   if(geracao!==rejOriginalConsulta)return;
+
+   if(
+    resultado.numero_ss!==original||
+    !resultado.validada
+   ){
+    throw Error('SS original nao validada pelo SISCOM.');
+   }
+
+   rejOriginalValidada=resultado;
+
+   $('rejResultadoOriginal').textContent=
+    'SS original localizada: '+resultado.numero_ss+
+    ' | Unidade: '+(resultado.unidade||resultado.executor||'Nao informada')+
+    ' | Macro: '+(resultado.macro||'Nao informada')+
+    '. A relacao de duplicidade ainda nao foi confirmada.';
+
+  }catch(e){
+   if(geracao!==rejOriginalConsulta)return;
+
+   rejOriginalValidada=null;
+   $('rejResultadoOriginal').textContent=
+    'Consulta nao concluida: '+e.message;
+  }finally{
+   botao.disabled=false;
+  }
+ });
 })();
 </script>
 <div id="tramDetailOverlay" class="tramDetailOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="tramDetailTitle">
