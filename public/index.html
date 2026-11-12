@@ -1295,6 +1295,76 @@ load();
 #siscomRejeicaoModal{position:fixed;inset:0;background:#102e5477;z-index:99999;display:none;align-items:center;justify-content:center;padding:7px}
 #siscomRejeicaoModal.open{display:flex}
 #siscomRejeicaoModal .rejBox{background:#f4f9fe;border-radius:10px;width:min(1550px,99vw);max-height:calc(100dvh - 14px);display:flex;flex-direction:column;overflow:hidden;padding:0;color:#143b69;box-shadow:0 12px 50px #0018;font-size:13px}
+/* rej-compact-v1 */
+#siscomRejeicaoModal .rejBox{
+ width:min(1260px,98vw);
+ font-size:12px;
+}
+#siscomRejeicaoModal .rejHeader{
+ padding:9px 14px;
+}
+#siscomRejeicaoModal .rejHeader h2{
+ font-size:16px;
+}
+#siscomRejeicaoModal .rejScroll{
+ display:grid;
+ grid-template-columns:repeat(2,minmax(0,1fr));
+ gap:8px 12px;
+ padding:10px 12px;
+ align-content:start;
+}
+#siscomRejeicaoModal .rejScroll>.rejSection{
+ margin:0;
+ min-width:0;
+}
+#siscomRejeicaoModal .rejScroll>.rejSection:nth-of-type(1),
+#siscomRejeicaoModal .rejScroll>.rejSection:nth-of-type(2),
+#siscomRejeicaoModal .rejScroll>.rejWarn,
+#siscomRejeicaoModal #rejPermissao,
+#siscomRejeicaoModal #rejStatus{
+ grid-column:1/-1;
+ margin:0;
+}
+#siscomRejeicaoModal .rejTitle{
+ padding:6px 10px;
+ font-size:12px;
+}
+#siscomRejeicaoModal .rejContent{
+ padding:9px 11px;
+}
+#siscomRejeicaoModal .rejSummary>div{
+ padding:7px 9px;
+}
+#siscomRejeicaoModal .rejSummary small{
+ font-size:10px;
+ margin-bottom:2px;
+}
+#siscomRejeicaoModal .rejSummary strong{
+ font-size:11px;
+}
+#siscomRejeicaoModal input:not([type=radio]),
+#siscomRejeicaoModal textarea{
+ min-height:34px;
+ padding:7px 9px;
+}
+#siscomRejeicaoModal textarea{
+ min-height:54px;
+}
+#siscomRejeicaoModal .rejButtons{
+ margin:7px 0;
+ gap:7px;
+}
+#siscomRejeicaoModal .rejFooter{
+ padding:8px 12px;
+}
+@media(max-width:760px){
+ #siscomRejeicaoModal .rejScroll{
+  grid-template-columns:1fr;
+ }
+ #siscomRejeicaoModal .rejScroll>.rejSection{
+  grid-column:1/-1;
+ }
+}
 #siscomRejeicaoModal .rejHeader{background:linear-gradient(100deg,#064c8b,#087acb);color:white;padding:13px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 #siscomRejeicaoModal .rejHeader h2{color:white;margin:0;font-size:19px}
 #siscomRejeicaoModal .rejHeader button{background:transparent;border:0;color:white;font-size:27px;cursor:pointer}
