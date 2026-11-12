@@ -238,7 +238,60 @@ if(materiaisDivisao && rota!=='/api/materiais'){
     });
   });
 }
-  if(!materiaisDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  // Consultas de rejeicao SISCOM por divisao.
+  // Nenhuma operacao de escrita oficial e liberada aqui.
+  const consultaRejeicaoDivisao =
+   (req.method==='POST' &&
+    rota==='/api/siscom-gateway/rejeicao-validar') ||
+   (req.method==='GET' &&
+    /^\/api\/siscom-gateway\/rejeicao-tentativa\//.test(rota));
+
+  if(consultaRejeicaoDivisao){
+   const numero=String(
+    req.method==='POST'
+     ? req.body?.numero_ss
+     : req.params?.numero || decodeURIComponent(
+        rota.substring('/api/siscom-gateway/rejeicao-tentativa/'.length)
+       )
+   ).trim();
+
+   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)){
+    return res.status(400).json({
+     ok:false,error:'Numero da SS invalido.'
+    });
+   }
+
+   const schema=config.lote1?'u46915':'u45468';
+
+   return pool.query({
+    text:`SELECT l.loc_city AS cidade
+          FROM ${schema}.task t
+          JOIN ${schema}.local l ON l.loc_id=t.loc_id
+          WHERE l.loc_integrationid=$1
+          LIMIT 1`,
+    values:[numero],
+    query_timeout:7000
+   }).then(resultado=>{
+    const cidade=normalizarCidade(resultado.rows[0]?.cidade||'');
+    const permitidas=config.cidades.map(normalizarCidade);
+
+    if(!cidade||!permitidas.includes(cidade)){
+     return res.status(403).json({
+      ok:false,
+      error:'SS nao localizada nesta divisao.'
+     });
+    }
+
+    return next();
+   }).catch(erro=>{
+    console.error('Consulta de rejeicao por divisao:',erro.message);
+    return res.status(503).json({
+     ok:false,
+     error:'Nao foi possivel validar a divisao da SS.'
+    });
+   });
+  }
+  if(!consultaRejeicaoDivisao && !materiaisDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
