@@ -189,7 +189,55 @@ const sincronizacaoExistenteDivisao =
    )
   );
 
-  if(!baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+const materiaisDivisao =
+  (req.method==='GET' &&
+   (rota==='/api/materiais' || rota==='/api/itens')) ||
+  (req.method==='POST' &&
+   (rota==='/api/itens' || rota==='/api/itens/lote'));
+
+if(materiaisDivisao && rota!=='/api/materiais'){
+  const numero=String(
+    req.method==='GET' ? req.query?.ss : req.body?.ss
+  ).trim();
+
+  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)){
+    return res.status(400).json({
+      ok:false,
+      error:'Numero da SS invalido.'
+    });
+  }
+
+  const schema=config.lote1?'u46915':'u45468';
+
+  return pool.query({
+    text:`SELECT l.loc_city AS cidade
+          FROM ${schema}.task t
+          JOIN ${schema}.local l ON l.loc_id=t.loc_id
+          WHERE l.loc_integrationid=$1
+          LIMIT 1`,
+    values:[numero],
+    query_timeout:7000
+  }).then(resultado=>{
+    const cidade=normalizarCidade(resultado.rows[0]?.cidade||'');
+    const permitidas=config.cidades.map(normalizarCidade);
+
+    if(!cidade||!permitidas.includes(cidade)){
+      return res.status(403).json({
+        ok:false,
+        error:'SS nao pertence a esta divisao.'
+      });
+    }
+
+    return next();
+  }).catch(erro=>{
+    console.error('Validacao de materiais:',erro.message);
+    return res.status(503).json({
+      ok:false,
+      error:'Nao foi possivel validar a divisao da SS.'
+    });
+  });
+}
+  if(!materiaisDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
