@@ -77,6 +77,11 @@ function statement(params, ids){
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
  const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
  const final=[];
+  // Recepcao: excluir SS cujo status de integracao no uMov ja e Rejeitada.
+ // A classificacao acontece no SQL, antes de LIMIT/OFFSET.
+ if(tela==='recepcao')final.push(
+  "LOWER(TRIM(COALESCE(p.status_integracao,''))) NOT LIKE 'rejeitad%'"
+ );
  if(tela==='baixar')final.push("COALESCE(NULLIF(TRIM(p.status_integracao),''),'')=''",'p.tsk_lastexecutiondatehour IS NOT NULL');
  else if(tela==='encerradas')final.push("NULLIF(TRIM(p.status_integracao),'') IS NOT NULL");
  else if(tela==='tramitacao')final.push("LOWER(TRIM(COALESCE(p.status_integracao,''))) LIKE 'baixad%'");
