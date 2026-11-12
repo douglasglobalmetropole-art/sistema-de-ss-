@@ -816,11 +816,26 @@ app.post('/api/siscom-gateway/anexar-relatorio',async(req,res)=>{
 
 // === REJEIÃ‡ÃƒO OFICIAL SISCOM (somente sessÃ£o individual, nunca senha administrativa) ===
 const SS_REJEICAO_FORMATO=/^\d{2}\/\d{2}-\d{6}-\d{2}$/;
-const REJEICAO_OPS=['validar_ss_rejeicao','rejeitar_ss_real'];
+const REJEICAO_OPS=['validar_ss_rejeicao','listar_motivos_nao_execucao','rejeitar_ss_real'];
 function rejectionEnabled(req){
  const user=siscomIndividual(req);
  return !!(user&&individualWriteAllowed(user)&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true');
 }
+app.get('/api/siscom-gateway/motivos-nao-execucao',async(req,res)=>{
+ const user=siscomIndividual(req);
+ res.set('Cache-Control','no-store');
+ if(!user)return res.status(401).json({error:'Login individual SISCOM obrigatorio'});
+ try{
+  const job=await siscomCreateJob(
+   'listar_motivos_nao_execucao',
+   signedTask('listar_motivos_nao_execucao',{},user.sid)
+  );
+  return res.status(202).json(job);
+ }catch(e){
+  console.error('Consulta motivos SISCOM:',e.message);
+  return res.status(502).json({error:'Consulta oficial indisponivel'});
+ }
+});
 app.post('/api/siscom-gateway/rejeicao-validar',async(req,res)=>{
  const user=siscomIndividual(req);
  if(!user)return res.status(401).json({error:'Entre com seu usuÃ¡rio SISCOM para validar a rejeiÃ§Ã£o'});
@@ -842,7 +857,10 @@ app.post('/api/siscom-gateway/rejeicao-confirmar',async(req,res)=>{
  if(!Number.isSafeInteger(equipe)||equipe<1||equipe>99999999)return res.status(400).json({error:'Equipe invÃ¡lida'});
  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(inicio)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(fim)||!Number.isFinite(Date.parse(inicio))||!Number.isFinite(Date.parse(fim))||Date.parse(fim)<Date.parse(inicio))return res.status(400).json({error:'Datas de inÃ­cio e fim invÃ¡lidas'});
  if(!observacao||observacao.length>1000)return res.status(400).json({error:'ObservaÃ§Ã£o obrigatÃ³ria (atÃ© 1000 caracteres)'});
- const payload={numero_ss:numero,motivo:'NAO_EXECUCAO',equipe,inicio,fim,observacao};
+ const motivoId=Number(p.motivo_nao_execucao_id);
+ if(!Number.isSafeInteger(motivoId)||motivoId<1)
+  return res.status(400).json({error:'Motivo oficial obrigatorio'});
+ const payload={numero_ss:numero,motivo:'NAO_EXECUCAO',motivo_nao_execucao_id:motivoId,equipe,inicio,fim,observacao};
  try{res.status(202).json(await siscomCreateJob('rejeitar_ss_real',signedTask('rejeitar_ss_real',payload,user.sid)));}
  catch(e){console.error('Fila de rejeiÃ§Ã£o:',e.message);res.status(409).json({error:'RejeiÃ§Ã£o nÃ£o iniciada ou jÃ¡ registrada para esta SS. Verifique o histÃ³rico; nÃ£o reenvie sem conferir.'});}
 });
