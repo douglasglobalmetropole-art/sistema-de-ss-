@@ -1,0 +1,62 @@
+{
+  "environment": "Node v24.22.1 / PostgreSQL PGlite / sintetico sem rede",
+  "task_rows": 20000,
+  "iterations": 5,
+  "statistic": "median, warm queries, alternating order",
+  "sql": [
+    {
+      "tela": "recepcao",
+      "filters": {},
+      "original_ms": 44.78,
+      "optimized_ms": 12.64,
+      "reduction_percent": 71.8,
+      "same_results": true
+    },
+    {
+      "tela": "campo",
+      "filters": {},
+      "original_ms": 46.76,
+      "optimized_ms": 12.02,
+      "reduction_percent": 74.3,
+      "same_results": true
+    },
+    {
+      "tela": "baixar",
+      "filters": {},
+      "original_ms": 122.04,
+      "optimized_ms": 38.84,
+      "reduction_percent": 68.2,
+      "same_results": true
+    },
+    {
+      "tela": "encerradas",
+      "filters": {},
+      "original_ms": 356.44,
+      "optimized_ms": 91.73,
+      "reduction_percent": 74.3,
+      "same_results": true
+    },
+    {
+      "tela": "tramitacao",
+      "filters": {},
+      "original_ms": 363.68,
+      "optimized_ms": 90.45,
+      "reduction_percent": 75.1,
+      "same_results": true
+    },
+    {
+      "tela": "encerradas",
+      "filters": {
+        "tags": "Urgente"
+      },
+      "original_ms": 378.9,
+      "optimized_ms": 183.24,
+      "reduction_percent": 51.6,
+      "same_results": true
+    }
+  ],
+  "date_format_1000": {
+    "original_ms": 41.55,
+    "optimized_ms": 1.38
+  }
+}

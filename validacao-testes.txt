@@ -1,0 +1,37 @@
+
+> ss-recepcao-umov-v6@1.0.0 test
+> node --test test/*.test.js
+
+✔ cache comprimido continua compativel com dados antigos e rejeita payload invalido (10.824086ms)
+✔ HTTP real: gzip, cache, invalidacao e isolamento entre lotes/divisoes (4291.327778ms)
+✔ catalogos compartilham consulta e assets podem usar cache do navegador (63.918583ms)
+✔ cache limitado e isolamento entre requisicoes concorrentes (1.266235ms)
+✔ singleFlight compartilha trabalho e libera falhas para nova tentativa (2.47232ms)
+✔ fila drena imediatamente, aguarda quando vazia e nunca sobrepoe operacoes (0.544699ms)
+✔ erro de ciclo usa recuo sem repetir operacao dentro do ciclo (0.308264ms)
+✔ SQL preserva resultados, filtros e paginacao: recepcao (2782.488579ms)
+✔ SQL preserva resultados, filtros e paginacao: campo (237.838347ms)
+✔ SQL preserva resultados, filtros e paginacao: baixar (235.317189ms)
+✔ SQL preserva resultados, filtros e paginacao: encerradas (946.594975ms)
+✔ SQL preserva resultados, filtros e paginacao: tramitacao (378.585478ms)
+✔ 30 pesquisas concorrentes compartilham consultas e refresh nao cria chaves infinitas (52.246108ms)
+✔ SQL mantem valores fornecidos fora do texto da consulta (0.390547ms)
+✔ worker.js reserva owned antes de atualizar status (3.767518ms)
+✔ worker.js reserva lost antes de atualizar status (1.898857ms)
+✔ worker.js reserva failed antes de atualizar status (1.027466ms)
+✔ integracoes/siscom/worker.js reserva owned antes de atualizar status (10.263672ms)
+✔ integracoes/siscom/worker.js reserva lost antes de atualizar status (0.99679ms)
+✔ integracoes/siscom/worker.js reserva failed antes de atualizar status (0.902939ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4829.205093
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice

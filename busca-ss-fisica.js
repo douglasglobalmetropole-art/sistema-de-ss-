@@ -6,10 +6,7 @@ const ABAS = new Set(['recepcao', 'campo', 'baixar', 'encerradas', 'tramitacao']
 const EXATA = /^\d{2}\/\d{2}-\d{6}-\d{2}$/;
 const texto = v => String(v ?? '').trim();
 const norm = v => texto(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const fmt = v => v ? new Intl.DateTimeFormat('pt-BR', {
-  timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric',
-  hour: '2-digit', minute: '2-digit', hour12: false
-}).format(new Date(v)).replace(',', '') : '';
+const fmt=require('./lib/performance').formatDate;
 function pertence(x, tela) {
   const situacao = norm(x.situacao_campo), integracao = norm(x.status_integracao);
   if (tela === 'recepcao') return situacao === 'pendente de envio para campo';

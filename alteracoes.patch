@@ -1,0 +1,1403 @@
+--- a/.env.example
++++ b/.env.example
+@@ -30,3 +30,20 @@
+ SUPABASE_URL=https://vzdqjinzjdzvurnsuujb.supabase.co
+ SUPABASE_SECRET_KEY=
+ SISCOM_GATEWAY_API_TOKEN=
++
++# Desempenho: maximo por instancia e por banco. Manter 3 na Vercel inicialmente.
++DB_POOL_MAX=3
++# Worker: intervalo ocioso; fila ativa segue imediatamente, sem paralelizar baixas.
++SISCOM_POLL_IDLE_MS=1000
++# Registra metodo, rota (sem query), status e tempo de respostas acima de 1s.
++PERF_LOG=false
++
++# Lote 1: banco separado e schema usado pelo integrador.
++DB_NAME_LOTE1=umovme_dbview_consglobalmetropole1
++DB_SCHEMA_LOTE1=u46915
++UMOV_API_TOKEN_LOTE1=
++UMOV_API_BASE_URL_LOTE1=https://api.umov.me/CenterWeb/api
++# Worker completo: mantenha os valores existentes em seu ambiente seguro.
++SISCOM_ACCESS_TOKEN=
++SISCOM_GATEWAY_SIGNING_SECRET=
++SISCOM_AUTH_PRIVATE_KEY_FILE=
+--- a/.gitignore
++++ b/.gitignore
+@@ -16,3 +16,6 @@
+ 
+ # Gateway local - contem credenciais e chave privada
+ /SISCOM-GATEWAY/
++
++# Chave privada do worker local
++*.pem
+--- /dev/null
++++ b/.vercelignore
+@@ -0,0 +1,16 @@
++.git
++node_modules
++work
++test
++scripts
++*.backup*
++BACKUP-*
++*.zip
++*.patch
++*.txt
++*.csv
++benchmark-resultados.json
++
++*.pem
++.env
++.env.*
+--- a/INICIAR_WORKER_SISCOM.ps1
++++ b/INICIAR_WORKER_SISCOM.ps1
+@@ -1,15 +1,14 @@
+ $ErrorActionPreference = 'Stop'
+ $site = Split-Path -Parent $MyInvocation.MyCommand.Path
+-$gateway = Join-Path $site 'SISCOM-GATEWAY'
+-$worker = Join-Path $gateway 'worker.js'
+-if (!(Test-Path -LiteralPath $worker)) { throw 'Worker nao encontrado em SISCOM-GATEWAY.' }
+-if (!(Test-Path -LiteralPath (Join-Path $gateway '.env'))) { throw 'Falta .env em SISCOM-GATEWAY. Instale novamente indicando a pasta antiga do gateway.' }
+-$chave = Join-Path $gateway 'siscom_auth_private.pem'
++$worker = Join-Path $site 'integracoes/siscom/worker.js'
++if (!(Test-Path -LiteralPath $worker)) { throw 'Worker nao encontrado em integracoes/siscom.' }
++if (!(Test-Path -LiteralPath (Join-Path $site '.env'))) { throw 'Configure o .env na raiz do projeto, usando .env.example como modelo.' }
++$chave = Join-Path $site 'siscom_auth_private.pem'
+ if (Test-Path -LiteralPath $chave) { $env:SISCOM_AUTH_PRIVATE_KEY_FILE = $chave }
+-if (!(Test-Path -LiteralPath (Join-Path $gateway 'node_modules\@supabase\supabase-js'))) { throw 'Dependencias ausentes. Execute npm ci --omit=dev na pasta SISCOM-GATEWAY.' }
+-Push-Location $gateway
++if (!(Test-Path -LiteralPath (Join-Path $site 'node_modules/@supabase/supabase-js'))) { throw 'Execute npm ci --omit=dev na raiz do projeto.' }
++Push-Location $site
+ try {
+   Write-Host 'WORKER SISCOM - Global SS (um processo por vez)' -ForegroundColor Cyan
+-  Write-Host 'Nao mantenha o worker da pasta antiga funcionando.' -ForegroundColor Yellow
+-  & node .\worker.js
++  Write-Host 'Encerre o worker antigo antes de iniciar este.' -ForegroundColor Yellow
++  & node $worker
+ } finally { Pop-Location }
+--- a/busca-ss-fisica.js
++++ b/busca-ss-fisica.js
+@@ -6,10 +6,7 @@
+ const EXATA = /^\d{2}\/\d{2}-\d{6}-\d{2}$/;
+ const texto = v => String(v ?? '').trim();
+ const norm = v => texto(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+-const fmt = v => v ? new Intl.DateTimeFormat('pt-BR', {
+-  timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric',
+-  hour: '2-digit', minute: '2-digit', hour12: false
+-}).format(new Date(v)).replace(',', '') : '';
++const fmt=require('./lib/performance').formatDate;
+ function pertence(x, tela) {
+   const situacao = norm(x.situacao_campo), integracao = norm(x.status_integracao);
+   if (tela === 'recepcao') return situacao === 'pendente de envio para campo';
+--- a/cp-fast-cache.js
++++ b/cp-fast-cache.js
+@@ -3,6 +3,8 @@
+ // A camada pode ser desativada via CP_PERSISTENT_CACHE_ENABLED=false.
+ const crypto=require('node:crypto');
+ const zlib=require('node:zlib');
++const {promisify}=require('node:util');
++const gzip=promisify(zlib.gzip),gunzip=promisify(zlib.gunzip);
+ const TABLE='central_operacoes_cache';
+ const MAX_INFLATED=18*1024*1024;
+ const MAX_COMPRESSED=3*1024*1024;
+@@ -34,7 +36,7 @@
+    if(!Number.isFinite(age)||age< -120000||age>maxStaleMs)return null;
+    const buf=Buffer.from(row.payload_b64,'base64');
+    if(!buf.length||buf.length>MAX_COMPRESSED)throw Error('compressed-size');
+-   const payload=JSON.parse(zlib.gunzipSync(buf,{maxOutputLength:MAX_INFLATED}).toString('utf8'));
++   const payload=JSON.parse((await gunzip(buf,{maxOutputLength:MAX_INFLATED})).toString('utf8'));
+    if(!payload||!Array.isArray(payload.dados)||typeof payload.truncado!=='boolean')return null;
+    return {payload,at:row.cached_at,age,stale:age>maxAgeMs};
+   }catch(err){console.warn('CP cache (leitura):',String(err.message||err).slice(0,100));return null;}
+@@ -44,7 +46,7 @@
+   try {
+    const raw=Buffer.from(JSON.stringify(payload));
+    if(raw.length>MAX_INFLATED)return false;
+-   const buf=zlib.gzipSync(raw,{level:4});
++   const buf=await gzip(raw,{level:4});
+    if(buf.length>MAX_COMPRESSED)return false;
+    const response=await fetch(base+'/rest/v1/'+TABLE,{
+     method:'POST',headers:{...headers(),Prefer:'resolution=merge-duplicates,return=minimal'},
+--- a/cp-indicadores-adicionais.js
++++ b/cp-indicadores-adicionais.js
+@@ -9,7 +9,7 @@
+     return m ? m[1] : '';
+   };
+   const ehAtivo = s => normalizar(s) === 'ATIVO';
+-  const cache = new Map();
++  const cache = require('./lib/performance').scopedMap(pool.cacheScope);
+   const getCache = key => {
+     const registro = cache.get(key);
+     return registro && Date.now() - registro.at < 90000 ? registro.value : null;
+--- a/cp-pesquisa-v6.js
++++ b/cp-pesquisa-v6.js
+@@ -13,12 +13,14 @@
+  encerradas:['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou','data_finalizacao','status_integracao','criado_em'],
+  tramitacao:['ss','logradouro','bairro','cidade','setor','servico','tags','equipe_executou','data_finalizacao','status_integracao','criado_em']
+ };
+-const C=new Map();
++const perf=require('./lib/performance');
++const C=perf.scopedMap(()=> 'search',100);
++const searchFlight=perf.singleFlight(100),metadataFlight=perf.singleFlight(20);
+ const fieldCache=new Map();
+ const str=x=>String(x??'').trim();
+ const norm=x=>str(x).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+ const isoDate=x=>/^\d{4}-\d{2}-\d{2}$/.test(str(x));
+-const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
++const fmt=require('./lib/performance').formatDate;
+ const bounded=(v,def,max)=>{const n=Number(v);return Number.isInteger(n)&&n>=0?Math.min(n,max):def};
+ function parse(req){
+  const tela=str(req.query.tela||'recepcao');
+@@ -30,7 +32,7 @@
+  const municipios=(Array.isArray(req.divisaoSS?.cidades)?req.divisaoSS.cidades:str(req.query.municipios||req.query.cidade).split('\u001f')).map(norm).filter(Boolean).slice(0,30);
+  return {tela,filters,inicio,fim,macro,municipios,equipe:str(req.query.equipe).slice(0,100),limit:Math.max(1,bounded(req.query.limit,25,100)),offset:bounded(req.query.offset,0,100000)};
+ }
+-async function fieldIds(pool,base='principal'){
++async function loadFieldIds(pool,base='principal'){
+  const cached=fieldCache.get(base);if(cached&&Date.now()-cached.timestamp<300000)return cached.fields;
+  const q=await pool.query({text:`SELECT cfd_id,cfd_table,cfd_integrationid FROM u45468.customfield WHERE cfd_table IN ('task','local') AND LOWER(TRIM(cfd_integrationid)) IN ('situacao','tag','tags','setor','hidrometro','reflocalizacao','informacaosolicitante','esclarecimentosolicitante','servicoexecutadosiscom','informacaoexecucaosiscom','materialusado','material','materiais')`,query_timeout:4000});
+  const find=(table,...keys)=>q.rows.filter(x=>str(x.cfd_table)===table&&keys.includes(str(x.cfd_integrationid).toLowerCase())).map(x=>str(x.cfd_id)).filter(Boolean);
+@@ -39,6 +41,7 @@
+  if(!fields.status.length)throw Object.assign(new Error('Campo oficial de situação não localizado no uMov; pesquisa V6 não ativada para evitar classificação incorreta.'),{status:503});
+  fieldCache.set(base,{timestamp:Date.now(),fields});return fields;
+ }
++function fieldIds(pool,base='principal'){return metadataFlight(base,()=>loadFieldIds(pool,base));}
+ function statement(params, ids){
+  const val=[];const add=x=>{val.push(x);return '$'+val.length};
+  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
+@@ -85,34 +88,41 @@
+  const sort=tela==='recepcao'?'p.tsk_insertdatehour':'p.tsk_lastexecutiondatehour';
+   const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
+      t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
+-     t.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,
++     t.tsk_situation,
+      l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
+-     l.loc_street AS logradouro,l.loc_streetnumber AS numero,
+-     a.age_name AS tecnico,tt.tty_description AS servico
++     l.loc_street AS logradouro,l.loc_streetnumber AS numero
+     FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
+-    LEFT JOIN u45468.agent a ON a.age_id=t.age_id
+-    LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
++    ${filters.equipe_executou||equipe?'LEFT JOIN u45468.agent a ON a.age_id=t.age_id':''}
++    ${filters.servico||macro.length?'LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id':''}
+     ${base.length?'WHERE '+base.join(' AND '):''}`;
+-  // Somente Recepcao e Em Campo sem filtros de campos personalizados:
+-  // paginar primeiro e consultar status/TAG/setor apenas nas linhas da pagina.
+-  // Nos demais casos, os filtros de status/TAG/setor continuam ANTES do LIMIT.
+-  const paginaPrimeiro=(tela==='recepcao'||tela==='campo')&&final.length===0;
+-  const sql=paginaPrimeiro
+-   ? `WITH b AS MATERIALIZED (
+-       ${baseSql}
+-      ), pagina AS MATERIALIZED (
+-       SELECT * FROM b ORDER BY ${sort.replace('p.','b.')} DESC NULLS LAST,b.tsk_id DESC
+-       LIMIT ${limitParam} OFFSET ${offsetParam}
+-      ) SELECT p.*,${status.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS status_integracao,
+-       ${tags.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS tags,
+-       ${setor.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS setor
+-       FROM pagina p ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC`
+-   : `WITH b AS MATERIALIZED (
+-       ${baseSql}
+-      ), p AS MATERIALIZED (
+-       SELECT b.*,${status} AS status_integracao,${tags} AS tags,${setor} AS setor FROM b
+-      ) SELECT * FROM p ${final.length?'WHERE '+final.join(' AND '):''}
+-      ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC LIMIT ${limitParam} OFFSET ${offsetParam}`;
++  // Filtra/classifica antes do LIMIT, mas enriquece apenas a pagina.
++  // A base pode ser integrada ao plano: nao materializar todas as tarefas.
++  const expressions={status_integracao:status,tags,setor};
++  // Com filtros personalizados combinados, uma classificacao intermediaria
++  // evita que o otimizador repita subconsultas correlacionadas em nested loops.
++  const classify=!!(filters.tags||filters.setor||filters.status_integracao);
++  const needed=new Set();
++  if(classify)for(const condition of final)for(const match of condition.matchAll(/p\.(status_integracao|tags|setor)/g))needed.add(match[1]);
++  const filtered=final.map(condition=>condition.replace(/p\.(status_integracao|tags|setor)/g,(_,field)=>classify?'b.'+field:expressions[field]).replace(/\bp\./g,'b.'));
++  const onPage=expression=>expression.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id');
++  const classified=classify?`, classificadas AS MATERIALIZED (
++    SELECT b.*,${[...needed].map(field=>expressions[field]+' AS '+field).join(',')} FROM b
++   )`:'';
++  const pageFields=Object.entries(expressions).filter(([field])=>!needed.has(field)).map(([field,expr])=>onPage(expr)+' AS '+field);
++  const sql=`WITH b AS NOT MATERIALIZED (
++    ${baseSql}
++   )${classified}, pagina AS MATERIALIZED (
++    SELECT b.* FROM ${classify?'classificadas':'b'} b ${filtered.length?'WHERE '+filtered.join(' AND '):''}
++    ORDER BY ${sort.replace('p.','b.')} DESC NULLS LAST,b.tsk_id DESC
++    LIMIT ${limitParam} OFFSET ${offsetParam}
++   ) SELECT p.*,${pageFields.length?pageFields.join(',')+',':''}
++     a.age_name AS tecnico,tt.tty_description AS servico,
++     (SELECT to_jsonb(token_task)->>'tsk_accesstoken' FROM u45468.task token_task
++      WHERE token_task.tsk_id=p.tsk_id LIMIT 1) AS token
++    FROM pagina p
++    LEFT JOIN u45468.agent a ON a.age_id=p.age_id
++    LEFT JOIN u45468.tasktype tt ON tt.tty_id=p.tty_id
++    ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC`;
+  return {text:sql,values:val};
+ }
+ async function extraFields(pool,rows,ids){
+@@ -144,14 +154,17 @@
+   };
+  });
+ }
+-async function handler(req,res,{pool,hostRelatorioUmov}){
++async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'}){
+  const started=Date.now();let params;
+  try{params=parse(req)}catch(e){return res.status(e.status||400).json({ok:false,error:e.message})}
+- const key=(req.divisaoSS?.codigo||'geral')+':'+(req.originalUrl||req.url||'');
++ const version=perf.getGeneration();
++ const key=scope+':'+JSON.stringify(params);
++ const flightKey=version+':'+key;
+  const cached=!req.query._refresh&&C.get(key);
+  if(cached&&Date.now()-cached.ts<30000){res.set('X-Cache','HIT');res.set('X-CP-Search-Plan','fisica-campos-v6/cache');return res.json({...cached.data,ms:Date.now()-started})}
+  try{
+-  const ids=await fieldIds(pool,(req.divisaoSS?.lote1||req.originalUrl?.startsWith('/lote1/'))?'lote1':'principal');
++  const result=await searchFlight(flightKey,async()=>{
++  const ids=await fieldIds(pool,scope.startsWith('lote1:')?'lote1':'principal');
+   if(params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
+   if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
+   const stmt=statement(params,ids);
+@@ -165,10 +178,13 @@
+   const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
+    limit:params.limit,offset:params.offset,ms:Date.now()-started,
+    tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
+-  if(C.size>=100)C.clear();C.set(key,{ts:Date.now(),data});
++  if(perf.getGeneration()===version)C.set(key,{ts:Date.now(),data});
++  return {data,msBanco,msDetalhes:Date.now()-t1};
++  });
++  const {data,msBanco,msDetalhes}=result;
+   res.set('X-Cache','MISS');res.set('X-CP-Search-Plan','fisica-campos-v6');
+-  res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${Date.now()-t1}`);
+-  return res.json(data);
++  res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${msDetalhes}`);
++  return res.json({...data,ms:Date.now()-started});
+  }catch(e){console.error('[CP V6] pesquisa:',e.message);const timeout=/timeout|timed out|canceling statement|read timeout/i.test(e.message);return res.status(e.status|| (timeout?504:503)).json({ok:false,error:timeout?'A pesquisa excedeu o limite de resposta do uMov. Verifique o plano SQL físico.':e.message,plano:'fisica-campos-v6'});}
+ }
+ module.exports={handler,statement,parse,transform,fieldIds};
+--- a/cp-routes.js
++++ b/cp-routes.js
+@@ -1,17 +1,19 @@
+ 'use strict';
+ const path=require('node:path');
++const {scopedMap,singleFlight}=require('./lib/performance');
+ const {timingSafeEqual}=require('node:crypto');
+ 
+ // Modulo da Central de Operacoes. Reaproveita a instancia e o pool do GLOBAL SS.
+ // Backend adaptado do index.js original da Central; nenhum servidor ou pool duplicado.
+-module.exports=function registrarCentralOperacoes(app,pool){
++module.exports=function registrarCentralOperacoes(app,pool,{getScope=()=> 'principal:geral'}={}){
+   require('./cp-diagnostico-inicio')(app,pool); // CP_V28_DIAGNOSTICO_TEMPORARIO
+   require('./cp-excel')(app,pool); // Exportacao Excel com links oficiais do uMov
+   // CP_V24_MAPA_RASTREIO - fonte de rastreio protegida e independente das SS.
+   require('./cp-tracking').registrar(app);
+   const SUPABASE_URL=process.env.SUPABASE_URL || 'https://vzdqjinzjdzvurnsuujb.supabase.co';
+   const SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
+-  const cpCache=require('./cp-fast-cache').create({url:SUPABASE_URL,key:SUPABASE_SERVICE_ROLE_KEY,enabled:process.env.CP_PERSISTENT_CACHE_ENABLED!=='false'});
++  const persistentCache=require('./cp-fast-cache').create({url:SUPABASE_URL,key:SUPABASE_SERVICE_ROLE_KEY,enabled:process.env.CP_PERSISTENT_CACHE_ENABLED!=='false'});
++  const cpCache={enabled:persistentCache.enabled,load:(name,opts)=>persistentCache.load('isolado-v1:'+getScope()+':'+name,opts),save:(name,data)=>persistentCache.save('isolado-v1:'+getScope()+':'+name,data)};
+   const cpToday=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'});
+   function supabaseHeaders(){
+     const h={apikey:SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'};
+@@ -20,7 +22,7 @@
+   }
+   async function sbRequest(url,options={}){
+     if(!SUPABASE_SERVICE_ROLE_KEY)throw Error('Credencial Supabase nao configurada');
+-    const r=await fetch(`${SUPABASE_URL}/rest/v1/${url}`,{...options,headers:{...supabaseHeaders(),Prefer:'return=representation',...(options.headers||{})}});
++    const r=await fetch(`${SUPABASE_URL}/rest/v1/${url}`,{...options,headers:{...supabaseHeaders(),Prefer:'return=representation',...(options.headers||{})},signal:options.signal||AbortSignal.timeout(8000)});
+     if(!r.ok)throw Error('Consulta Supabase indisponivel ('+r.status+')');
+     return r.json();
+   }
+@@ -37,7 +39,8 @@
+  const m=String(v||'').match(/(?:^|\s)(\d{2,3})(?:\s|\-|$)/);
+  return m?m[1]:'';
+ }
+-async function lerVeiculos(){return await sbRequest('frotas_veiculos?select=id,placa,prefixo,tipo,status,polo,cidade,equipe_umov,funcionario_umov&order=placa.asc')}
++const fleetRequests=singleFlight();
++async function lerVeiculos(){return fleetRequests('frota',()=>sbRequest('frotas_veiculos?select=id,placa,prefixo,tipo,status,polo,cidade,equipe_umov,funcionario_umov&order=placa.asc'))}
+ async function mapaVeiculosFrotas(){
+  const m=new Map();
+  try{
+@@ -65,8 +68,8 @@
+ 
+ 
+ 
+-const CACHE=new Map();
+-const DATA_CACHE=new Map();
++const CACHE=scopedMap(getScope);
++const DATA_CACHE=scopedMap(getScope);
+ const DATA_CACHE_TTL=5*60*1000;
+ 
+ // CP_V21: consultas isoladas por IDs. Falha de um complemento não invalida a lista base.
+@@ -568,8 +571,10 @@
+ 
+ // Fonte oficial para os indicadores OPERACIONAIS: situacao e datas da dbout_task.
+ // Nao aplicar filtro de data: SS que continuam Em Campo podem ter sido abertas ha meses.
+-const ATIVAS_CACHE={dados:null,ts:0};
++const activeCaches=scopedMap(getScope,1);
+ app.get('/api/cp/ativas',async(req,res)=>{
++ let ATIVAS_CACHE=activeCaches.get('ativas');
++ if(!ATIVAS_CACHE){ATIVAS_CACHE={dados:null,ts:0};activeCaches.set('ativas',ATIVAS_CACHE);}
+  let activeFallback=null;
+  try{
+   const fresh=req.query.refresh==='1';
+@@ -695,7 +700,7 @@
+ });
+ 
+ // GPS separado da consulta principal: falhas aqui nao afetam os KPIs.
+-const GPS_CACHE=new Map();
++const GPS_CACHE=scopedMap(getScope);
+ app.post('/api/cp/ss-gps',async(req,res)=>{
+  const ids=[...new Set((Array.isArray(req.body?.task_ids)?req.body.task_ids:[]).map(Number).filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,40);
+  if(!ids.length)return res.json([]);
+--- a/integracoes/siscom/worker.js
++++ b/integracoes/siscom/worker.js
+@@ -146,6 +146,7 @@
+   ocupado = true;
+ 
+   let tarefaAtual = null;
++  let tarefaReservada = false;
+   let processouUmaTarefa = false;
+   try {
+     const { data: tarefas, error } = await supabase
+@@ -161,7 +162,7 @@
+ 
+     const tarefa = tarefas[0];
+     tarefaAtual = tarefa;
+-    let tarefaReservada = false;
++
+ 
+     const { data: reservada, error: erroReserva } = await supabase
+       .from("siscom_gateway_jobs")
+@@ -632,7 +633,7 @@
+ 
+   } catch (erro) {
+     console.error("Erro:", erro.message);
+-    if (tarefaAtual) {
++    if (tarefaAtual && tarefaReservada) {
+       const { error: erroStatus } = await supabase.from("siscom_gateway_jobs")
+         .update({status:"erro",error_message:String(erro.message).slice(0,250),
+           ...(tarefaAtual.operation==='siscom_login_individual'&&tarefaAtual.payload?.__siscom_identity?.sid?{payload:{__siscom_identity:{sid:tarefaAtual.payload.__siscom_identity.sid}}}:{}),
+@@ -642,14 +643,11 @@
+     }
+   } finally {
+     ocupado = false;
+-    // Fila ativa: busca proximo job sem aguardar o ciclo ocioso de 5 segundos.
+-    // Uma operacao SISCOM por vez, sem alterar politica de reenvio.
+-    if (processouUmaTarefa) setTimeout(processar, 200);
+   }
++  return processouUmaTarefa;
+ }
+ 
+ console.log("SISCOM Worker iniciado");
+-console.log("Consultando Supabase a cada 5 segundos");
+-
+-processar();
+-setInterval(processar, 5000);
++console.log("Fila sequencial; consulta ociosa configuravel por SISCOM_POLL_IDLE_MS");
++const polling=require('../../lib/worker-polling').fromEnv(processar);
++for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>polling.stop());
+--- /dev/null
++++ b/lib/performance.js
+@@ -0,0 +1,51 @@
++'use strict';
++// Caches locais limitados; cada banco/divisao possui seu proprio namespace.
++const registries = new Set();
++let generation = 0;
++class BoundedMap extends Map {
++  constructor(max = 200) { super(); this.max = max; }
++  set(key, value) {
++    this.delete(key); super.set(key, value);
++    while (this.size > this.max) this.delete(this.keys().next().value);
++    return this;
++  }
++}
++function scopedMap(scope = () => 'principal', max = 120) {
++  const maps = new Map();
++  registries.add(maps);
++  const current = () => {
++    const key = scope();
++    if (!maps.has(key)) maps.set(key, new BoundedMap(max));
++    return maps.get(key);
++  };
++  return {
++    get: key => current().get(key), set: (key, value) => current().set(key, value),
++    delete: key => current().delete(key), clear: () => current().clear(),
++    keys: () => current().keys(), get size() { return current().size; }
++  };
++}
++function invalidate() {
++  generation++;
++  for (const maps of registries) maps.clear();
++}
++function singleFlight(max = 200) {
++  const pending = new Map();
++  return function run(key, load) {
++    if (pending.has(key)) return pending.get(key);
++    if (pending.size >= max) return Promise.resolve().then(load);
++    const promise = Promise.resolve().then(load).finally(() => pending.delete(key));
++    pending.set(key, promise);
++    return promise;
++  };
++}
++const dateFormatter = new Intl.DateTimeFormat('pt-BR', {
++  timeZone: 'UTC', day: '2-digit', month: '2-digit', year: 'numeric',
++  hour: '2-digit', minute: '2-digit', hour12: false
++});
++const formatDate = value => value ? dateFormatter.format(new Date(value)).replace(',', '') : '';
++function positiveInt(value, fallback, max = 100) {
++  const n = Number(value);
++  return Number.isSafeInteger(n) && n > 0 ? Math.min(n, max) : fallback;
++}
++module.exports = { BoundedMap, scopedMap, singleFlight, invalidate, formatDate, positiveInt,
++  getGeneration: () => generation };
+--- /dev/null
++++ b/lib/worker-polling.js
+@@ -0,0 +1,17 @@
++'use strict';
++const {positiveInt}=require('./performance');
++// Um timer, uma operacao por vez. Drena fila ativa sem espera artificial.
++function startPolling(processOne, {idleMs=1000, errorMs=5000, schedule=setTimeout, cancel=clearTimeout, onError=console.error}={}) {
++  let stopped=false,timer=null;
++  async function tick(){
++    let delay=idleMs;
++    try{if(await processOne())delay=0;}catch(error){delay=errorMs;onError('Falha no ciclo do worker:',error.message);}
++    if(!stopped)timer=schedule(tick,delay);
++  }
++  timer=schedule(tick,0);
++  return {stop(){stopped=true;if(timer!==null)cancel(timer);}};
++}
++function fromEnv(processOne,env=process.env){
++ return startPolling(processOne,{idleMs:positiveInt(env.SISCOM_POLL_IDLE_MS,1000,60000),errorMs:5000});
++}
++module.exports={startPolling,fromEnv};
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -9,14 +9,26 @@
+       "version": "1.0.0",
+       "dependencies": {
+         "@sparticuz/chromium": "^141.0.0",
++        "@supabase/supabase-js": "^2.0.0",
++        "compression": "^1.8.2",
+         "dotenv": "^16.4.5",
+         "express": "^4.21.1",
+         "pg": "^8.13.1",
+         "puppeteer-core": "^24.0.0"
+       },
++      "devDependencies": {
++        "@electric-sql/pglite": "^0.5.16"
++      },
+       "engines": {
+         "node": "24.x"
+       }
++    },
++    "node_modules/@electric-sql/pglite": {
++      "version": "0.5.16",
++      "resolved": "https://registry.npmjs.org/@electric-sql/pglite/-/pglite-0.5.16.tgz",
++      "integrity": "sha512-Nj8KcIsJL748W408U2N8q4+9IlONdpRIU8MJypIAAINMJ5nqKyqpX7Mgg/5XKkXiAib3AoZGR6hnJFlrlLBrcg==",
++      "dev": true,
++      "license": "Apache-2.0"
+     },
+     "node_modules/@puppeteer/browsers": {
+       "version": "2.13.2",
+@@ -73,6 +85,98 @@
+       },
+       "engines": {
+         "node": ">=20.11.0"
++      }
++    },
++    "node_modules/@supabase/auth-js": {
++      "version": "2.119.0",
++      "resolved": "https://registry.npmjs.org/@supabase/auth-js/-/auth-js-2.119.0.tgz",
++      "integrity": "sha512-WI7KqJRxqZjm77PlRO/VfKretL4SG8g8stWfBmpyx9To+fFapZlSbXA8QkduoMvr72rRpIF24ZLrjktBrp+ZFA==",
++      "license": "MIT",
++      "dependencies": {
++        "tslib": "2.8.1"
++      },
++      "engines": {
++        "node": ">=22.0.0"
++      }
++    },
++    "node_modules/@supabase/functions-js": {
++      "version": "2.119.0",
++      "resolved": "https://registry.npmjs.org/@supabase/functions-js/-/functions-js-2.119.0.tgz",
++      "integrity": "sha512-0aOdF/Y4lA+62K02nwZClfAthXmFEml0od42q3yy/9t3bBitomAOYEatTFSnxT/5UeeIDNn2DOnXTdAP0sqGNQ==",
++      "license": "MIT",
++      "dependencies": {
++        "tslib": "2.8.1"
++      },
++      "engines": {
++        "node": ">=22.0.0"
++      }
++    },
++    "node_modules/@supabase/phoenix": {
++      "version": "0.4.5",
++      "resolved": "https://registry.npmjs.org/@supabase/phoenix/-/phoenix-0.4.5.tgz",
++      "integrity": "sha512-aAn9H9ovVyeApKy11OWOrrOGq8DV68yWeH4ud2lN9fzn4aO8Zb5GLL9m1pUg9nLqIcT+ZDfAcsZe0E/nqdv2lw==",
++      "license": "MIT"
++    },
++    "node_modules/@supabase/postgrest-js": {
++      "version": "2.119.0",
++      "resolved": "https://registry.npmjs.org/@supabase/postgrest-js/-/postgrest-js-2.119.0.tgz",
++      "integrity": "sha512-qBmcjEFO7Ptyf5qvOXYJa1s4bfA4zsMIFf2i+h2zd6RRTDLwquX8z1mnS9djNOJjbiO1OGFh5Y2Lc2k2pA8TMw==",
++      "license": "MIT",
++      "dependencies": {
++        "tslib": "2.8.1"
++      },
++      "engines": {
++        "node": ">=22.0.0"
++      }
++    },
++    "node_modules/@supabase/realtime-js": {
++      "version": "2.119.0",
++      "resolved": "https://registry.npmjs.org/@supabase/realtime-js/-/realtime-js-2.119.0.tgz",
++      "integrity": "sha512-fPzxt+SAYweqsZUCSZma2dvN+HT6lVjwWj8BbkVwapW6wNf1odUi+ATYN7svX4Zm9vt0kz0l0VzINAUAA38FEg==",
++      "license": "MIT",
++      "dependencies": {
++        "@supabase/phoenix": "0.4.5",
++        "tslib": "2.8.1"
++      },
++      "engines": {
++        "node": ">=22.0.0"
++      }
++    },
++    "node_modules/@supabase/storage-js": {
++      "version": "2.119.0",
++      "resolved": "https://registry.npmjs.org/@supabase/storage-js/-/storage-js-2.119.0.tgz",
++      "integrity": "sha512-htx1dSCnSJVPlx2BNSgLSUDvLMxuGbYa6pUPl5xoCs4as4cIhBVwuxj78zbggCyPHxLnEXjsV/qvlDsVjpodKw==",
++      "license": "MIT",
++      "dependencies": {
++        "iceberg-js": "^0.8.1",
++        "tslib": "2.8.1"
++      },
++      "engines": {
++        "node": ">=22.0.0"
++      }
++    },
++    "node_modules/@supabase/supabase-js": {
++      "version": "2.119.0",
++      "resolved": "https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-2.119.0.tgz",
++      "integrity": "sha512-MKP49G6bJbPhvsZDegZ/IXS/ITApPgplDCF5+F65KZ5kIArS5Y90WFxwvWYALx2bsxdrSuHvkCiXHYr3dU8+sw==",
++      "license": "MIT",
++      "dependencies": {
++        "@supabase/auth-js": "2.119.0",
++        "@supabase/functions-js": "2.119.0",
++        "@supabase/postgrest-js": "2.119.0",
++        "@supabase/realtime-js": "2.119.0",
++        "@supabase/storage-js": "2.119.0"
++      },
++      "engines": {
++        "node": ">=22.0.0"
++      },
++      "peerDependencies": {
++        "@opentelemetry/api": ">=1.0.0"
++      },
++      "peerDependenciesMeta": {
++        "@opentelemetry/api": {
++          "optional": true
++        }
+       }
+     },
+     "node_modules/@tootallnate/quickjs-emscripten": {
+@@ -383,6 +487,50 @@
+       "resolved": "https://registry.npmjs.org/color-name/-/color-name-1.1.4.tgz",
+       "integrity": "sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==",
+       "license": "MIT"
++    },
++    "node_modules/compressible": {
++      "version": "2.0.18",
++      "resolved": "https://registry.npmjs.org/compressible/-/compressible-2.0.18.tgz",
++      "integrity": "sha512-AF3r7P5dWxL8MxyITRMlORQNaOA2IkAFaTr4k7BUumjPtRpGDTZpl0Pb1XCO6JeDCBdp126Cgs9sMxqSjgYyRg==",
++      "license": "MIT",
++      "dependencies": {
++        "mime-db": ">= 1.43.0 < 2"
++      },
++      "engines": {
++        "node": ">= 0.6"
++      }
++    },
++    "node_modules/compression": {
++      "version": "1.8.2",
++      "resolved": "https://registry.npmjs.org/compression/-/compression-1.8.2.tgz",
++      "integrity": "sha512-o8vI5RE5A6EVVOd9o41jKp41aJom+QTEO/Bx8MYNjexMo/Bv2WOjUfZr+aL0WnYSgymUy6zeguqLTsIhV0gMvQ==",
++      "license": "MIT",
++      "dependencies": {
++        "bytes": "3.1.2",
++        "compressible": "~2.0.18",
++        "debug": "2.6.9",
++        "destroy": "1.2.0",
++        "negotiator": "~0.6.4",
++        "on-headers": "~1.1.0",
++        "safe-buffer": "5.2.1",
++        "vary": "~1.1.2"
++      },
++      "engines": {
++        "node": ">= 0.8.0"
++      },
++      "funding": {
++        "type": "opencollective",
++        "url": "https://opencollective.com/express"
++      }
++    },
++    "node_modules/compression/node_modules/negotiator": {
++      "version": "0.6.4",
++      "resolved": "https://registry.npmjs.org/negotiator/-/negotiator-0.6.4.tgz",
++      "integrity": "sha512-myRT3DiWPHqho5PrJaIRyaMv2kgYf0mUVgBNOYMuCH5Ki1yEiQaf/ZJuQ62nvpc44wL5WDbTX7yGJi1Neevw8w==",
++      "license": "MIT",
++      "engines": {
++        "node": ">= 0.6"
++      }
+     },
+     "node_modules/content-disposition": {
+       "version": "0.5.4",
+@@ -1043,6 +1191,15 @@
+       "integrity": "sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==",
+       "license": "MIT"
+     },
++    "node_modules/iceberg-js": {
++      "version": "0.8.1",
++      "resolved": "https://registry.npmjs.org/iceberg-js/-/iceberg-js-0.8.1.tgz",
++      "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA==",
++      "license": "MIT",
++      "engines": {
++        "node": ">=20.0.0"
++      }
++    },
+     "node_modules/iconv-lite": {
+       "version": "0.4.24",
+       "resolved": "https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.4.24.tgz",
+@@ -1216,6 +1373,15 @@
+       "dependencies": {
+         "ee-first": "1.1.1"
+       },
++      "engines": {
++        "node": ">= 0.8"
++      }
++    },
++    "node_modules/on-headers": {
++      "version": "1.1.0",
++      "resolved": "https://registry.npmjs.org/on-headers/-/on-headers-1.1.0.tgz",
++      "integrity": "sha512-737ZY3yNnXy37FHkQxPzt4UZ2UWPWiCZWLvFZ4fu5cueciegX0zGPnrlY6bwRg4FdQOe9YU8MkmJwGhoMybl8A==",
++      "license": "MIT",
+       "engines": {
+         "node": ">= 0.8"
+       }
+--- a/package.json
++++ b/package.json
+@@ -6,13 +6,21 @@
+     "node": "24.x"
+   },
+   "scripts": {
+-    "start": "node server.js"
++    "start": "node server.js",
++    "test": "node --test test/*.test.js",
++    "worker:siscom": "node integracoes/siscom/worker.js",
++    "benchmark": "node scripts/benchmark.js"
+   },
+   "dependencies": {
++    "@sparticuz/chromium": "^141.0.0",
++    "@supabase/supabase-js": "^2.0.0",
++    "compression": "^1.8.2",
+     "dotenv": "^16.4.5",
+     "express": "^4.21.1",
+     "pg": "^8.13.1",
+-    "@sparticuz/chromium": "^141.0.0",
+     "puppeteer-core": "^24.0.0"
++  },
++  "devDependencies": {
++    "@electric-sql/pglite": "^0.5.16"
+   }
+ }
+--- a/public/index.html
++++ b/public/index.html
+@@ -611,21 +611,23 @@
+ (()=>{
+  const input=$('buscaDiretaSS'),botao=$('buscaDiretaBtn'),limpar=$('buscaDiretaLimpar');
+  const painel=$('buscaDiretaPainel');if(painel)painel.remove();
+- let seq=0,timer,anterior=null;
++ let seq=0,timer,anterior=null,controller=null;
+  async function buscar(){
+   const ss=input.value.trim(),id=++seq;
+   if(ss.length<4){if(!ss)restaurar();else $('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return}
+   if(!window.__buscaSSAtiva)anterior={raw,offset:window.__pageOffset,total:window.__totalSS,hasMore:window.__hasMore,ms:window.ms};
++  if(controller)controller.abort();controller=new AbortController();
++  if(consultaListaAtual)consultaListaAtual.abort();numeroConsultaLista++;
+   window.__buscaSSAtiva=true;botao.disabled=true;$('countInfo').textContent='Pesquisando SS diretamente no PostgreSQL...';
+   try{
+-   const r=await fetch('/api/localizar-ss-rapida?ss='+encodeURIComponent(ss)+'&tela='+encodeURIComponent(currentScreen)+'&limit=30',{cache:'no-store'});const j=await r.json();if(id!==seq)return;
++   const r=await fetch('/api/localizar-ss-rapida?ss='+encodeURIComponent(ss)+'&tela='+encodeURIComponent(currentScreen)+'&limit=30',{cache:'no-store',signal:controller.signal});const j=await r.json();if(id!==seq)return;
+    if(!r.ok||!j.ok)throw Error(j.error||'Erro na consulta');
+    raw=j.rows||[];selected={};window.__pageOffset=0;window.__totalSS=raw.length;window.__hasMore=false;window.ms=null;apply();
+    if(!raw.length)$('countInfo').textContent=j.encontrados_fora_da_aba?'SS encontrada no uMov, mas não pertence à aba '+currentScreen+'.':'Nenhuma SS encontrada para '+ss+'.';else if(j.aviso)$('countInfo').textContent=j.aviso;
+-  }catch(e){if(id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
++  }catch(e){if(e.name!=='AbortError'&&id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
+   finally{if(id===seq)botao.disabled=false}
+  }
+- function restaurar(){seq++;clearTimeout(timer);window.__buscaSSAtiva=false;botao.disabled=false;selected={};
++ function restaurar(){seq++;clearTimeout(timer);if(controller)controller.abort();window.__buscaSSAtiva=false;botao.disabled=false;selected={};
+   if(anterior){raw=anterior.raw;window.__pageOffset=anterior.offset;window.__totalSS=anterior.total;window.__hasMore=anterior.hasMore;window.ms=anterior.ms;anterior=null;apply()}else load();
+  }
+  botao.onclick=buscar;
+--- /dev/null
++++ b/scripts/benchmark.js
+@@ -0,0 +1,35 @@
++'use strict';
++// Comparacao local, com PostgreSQL embarcado e dados sinteticos. Nao mede producao.
++const {performance}=require('node:perf_hooks');
++const assert=require('node:assert/strict');
++const {database,ids}=require('../test/fixtures/database');
++const original=require('../test/fixtures/original-statement');
++const {statement}=require('../cp-pesquisa-v6');
++const {formatDate}=require('../lib/performance');
++const median=values=>values.slice().sort((a,b)=>a-b)[Math.floor(values.length/2)];
++async function main(){
++ const count=20000,db=await database(count),results=[];
++ try{
++  for(const [tela,filters] of [['recepcao',{}],['campo',{}],['baixar',{}],['encerradas',{}],['tramitacao',{}],['encerradas',{tags:'Urgente'}]]){
++   const params={tela,filters,inicio:'2026-11-01',fim:'2026-12-01',macro:[],municipios:[],equipe:'',limit:25,offset:0};
++   const a=original(params,ids),b=statement(params,ids);
++   const oldRows=(await db.query(a.text,a.values)).rows,newRows=(await db.query(b.text,b.values)).rows;
++   assert.deepEqual(newRows,oldRows);
++   const times={original:[],optimized:[]};
++   for(let i=0;i<5;i++){
++    // Alterna a ordem para reduzir o efeito de aquecimento.
++    for(const label of i%2?['optimized','original']:['original','optimized']){
++     const q=label==='original'?a:b,start=performance.now();await db.query(q.text,q.values);times[label].push(performance.now()-start);
++    }
++   }
++   const oldMs=median(times.original),newMs=median(times.optimized);
++   results.push({tela,filters,original_ms:+oldMs.toFixed(2),optimized_ms:+newMs.toFixed(2),reduction_percent:+((1-newMs/oldMs)*100).toFixed(1),same_results:true});
++  }
++  const date=new Date('2026-11-01T12:00:00Z');let start=performance.now();
++  for(let i=0;i<1000;i++)new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(date);
++  const oldFormat=performance.now()-start;start=performance.now();for(let i=0;i<1000;i++)formatDate(date);
++  const newFormat=performance.now()-start;
++  console.log(JSON.stringify({environment:'Node '+process.version+' / PostgreSQL PGlite / sintetico sem rede',task_rows:count,iterations:5,statistic:'median, warm queries, alternating order',sql:results,date_format_1000:{original_ms:+oldFormat.toFixed(2),optimized_ms:+newFormat.toFixed(2)}},null,2));
++ }finally{await db.close();}
++}
++main().catch(e=>{console.error(e);process.exitCode=1;});
+--- /dev/null
++++ b/scripts/indices-recomendados.sql
+@@ -0,0 +1,28 @@
++-- RECOMENDACOES PARA O RESPONSAVEL PELO BANCO; nenhum indice e aplicado pelo app.
++-- Primeiro confirme se task/local/customfieldvalue sao tabelas fisicas e quais
++-- indices equivalentes ja existem. Nao crie indices em views dbout_*.
++-- uMov pode oferecer apenas leitura: neste caso solicite ao fornecedor.
++SELECT schemaname, tablename, indexname, indexdef
++FROM pg_indexes
++WHERE schemaname IN ('u45468','u46915','public')
++  AND tablename IN ('task','local','customfieldvalue','siscom_gateway_jobs')
++ORDER BY schemaname,tablename,indexname;
++
++-- Exemplos a avaliar com EXPLAIN (ANALYZE, BUFFERS) em ambiente de homologacao.
++-- Substitua o schema para o lote correto e verifique custos de escrita/espaco.
++-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ss_task_status_abertura_idx
++-- ON u45468.task (lower(trim(coalesce(tsk_situation,''))),tsk_insertdatehour DESC,tsk_id DESC);
++-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ss_task_ultima_idx
++-- ON u45468.task (tsk_lastexecutiondatehour DESC NULLS LAST,tsk_id DESC);
++-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ss_task_local_idx
++-- ON u45468.task (loc_id,tsk_id DESC);
++-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ss_cfv_registro_campo_idx
++-- ON u45468.customfieldvalue (cfv_registerid,cfd_id);
++-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ss_local_numero_idx
++-- ON u45468.local (loc_integrationid);
++-- Busca ILIKE '%texto%' exige avaliacao de pg_trgm/GIN para cada coluna usada.
++-- Nao habilitar extensoes automaticamente nem indexar todas as colunas sem medir.
++
++-- Supabase: fila pendente ordenada por criacao; nao incluir payload no indice.
++-- CREATE INDEX CONCURRENTLY IF NOT EXISTS siscom_jobs_pendentes_criacao_idx
++-- ON public.siscom_gateway_jobs (created_at) WHERE status='pendente';
+--- /dev/null
++++ b/scripts/preview-fixture.js
+@@ -0,0 +1,3 @@
++// Previa local com dados sinteticos; nao se conecta ao uMov/SISCOM.
++const {fixtureApp}=require('../test/fixtures/app');
++fixtureApp().then(({app})=>app.listen(3100,'127.0.0.1',()=>console.log('Fixture http://127.0.0.1:3100')));
+--- a/server.js
++++ b/server.js
+@@ -1,12 +1,16 @@
+ require('dotenv').config();
+ const express=require('express'),{Pool}=require('pg'),path=require('path');
+ const fs=require('node:fs');
++const performance=require('./lib/performance');
++const pageTemplates=new performance.BoundedMap(8);
++function readPage(name){if(!pageTemplates.has(name))pageTemplates.set(name,fs.readFileSync(path.join(__dirname,'public',name),'utf8'));return pageTemplates.get(name);}
+ const {AsyncLocalStorage}=require('node:async_hooks');
+ const loteContext=new AsyncLocalStorage();
+ const emLote1=()=>loteContext.getStore()?.lote1===true;
+ const LOTE1_CIDADES=['VITORIA','SERRA','FUNDAO','ARACRUZ'];
+ const normalizarCidade=v=>String(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+ const app=express(),PORT=Number(process.env.PORT||3000);
++app.use(require('compression')({threshold:1024,level:4}));
+ // Em ambientes serverless (Vercel), a mesma instÃ¢ncia pode atender vÃ¡rias
+ // requisiÃ§Ãµes. Um pool curto evita abrir conexÃµes demais no PostgreSQL.
+ const poolPrincipal=new Pool({
+@@ -16,7 +20,7 @@
+  user:process.env.DB_USER,
+  password:String(process.env.DB_PASSWORD||''),
+  ssl:String(process.env.DB_SSL||'false').toLowerCase()==='true'?{rejectUnauthorized:false}:false,
+- max:3,
++ max:performance.positiveInt(process.env.DB_POOL_MAX,3,20),
+  connectionTimeoutMillis:5000,
+  idleTimeoutMillis:20000,
+  allowExitOnIdle:true
+@@ -29,9 +33,10 @@
+  host:process.env.DB_HOST,port:Number(process.env.DB_PORT||5432),database:nomeBancoLote1,
+  user:process.env.DB_USER,password:String(process.env.DB_PASSWORD||''),
+  ssl:String(process.env.DB_SSL||'false').toLowerCase()==='true'?{rejectUnauthorized:false}:false,
+- max:3,connectionTimeoutMillis:5000,idleTimeoutMillis:20000,allowExitOnIdle:true
+-});
+-const pool={query:(...args)=>{
++ max:performance.positiveInt(process.env.DB_POOL_MAX,3,20),connectionTimeoutMillis:5000,idleTimeoutMillis:20000,allowExitOnIdle:true
++});
++const cacheScope=()=>[emLote1()?'lote1':'principal',loteContext.getStore()?.divisao||'geral'].join(':');
++const pool={cacheScope,query:(...args)=>{
+  if(!emLote1())return poolPrincipal.query(...args);
+  if(!nomeBancoLote1||nomeBancoLote1===process.env.DB_NAME)throw Error('Banco Lote 1 nao configurado de forma isolada');
+  if(typeof args[0]==='string')args[0]=args[0].replace(/\bu45468\./g,'"'+schemaLote1+'".').replace(/table_schema='u45468'/g,"table_schema='"+schemaLote1+"'");
+@@ -74,9 +79,7 @@
+ 
+   if(!match[2]){
+    try{
+-    let html=fs.readFileSync(
+-     path.join(__dirname,'public','index.html'),'utf8'
+-    );
++    let html=readPage('index.html');
+ 
+     const antes="const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
+ 
+@@ -318,7 +321,7 @@
+   if(nomeBancoLote1===process.env.DB_NAME)return res.status(503).send('Banco Lote 1 deve ser diferente do banco principal.');
+   if(pagina){
+    try{
+-    let html=fs.readFileSync(path.join(__dirname,'public','index.html'),'utf8');
++    let html=readPage('index.html');
+     const antes="const CIDADES_CONFIGURADAS=['VILA VELHA','CARIACICA','VIANA','GUARAPARI','ANCHIETA','PIUMA','RECANTO DA SEREIA'];";
+     if(!html.includes(antes))return res.status(503).send('Lista de cidades do layout mudou; atualize o integrador do Lote 1.');
+     html=html.replace(antes,"const CIDADES_CONFIGURADAS=['VIT\u00D3RIA','SERRA','FUND\u00C3O','ARACRUZ'];");
+@@ -351,6 +354,24 @@
+  });
+ });
+ 
++const invalidatingRoutes=new Set([
++ '/api/auth/logout','/api/enviar-equipe','/api/status-integracao','/api/remover-equipe',
++ '/api/retornar-recepcao','/api/tags','/api/duplicidades/aplicar-tag',
++ '/api/siscom-gateway/sincronizar-baixa','/api/siscom-gateway/sincronizar-baixa-existente',
++ '/api/siscom-gateway/sincronizar-rejeicao'
++]);
++app.use((req,res,next)=>{
++ const route=req.url.split('?')[0];
++ const started=process.hrtime.bigint();
++ res.on('finish',()=>{
++  if(!['GET','HEAD','OPTIONS'].includes(req.method)&&invalidatingRoutes.has(route)&&res.statusCode<400){
++   cache.clear(); performance.invalidate();
++  }
++  const ms=Number(process.hrtime.bigint()-started)/1e6;
++  if(process.env.PERF_LOG==='true'&&ms>=1000)console.info('[performance]',req.method,req.path,res.statusCode,Math.round(ms)+'ms');
++ });
++ next();
++});
+ app.use(express.json({limit:'100kb'}));
+ // Teste de SSO OIDC (desativado por padrÃ£o). Nunca recebe senhas do uMov.
+ const crypto=require('node:crypto');
+@@ -790,12 +811,22 @@
+ // Modo SSO de teste: bloquear todas as rotas de negÃ³cio atÃ© as permissÃµes do uMov serem verificadas.
+ // Mesmo um login vÃ¡lido NÃƒO libera dados ou aÃ§Ãµes administrativas.
+ app.use('/api',(req,res,next)=>{if(!OIDC_ENABLED)return next();const x=verified(cookies(req)[OIDC_COOKIE]);if(!x)return res.status(401).json({ok:false,error:'FaÃ§a login com uMov.'});return res.status(403).json({ok:false,error:'Login validado. Aguardando integraÃ§Ã£o de permissÃµes do uMov; acesso Ã s SS bloqueado por seguranÃ§a.'})});
+-require('./cp-routes')(app,pool);
++require('./cp-routes')(app,pool,{getScope:cacheScope});
+ app.get('/cm', (req, res) => {
+   res.sendFile(path.join(__dirname, 'public', 'cm.html'));
+ });
+-app.use(express.static(path.join(__dirname,'public')));
+-const cache=new Map(),cacheKey=k=>(emLote1()?'lote1:':'principal:')+k,getCache=(k,ttl)=>{const x=cache.get(cacheKey(k));return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(cacheKey(k),{ts:Date.now(),data:v}),v);
++app.use(express.static(path.join(__dirname,'public'),{maxAge:'1h',setHeaders(res,file){if(file.endsWith('.html'))res.setHeader('Cache-Control','no-cache');}}));
++const cache=new performance.BoundedMap(500),cacheKey=k=>(emLote1()?'lote1:':'principal:')+k,getCache=(k,ttl)=>{const x=cache.get(cacheKey(k));return x&&Date.now()-x.ts<ttl?x.data:null},setCache=(k,v)=>(cache.set(cacheKey(k),{ts:Date.now(),data:v}),v);
++const catalogueFlight=performance.singleFlight();
++async function cachedRead(key,ttl,load){
++ const hit=getCache(key,ttl);if(hit!==null)return hit;
++ const generation=performance.getGeneration();
++ return catalogueFlight(cacheKey(key)+':'+generation,async()=>{
++  const value=await load();
++  if(performance.getGeneration()===generation)setCache(key,value);
++  return value;
++ });
++}
+ async function extrasLocal(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT loc_id,loc_integrationid AS ss,e_localidade AS cidade,e_bairro AS bairro,e_setor AS setor,e_reflocalizacao AS referencia_localizacao,loc_description AS localizacao,loc_street AS logradouro,loc_streetnumber AS numero,e_hidrometro AS hidrometro,e_situacao AS status_integracao,e_servicoexecutadosiscom AS servico_executado,e_informacaoexecucaosiscom AS informacao_bombeiro,e_informacaosolicitante AS informacao_solicitante,e_esclarecimentosolicitante AS esclarecimento_solicitante,to_jsonb(dbout_local) AS campos FROM u45468.dbout_local WHERE loc_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.loc_id),x));return m}
+ async function extrasTask(ids){const u=[...new Set(ids.filter(Boolean).map(Number).filter(Number.isFinite))],m=new Map();if(!u.length)return m;const r=await pool.query({text:`SELECT d.tsk_id,d.tss_id,d.tsk_accesstoken,d.tsk_situation AS situacao_campo,d.e_tag AS tags,d.e_situacao AS status_integracao,d.tsk_realinitialdatehour AS inicio_atividade_raw,d.tsk_lastexecutiondatehour AS ultima_atividade_raw,d.tsk_realfinaldatehour AS fim_real_raw,to_jsonb(d) AS campos FROM u45468.dbout_task d WHERE d.tsk_id=ANY($1::bigint[])`,values:[u],query_timeout:5000});r.rows.forEach(x=>m.set(String(x.tsk_id),x));return m}
+ const campo=(row,...nomes)=>{const dados=row?.campos||{};for(const nome of nomes){const valor=dados[nome];if(valor!==null&&valor!==undefined&&String(valor).trim()!=='')return String(valor)}return ''};
+@@ -839,7 +870,7 @@
+  const q=await pool.query({text:`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tsk_insertdatehour,d.tsk_lastexecutiondatehour,d.tsk_situation AS situacao_campo,d.e_situacao AS status_integracao,l.loc_integrationid AS ss,l.loc_city AS cidade_base,l.loc_neighborhood AS bairro_base,l.loc_street AS logradouro_base,l.loc_streetnumber AS numero_base,a.age_name AS tecnico,tt.tty_description AS servico ${base} ORDER BY ${tela==='recepcao'?'t.tsk_insertdatehour':'d.tsk_lastexecutiondatehour'} DESC NULLS LAST,t.tsk_id DESC LIMIT $2 OFFSET $3`,values:[...values,limit+1,offset],query_timeout:9000});
+  const hasMore=q.rows.length>limit; q.rows=q.rows.slice(0,limit);
+  const [locals,tasks]=await Promise.all([extrasLocal(q.rows.map(x=>x.loc_id)),extrasTask(q.rows.map(x=>x.tsk_id))]);
+- const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
++ const fmt=v=>v?performance.formatDate(v):'';
+  const rows=q.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return {ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" â€“ "),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
+  res.json({ok:true,rows,total,count:rows.length,limit,offset,hasMore});
+  }catch(e){console.error('Busca SS:',e);res.status(500).json({ok:false,error:e.message})}});
+@@ -890,7 +921,7 @@
+ // somente quando o respectivo filtro estiver preenchido.
+ const CP_PESQUISA_CACHE=new Map();
+ app.get('/api/pesquisa-global',async(req,res)=>{
+- if(process.env.CP_PESQUISA_V6 !== 'false') return require('./cp-pesquisa-v6').handler(req,res,{pool,hostRelatorioUmov});
++ if(process.env.CP_PESQUISA_V6 !== 'false') return require('./cp-pesquisa-v6').handler(req,res,{pool,hostRelatorioUmov,scope:cacheScope()});
+  if(process.env.CP_PESQUISA_V4 !== 'false') return require('./cp-pesquisa-v4').handler(req,res,{pool,extrasLocal,extrasTask,campo,hostRelatorioUmov});
+  try{
+  const inicioConsulta=Date.now();
+@@ -1003,7 +1034,7 @@
+  const [locals,tasks,agents,types]=await Promise.all([extrasLocal(items.map(x=>x.loc_id)),extrasTask(items.map(x=>x.tsk_id)),pool.query({text:'SELECT age_id,age_name FROM u45468.agent WHERE age_id=ANY($1::bigint[])',values:[items.map(x=>x.age_id).filter(Boolean)],query_timeout:5000}),pool.query({text:'SELECT tty_id,tty_description FROM u45468.tasktype WHERE tty_id=ANY($1::bigint[])',values:[items.map(x=>x.tty_id).filter(Boolean)],query_timeout:5000})]);
+  const msExtras=Date.now()-inicioExtras;
+  const agentMap=new Map(agents.rows.map(x=>[String(x.age_id),x.age_name]));const typeMap=new Map(types.rows.map(x=>[String(x.tty_id),x.tty_description]));
+- const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
++ const fmt=v=>v?performance.formatDate(v):'';
+  const rows=items.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:x.ss||l.ss||'',tarefa:x.tsk_id,local:x.loc_id,cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',servico:typeMap.get(String(x.tty_id))||'',tecnico:agentMap.get(String(x.age_id))||'',equipe_executou:agentMap.get(String(x.age_id))||'',tags:t.tags||'',situacao_campo:x.situacao_campo||'',status_integracao:x.status_integracao||'',tss_id:t.tss_id||'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',servico_executado:l.informacao_bombeiro||l.servico_executado||'',materiais_bombeiro:campo(l,'e_material','e_materialusado')||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' â€“ '),criado_em:fmt(x.tsk_insertdatehour),link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:''}});
+  res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${msExtras}`);
+  const dados={ok:true,rows,total:null,count:rows.length,limit,offset,hasMore,ms:Date.now()-inicioConsulta,tempos:{banco_ms:msBanco,detalhes_ms:msExtras}};
+@@ -1036,7 +1067,7 @@
+     extrasLocal(encontrados.map(x=>x.loc_id).filter(Boolean)),
+     extrasTask(encontrados.map(x=>x.tarefa))
+   ]);
+-  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
++  const fmt=v=>v?performance.formatDate(v):'';
+   const rows=encontrados.map(x=>{
+     const l=locaisExtras.get(String(x.loc_id))||{},t=tarefasExtras.get(String(x.tarefa))||{};
+     return {ss:x.ss||'',tarefa:x.tarefa,local:x.loc_id,cidade:l.cidade||x.cidade||'',bairro:l.bairro||x.bairro||'',logradouro:l.logradouro||x.rua||'',numero:l.numero||'',setor:l.setor||'',servico:x.servico||'',tags:t.tags||'',situacao_campo:x.situacao||'',status_integracao:x.status_integracao||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tss_id:t.tss_id||'',link:hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tarefa}/${t.tsk_accesstoken}`:'',hidrometro:l.hidrometro||'',referencia_localizacao:l.referencia_localizacao||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:fmt(t.ultima_atividade_raw),data_finalizacao:fmt(t.ultima_atividade_raw),periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(' â€“ '),criado_em:fmt(x.criado_em)};
+@@ -1052,7 +1083,7 @@
+  if(tela==='recepcao'){
+   const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca});
+   const [locals,tasks]=await Promise.all([extrasLocal(pagina.rows.map(x=>x.loc_id)),extrasTask(pagina.rows.map(x=>x.tsk_id))]);
+-  const fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';
++  const fmt=v=>v?performance.formatDate(v):'';
+   const rows=pagina.rows.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{};return{ss:l.ss||'',cidade:l.cidade||'',bairro:l.bairro||'',setor:l.setor||'',logradouro:l.logradouro||'',numero:l.numero||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${encodeURIComponent(t.tsk_accesstoken)}`:'',situacao_campo:x.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:'',informacao_bombeiro:'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:'',fim_atividade:'',fim_real:'',ultima_atividade:'',data_finalizacao:'',periodo_execucao:'',criado_em:fmt(x.tsk_insertdatehour)}});
+   const total=null; // PaginaÃ§Ã£o leve: sem COUNT(*) a cada pÃ¡gina.
+   const data={ok:true,count:rows.length,total,hasMore:total===null?pagina.hasMore:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows};setCache(key,data);res.set('X-Cache','MISS');return res.json(data);
+@@ -1074,13 +1105,26 @@
+  const registrosPagina=base.rows.slice(0,limit);
+  const [locals,tasks]=await Promise.all([extrasLocal(registrosPagina.map(x=>x.loc_id)),extrasTask(registrosPagina.map(x=>x.tsk_id))]);
+  const msExtras=Date.now()-tExtras;
+- const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'UTC',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(v)).replace(',',''):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||t.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" â€“ "),criado_em:fmt(x.data_referencia)}});
++ const rows=registrosPagina.map(x=>{const l=locals.get(String(x.loc_id))||{},t=tasks.get(String(x.tsk_id))||{},fmt=v=>v?performance.formatDate(v):'';const dataFinalizacao=fmt(t.ultima_atividade_raw);return{ss:x.ss||'',cidade:l.cidade||x.cidade_base||'',bairro:l.bairro||x.bairro_base||'',setor:l.setor||'',logradouro:l.logradouro||x.logradouro_base||'',numero:l.numero||x.numero_base||'',referencia_localizacao:l.referencia_localizacao||'',localizacao:l.localizacao||'',servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:t.equipe_executou||x.tecnico||'',tarefa:x.tsk_id,local:x.loc_id,tss_id:t.tss_id||'',link:(hostRelatorioUmov()&&Number(t.tss_id)===50&&t.tsk_accesstoken)?`https://${hostRelatorioUmov()}/CenterWeb/report/schedule/${x.tsk_id}/${t.tsk_accesstoken}`:'',situacao_campo:x.situacao_campo||t.situacao_campo||'',tags:t.tags||'',status_integracao:x.status_integracao||l.status_integracao||t.status_integracao||'',hidrometro:l.hidrometro||'',servico_executado:l.informacao_bombeiro||l.servico_executado||campo(l,'e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||campo(t,'e_informacaoexecucaosiscom','e_informacaoexecucao','e_informacaoexecucaocampo','e_retornoexecucao','e_servicoexecutado','e_servicoexecutadoequipe')||'',materiais_bombeiro:campo(l,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||campo(t,'e_materialusado','e_material','e_materiais','e_materialutilizado','e_materiaisutilizados','e_materiaislancados')||'',informacao_solicitante:l.informacao_solicitante||'',esclarecimento_solicitante:l.esclarecimento_solicitante||'',inicio_atividade:fmt(t.inicio_atividade_raw),fim_atividade:fmt(t.fim_real_raw),fim_real:fmt(t.fim_real_raw),ultima_atividade:dataFinalizacao,data_finalizacao:dataFinalizacao,periodo_execucao:[fmt(t.inicio_atividade_raw),fmt(t.fim_real_raw||t.ultima_atividade_raw)].filter(Boolean).join(" â€“ "),criado_em:fmt(x.data_referencia)}});
+  const total=null; // PaginaÃ§Ã£o leve: sem varredura para contar todas as SS.
+  const data={ok:true,count:rows.length,total,hasMore:total===null?base.rows.length>limit:offset+rows.length<total,offset,limit,ms:Date.now()-started,rows,tempos:{banco_ms:msBanco,detalhes_ms:msExtras}};setCache(key,data);res.set('X-Cache','MISS');res.set('Server-Timing',`banco;dur=${msBanco},detalhes;dur=${msExtras}`);res.json(data);
+ }catch(e){console.error('RecepÃ§Ã£o:',e);res.status(500).json({ok:false,error:e.message})}});
+-app.get('/api/macros',async(req,res)=>{try{const hit=getCache('macros',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(tty_description) AS macro FROM u45468.tasktype WHERE tty_description IS NOT NULL AND TRIM(tty_description)<>'' ORDER BY 1`,query_timeout:6000});setCache('macros',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
+-app.get('/api/cidades',async(req,res)=>{try{const hit=getCache('cidades',300000);if(hit)return res.json({ok:true,rows:hit});const r=await pool.query({text:`SELECT DISTINCT TRIM(e_localidade) AS cidade FROM u45468.dbout_local WHERE e_localidade IS NOT NULL AND TRIM(e_localidade)<>'' ORDER BY 1`,query_timeout:6000});setCache('cidades',r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
+-app.get('/api/equipes',async(req,res)=>{try{const q=String(req.query.q||'').trim(),key='eq:'+(emLote1()?'lote1':'principal')+':'+q.toLowerCase(),hit=getCache(key,60000);if(hit)return res.json({ok:true,rows:hit});const values=[],where=['age_name IS NOT NULL',"TRIM(age_name)<>''"];if(q){values.push('%'+q+'%');where.push('(age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1)')}const r=await pool.query({text:`SELECT DISTINCT age_id AS id,age_name AS nome FROM u45468.agent WHERE ${where.join(' AND ')} ORDER BY age_name LIMIT 80`,values,query_timeout:6000});setCache(key,r.rows);res.json({ok:true,rows:r.rows})}catch(e){res.status(500).json({ok:false,error:e.message})}});
++app.get('/api/macros',async(req,res)=>{try{
++ const rows=await cachedRead('macros',300000,async()=> (await pool.query({text:`SELECT DISTINCT TRIM(tty_description) AS macro FROM u45468.tasktype WHERE tty_description IS NOT NULL AND TRIM(tty_description)<>'' ORDER BY 1`,query_timeout:6000})).rows);
++ res.json({ok:true,rows});
++}catch(e){res.status(500).json({ok:false,error:e.message})}});
++app.get('/api/cidades',async(req,res)=>{try{
++ const rows=await cachedRead('cidades',300000,async()=> (await pool.query({text:`SELECT DISTINCT TRIM(e_localidade) AS cidade FROM u45468.dbout_local WHERE e_localidade IS NOT NULL AND TRIM(e_localidade)<>'' ORDER BY 1`,query_timeout:6000})).rows);
++ res.json({ok:true,rows});
++}catch(e){res.status(500).json({ok:false,error:e.message})}});
++app.get('/api/equipes',async(req,res)=>{try{
++ const q=String(req.query.q||'').trim();
++ const rows=await cachedRead('eq:'+q.toLowerCase(),60000,async()=>{
++  const values=[],where=['age_name IS NOT NULL',"TRIM(age_name)<>''"];
++  if(q){values.push('%'+q+'%');where.push('(age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1)')}
++  return (await pool.query({text:`SELECT DISTINCT age_id AS id,age_name AS nome FROM u45468.agent WHERE ${where.join(' AND ')} ORDER BY age_name LIMIT 80`,values,query_timeout:6000})).rows;
++ });res.json({ok:true,rows});
++}catch(e){res.status(500).json({ok:false,error:e.message})}});
+ 
+ // Envio de SS para equipe: grava no uMov, nunca apenas na interface.
+ app.post('/api/enviar-equipe',async(req,res)=>{
+@@ -1196,7 +1240,7 @@
+  const saida={servico_executado:'',materiais_bombeiro:'',pavimentacao:''};
+  for(const tabela of historicosExecucao){
+   try{
+-   const meta=await pool.query({text:`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2`,values:[emLote1()?'u46915':'u45468',tabela],query_timeout:4000});
++   const meta=await cachedRead('schema:'+tabela,300000,()=>pool.query({text:`SELECT column_name FROM information_schema.columns WHERE table_schema=$1 AND table_name=$2`,values:[emLote1()?schemaLote1:'u45468',tabela],query_timeout:4000}));
+    const nomes=new Set(meta.rows.map(r=>r.column_name));
+    const chave=['tsk_id','task_id','tsk_id_task','hts_tsk_id'].find(n=>nomes.has(n));
+    if(!chave){console.warn('Historico sem chave de tarefa conhecida:',tabela);continue}
+@@ -1204,7 +1248,7 @@
+    const selecionados=campos.filter(n=>nomes.has(n));if(!selecionados.length)continue;
+    const ordenacao=['hts_id','htr_id','his_id','id'].find(n=>nomes.has(n));
+    const preenchidos=selecionados.map(n=>`NULLIF(BTRIM("${n}"::text),'') IS NOT NULL`).join(' OR ');
+-    const sql=`SELECT ${selecionados.map(n=>'"'+n+'"').join(',')} FROM ${emLote1()?"u46915":"u45468"}."${tabela}" WHERE "${chave}"=$1 AND (${preenchidos}) ${ordenacao?'ORDER BY "'+ordenacao+'" DESC':''} LIMIT 30`;
++    const sql=`SELECT ${selecionados.map(n=>'"'+n+'"').join(',')} FROM ${emLote1()?schemaLote1:"u45468"}."${tabela}" WHERE "${chave}"=$1 AND (${preenchidos}) ${ordenacao?'ORDER BY "'+ordenacao+'" DESC':''} LIMIT 30`;
+    const resultado=await pool.query({text:sql,values:[tarefa],query_timeout:6000});
+    for(const r of resultado.rows){
+     if(!saida.servico_executado&&r.e_cp_servicoexecutado?.trim())saida.servico_executado=r.e_cp_servicoexecutado;
+--- /dev/null
++++ b/test/cache-codec.test.js
+@@ -0,0 +1,22 @@
++'use strict';
++const {test}=require('node:test');
++const assert=require('node:assert/strict');
++const zlib=require('node:zlib');
++const {create}=require('../cp-fast-cache');
++test('cache comprimido continua compativel com dados antigos e rejeita payload invalido',async()=>{
++ const original=global.fetch;let record;
++ global.fetch=async(url,options)=>{
++  if(options.method==='POST'){record=JSON.parse(options.body);return {ok:true};}
++  return {ok:true,json:async()=>[record]};
++ };
++ try{
++  const cache=create({url:'https://example.test',key:'test-key-long-enough'});
++  const payload={dados:[{ss:'11/26-000001-01',texto:'x'.repeat(10000)}],truncado:false};
++  assert.equal(await cache.save('page',payload),true);
++  assert.deepEqual(JSON.parse(zlib.gunzipSync(Buffer.from(record.payload_b64,'base64'))),payload);
++  assert.deepEqual((await cache.load('page')).payload,payload);
++  record.payload_b64=zlib.gzipSync(JSON.stringify({dados:[]})).toString('base64');
++  assert.equal(await cache.load('page'),null);
++  record.cached_at='2020-01-01';assert.equal(await cache.load('page'),null);
++ }finally{global.fetch=original;}
++});
+--- /dev/null
++++ b/test/fixtures/app.js
+@@ -0,0 +1,27 @@
++'use strict';
++const {database}=require('./database');
++async function fixtureApp(){
++ const main=await database(),lote=await database();
++ await main.exec("UPDATE u45468.local SET loc_city='CARIACICA' WHERE loc_city='VITÓRIA'");
++ await lote.exec("UPDATE u45468.local SET loc_city='SERRA' WHERE loc_city='VILA VELHA'");
++ let calls=0;
++ const pg=require('pg'),OriginalPool=pg.Pool;
++ process.env.DB_NAME='fixture-principal';process.env.DB_NAME_LOTE1='fixture-lote1';
++ process.env.UMOV_OIDC_ENABLED='false';process.env.CP_PERSISTENT_CACHE_ENABLED='false';
++ class FixturePool{
++  constructor(options){this.db=options.database==='fixture-lote1'?lote:main;}
++  async connect(){return {query:this.query.bind(this),release(){}};}
++  async query(query,values){
++   calls++;
++   let text=typeof query==='string'?query:query.text;
++   text=text.replaceAll('"u46915".','u45468.');
++   // As views dbout de producao nao fazem parte da fixture SQL fisica.
++   if(/u45468\.dbout_/.test(text))return {rows:[]};
++   return this.db.query(text,values||(typeof query==='object'?query.values:[])||[]);
++  }
++ }
++ pg.Pool=FixturePool;
++ const app=require('../../server');pg.Pool=OriginalPool;
++ return {app,getCalls:()=>calls,async close(){await main.close();await lote.close();}};
++}
++module.exports={fixtureApp};
+--- /dev/null
++++ b/test/fixtures/database.js
+@@ -0,0 +1,31 @@
++'use strict';
++const {PGlite}=require('@electric-sql/pglite');
++async function database(count=180){
++ if(!Number.isSafeInteger(count)||count<1||count>100000)throw Error('Invalid fixture size');
++ const db=new PGlite();
++ await db.exec(`CREATE SCHEMA u45468;
++ CREATE TABLE u45468.task(tsk_id bigint PRIMARY KEY,loc_id bigint,age_id bigint,tty_id bigint,tss_id int,tsk_situation text,tsk_insertdatehour timestamp,tsk_lastexecutiondatehour timestamp,tsk_realinitialdatehour timestamp,tsk_realfinaldatehour timestamp,tsk_accesstoken text);
++ CREATE TABLE u45468.local(loc_id bigint PRIMARY KEY,loc_integrationid text,loc_city text,loc_neighborhood text,loc_street text,loc_streetnumber text);
++ CREATE TABLE u45468.agent(age_id bigint PRIMARY KEY,age_name text);
++ CREATE TABLE u45468.tasktype(tty_id bigint PRIMARY KEY,tty_description text);
++ CREATE TABLE u45468.customfield(cfd_id bpchar PRIMARY KEY,cfd_table text,cfd_integrationid text);
++ CREATE TABLE u45468.customfieldvalue(cfv_registerid bigint,cfd_id bpchar,cfv_internalvalue text,cfv_externalvalue text);
++ CREATE TABLE u45468.customentityvalue(cev_id bigint PRIMARY KEY,cev_description text);
++ INSERT INTO u45468.agent VALUES(1,'Equipe 01'),(2,'Equipe 02');
++ INSERT INTO u45468.tasktype VALUES(1,'Agua'),(2,'Esgoto');
++ INSERT INTO u45468.customfield VALUES('status','task','situacao'),('tags','task','tag'),('setor','local','setor');
++ INSERT INTO u45468.customentityvalue VALUES(1,'Baixada no Siscom');
++ INSERT INTO u45468.local SELECT n,'11/26-'||lpad(n::text,6,'0')||'-01',CASE WHEN n%2=0 THEN 'VILA VELHA' ELSE 'VITÓRIA' END,'Centro','Rua '||n,'10' FROM generate_series(1,${count}) n;
++ INSERT INTO u45468.task SELECT n,n,(n%2)+1,(n%2)+1,50,
++ CASE WHEN n%3=0 THEN 'Pendente de envio para campo' WHEN n%3=1 THEN 'Em campo' ELSE 'Retornada de campo' END,
++ '2026-11-01'::timestamp+(n||' minutes')::interval,'2026-11-02'::timestamp+(n||' minutes')::interval,'2026-11-02'::timestamp,'2026-11-02'::timestamp,'token-'||n FROM generate_series(1,${count}) n;
++ INSERT INTO u45468.customfieldvalue SELECT n,'status',CASE WHEN n%4=0 THEN '1' WHEN n%4=1 THEN 'Rejeitada' ELSE '' END,'' FROM generate_series(1,${count}) n;
++ INSERT INTO u45468.customfieldvalue SELECT n,'tags',CASE WHEN n%2=0 THEN 'Urgente' ELSE 'Normal' END,'' FROM generate_series(1,${count}) n;
++ INSERT INTO u45468.customfieldvalue SELECT n,'setor','Setor A','' FROM generate_series(1,${count}) n;
++ CREATE INDEX task_status_date ON u45468.task(lower(trim(coalesce(tsk_situation,''))),tsk_insertdatehour DESC,tsk_id DESC);
++ CREATE INDEX cfv_lookup ON u45468.customfieldvalue(cfv_registerid,cfd_id);
++ ANALYZE;`);
++ return db;
++}
++const ids={status:['status'],tags:['tags'],setor:['setor'],hidrometro:[],referencia:[],info:[],esclarecimento:[],servicoExecutado:[],materiais:[]};
++module.exports={database,ids};
+--- /dev/null
++++ b/test/fixtures/original-statement.js
+@@ -0,0 +1,80 @@
++// Referencia SQL recebida no ZIP, usada apenas para comparacao de resultados.
++const isoDate=x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x).trim());
++function statement(params, ids){
++ const val=[];const add=x=>{val.push(x);return '$'+val.length};
++ const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
++ const base=[];
++ if(!filters.ss&&isoDate(inicio)&&isoDate(fim)){
++  const col='t.tsk_insertdatehour';
++  base.push(`${col} >= ${add(inicio)}::date`,`${col} < (${add(fim)}::date + INTERVAL '1 day')`);
++ }
++ const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'"};
++ if(conditions[tela])base.push(conditions[tela]);
++ const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
++ if(filters.ss)like('l.loc_integrationid',filters.ss);
++ if(filters.logradouro)like('l.loc_street',filters.logradouro);
++ if(filters.bairro)like('l.loc_neighborhood',filters.bairro);
++ if(filters.cidade)like('l.loc_city',filters.cidade);
++ if(filters.servico)like('tt.tty_description',filters.servico);
++ if(filters.equipe_executou)like('a.age_name',filters.equipe_executou);
++ if(filters.criado_em)like("TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')",filters.criado_em);
++ if(filters.data_finalizacao){
++  const p=add('%'+filters.data_finalizacao+'%');
++  base.push(`(TO_CHAR(t.tsk_lastexecutiondatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p} OR TO_CHAR(t.tsk_realfinaldatehour,'DD/MM/YYYY HH24:MI') ILIKE ${p})`);
++ }
++ if(macro.length)base.push(`TRIM(tt.tty_description)=ANY(${add(macro)}::text[])`);
++ if(municipios.length){
++  const cityParam=add(municipios);
++  // Filtragem direta pela tabela fisica antes da paginacao.
++  const normCity=expr=>`translate(UPPER(TRIM(${expr})),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')`;
++  base.push(`${normCity('l.loc_city')}=ANY(${cityParam}::text[])`);
++ }
++ if(equipe)like('a.age_name',equipe);
++ const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
++ // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
++ const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
++ const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
++ const final=[];
++ if(tela==='baixar')final.push("COALESCE(NULLIF(TRIM(p.status_integracao),''),'')=''",'p.tsk_lastexecutiondatehour IS NOT NULL');
++ else if(tela==='encerradas')final.push("NULLIF(TRIM(p.status_integracao),'') IS NOT NULL");
++ else if(tela==='tramitacao')final.push("LOWER(TRIM(COALESCE(p.status_integracao,''))) LIKE 'baixad%'");
++ if(filters.tags)final.push(`p.tags ILIKE ${add('%'+filters.tags+'%')}`);
++ if(filters.setor)final.push(`p.setor ILIKE ${add('%'+filters.setor+'%')}`);
++ if(filters.status_integracao)final.push(`p.status_integracao ILIKE ${add('%'+filters.status_integracao+'%')}`);
++ // Filtros são avaliados antes da paginação. Inclui uma linha a mais para hasMore.
++ const limitParam=add(limit+1), offsetParam=add(offset);
++ const sort=tela==='recepcao'?'p.tsk_insertdatehour':'p.tsk_lastexecutiondatehour';
++  const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
++     t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
++     t.tsk_situation, (to_jsonb(t)->>'tsk_accesstoken') AS token,
++     l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
++     l.loc_street AS logradouro,l.loc_streetnumber AS numero,
++     a.age_name AS tecnico,tt.tty_description AS servico
++    FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
++    LEFT JOIN u45468.agent a ON a.age_id=t.age_id
++    LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
++    ${base.length?'WHERE '+base.join(' AND '):''}`;
++  // Somente Recepcao e Em Campo sem filtros de campos personalizados:
++  // paginar primeiro e consultar status/TAG/setor apenas nas linhas da pagina.
++  // Nos demais casos, os filtros de status/TAG/setor continuam ANTES do LIMIT.
++  const paginaPrimeiro=(tela==='recepcao'||tela==='campo')&&final.length===0;
++  const sql=paginaPrimeiro
++   ? `WITH b AS MATERIALIZED (
++       ${baseSql}
++      ), pagina AS MATERIALIZED (
++       SELECT * FROM b ORDER BY ${sort.replace('p.','b.')} DESC NULLS LAST,b.tsk_id DESC
++       LIMIT ${limitParam} OFFSET ${offsetParam}
++      ) SELECT p.*,${status.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS status_integracao,
++       ${tags.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS tags,
++       ${setor.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id')} AS setor
++       FROM pagina p ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC`
++   : `WITH b AS MATERIALIZED (
++       ${baseSql}
++      ), p AS MATERIALIZED (
++       SELECT b.*,${status} AS status_integracao,${tags} AS tags,${setor} AS setor FROM b
++      ) SELECT * FROM p ${final.length?'WHERE '+final.join(' AND '):''}
++      ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC LIMIT ${limitParam} OFFSET ${offsetParam}`;
++ return {text:sql,values:val};
++}
++
++module.exports=statement;
+--- /dev/null
++++ b/test/http.test.js
+@@ -0,0 +1,36 @@
++'use strict';
++const {test,before,after}=require('node:test');
++const assert=require('node:assert/strict');
++const {fixtureApp}=require('./fixtures/app');
++let fixture,server,base;
++before(async()=>{fixture=await fixtureApp();server=fixture.app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;});
++after(async()=>{if(server)await new Promise(r=>server.close(r));if(fixture)await fixture.close();});
++test('HTTP real: gzip, cache, invalidacao e isolamento entre lotes/divisoes',async()=>{
++ const search='/api/pesquisa-global?tela=campo&limit=50';
++ let response=await fetch(base+search,{headers:{'Accept-Encoding':'gzip'}});
++ assert.equal(response.status,200);assert.equal(response.headers.get('content-encoding'),'gzip');
++ assert((await response.json()).rows.length>0);
++ response=await fetch(base+search);assert.equal(response.headers.get('x-cache'),'HIT');
++ await fetch(base+'/api/auth/logout',{method:'POST'});
++ response=await fetch(base+search);assert.equal(response.headers.get('x-cache'),'MISS');
++ for(const [prefix,allowed] of [['ODVV',['VILA VELHA']],['ODVT',['VITÓRIA']],['ODLN',['SERRA']]]){
++  response=await fetch(base+'/'+prefix+search);
++  assert.equal(response.status,200,prefix);
++  const data=await response.json();assert(data.rows.length>0,prefix);
++  assert(data.rows.every(row=>allowed.includes(row.cidade)),prefix);
++ }
++ const a=await fetch(base+search).then(r=>r.json());
++ const b=await fetch(base+'/lote1'+search).then(r=>r.json());
++ assert(a.rows.every(r=>!['SERRA','VITÓRIA'].includes(r.cidade)));
++ assert(b.rows.every(r=>['SERRA','VITÓRIA'].includes(r.cidade)));
++});
++test('catalogos compartilham consulta e assets podem usar cache do navegador',async()=>{
++ const before=fixture.getCalls();
++ const responses=await Promise.all(Array.from({length:20},()=>fetch(base+'/api/macros').then(r=>r.json())));
++ assert(responses.every(r=>r.ok));assert.equal(fixture.getCalls()-before,1);
++ const asset=await fetch(base+'/duplicidades-global.js');assert.equal(asset.status,200);assert.match(asset.headers.get('cache-control'),/max-age=3600/);
++ const html=await fetch(base+'/');assert.equal(html.status,200);assert.equal(html.headers.get('cache-control'),'no-cache');
++ for(const path of ['/ODVV','/ODVT','/lote1']){
++  const page=await fetch(base+path);assert.equal(page.status,200,path);assert((await page.text()).includes(path+'/api/'));
++ }
++});
+--- /dev/null
++++ b/test/performance.test.js
+@@ -0,0 +1,36 @@
++'use strict';
++const {test}=require('node:test');
++const assert=require('node:assert/strict');
++const {AsyncLocalStorage}=require('node:async_hooks');
++const {BoundedMap,scopedMap,singleFlight,invalidate}=require('../lib/performance');
++const {startPolling}=require('../lib/worker-polling');
++test('cache limitado e isolamento entre requisicoes concorrentes',async()=>{
++ const context=new AsyncLocalStorage(),map=scopedMap(()=>context.getStore(),2);
++ await Promise.all(['principal','lote1','ODVV'].map(scope=>context.run(scope,async()=>{
++  map.set('a',scope);await Promise.resolve();assert.equal(map.get('a'),scope);
++  map.set('b',2);map.set('c',3);assert.equal(map.size,2);assert.equal(map.get('a'),undefined);
++ })));
++ invalidate();context.run('principal',()=>assert.equal(map.size,0));
++ const bounded=new BoundedMap(1);bounded.set('a',1).set('b',2);assert.equal(bounded.size,1);
++});
++test('singleFlight compartilha trabalho e libera falhas para nova tentativa',async()=>{
++ const run=singleFlight();let count=0;
++ const load=async()=>{count++;await Promise.resolve();return 42;};
++ assert.deepEqual(await Promise.all(Array.from({length:50},()=>run('same',load))),Array(50).fill(42));
++ assert.equal(count,1);await assert.rejects(run('fail',async()=>{throw Error('fail');}));
++ assert.equal(await run('fail',load),42);
++});
++test('fila drena imediatamente, aguarda quando vazia e nunca sobrepoe operacoes',async()=>{
++ const tasks=[];let active=0,maxActive=0,cycle=0;
++ const poll=startPolling(async()=>{active++;maxActive=Math.max(maxActive,active);await Promise.resolve();active--;return ++cycle<3;},{idleMs:1000,schedule(fn,ms){tasks.push({fn,ms});return tasks.length;},cancel(){}});
++ assert.equal(tasks[0].ms,0);
++ await tasks.shift().fn();assert.equal(tasks[0].ms,0);
++ await tasks.shift().fn();assert.equal(tasks[0].ms,0);
++ await tasks.shift().fn();assert.equal(tasks[0].ms,1000);assert.equal(maxActive,1);
++ poll.stop();await tasks.shift().fn();assert.equal(tasks.length,0);
++});
++test('erro de ciclo usa recuo sem repetir operacao dentro do ciclo',async()=>{
++ const tasks=[];let calls=0;
++ const poll=startPolling(async()=>{calls++;throw Error('offline');},{errorMs:5000,onError(){},schedule(fn,ms){tasks.push({fn,ms});},cancel(){}});
++ await tasks.shift().fn();assert.equal(calls,1);assert.equal(tasks[0].ms,5000);poll.stop();
++});
+--- /dev/null
++++ b/test/search.test.js
+@@ -0,0 +1,43 @@
++'use strict';
++const {test,before,after}=require('node:test');
++const assert=require('node:assert/strict');
++const {database,ids}=require('./fixtures/database');
++const original=require('./fixtures/original-statement');
++const v6=require('../cp-pesquisa-v6');
++const perf=require('../lib/performance');
++let db;
++before(async()=>{db=await database();});
++after(async()=>{await db.close();});
++for(const tela of ['recepcao','campo','baixar','encerradas','tramitacao']){
++ test('SQL preserva resultados, filtros e paginacao: '+tela,async()=>{
++  for(const filters of [{},{tags:'Urgente'},{setor:'Setor A'},{ss:'0001'},{servico:'Agua'},{equipe_executou:'01'},{status_integracao:'Baixada'},{criado_em:'01/11'},{data_finalizacao:'02/11'}]){
++   for(const offset of [0,3]){
++    const params={tela,filters,inicio:'2026-11-01',fim:'2026-11-03',macro:[],municipios:['VILA VELHA'],equipe:'',limit:5,offset};
++    const old=original(params,ids),next=v6.statement(params,ids);
++    const a=await db.query(old.text,old.values),b=await db.query(next.text,next.values);
++    assert.deepEqual(b.rows,a.rows,JSON.stringify({tela,filters,offset}));
++   }
++  }
++ });
++}
++function response(){return {headers:{},set(k,v){this.headers[k]=v;return this;},status(n){this.code=n;return this;},json(data){this.data=data;return this;}};}
++test('30 pesquisas concorrentes compartilham consultas e refresh nao cria chaves infinitas',async()=>{
++ perf.invalidate();let calls=0;
++ const pool={async query(q){calls++;await new Promise(r=>setTimeout(r,5));return db.query(q.text,q.values);}};
++ const make=refresh=>({query:{tela:'campo',limit:'5',_refresh:refresh},url:'/api/pesquisa-global'});
++ const responses=Array.from({length:30},response);
++ await Promise.all(responses.map((r,i)=>v6.handler(make(String(i)),r,{pool,scope:'principal:geral'})));
++ assert.equal(calls,2); // um metadado + uma pagina, sem extras locais configurados
++ assert(responses.every(r=>r.data.ok&&r.data.rows.length===5));
++ const hit=response();await v6.handler(make(undefined),hit,{pool,scope:'principal:geral'});
++ assert.equal(hit.headers['X-Cache'],'HIT');assert.equal(calls,2);
++ const second=response();await v6.handler(make(undefined),second,{pool,scope:'lote1:geral'});
++ assert.equal(second.headers['X-Cache'],'MISS');assert.equal(calls,4);
++ perf.invalidate();const invalid=response();await v6.handler(make(undefined),invalid,{pool,scope:'principal:geral'});
++ assert.equal(invalid.headers['X-Cache'],'MISS');
++});
++test('SQL mantem valores fornecidos fora do texto da consulta',()=>{
++ const injection="' OR 1=1 --";
++ const q=v6.statement({tela:'encerradas',filters:{ss:injection},macro:[],municipios:[],equipe:'',limit:5,offset:0},ids);
++ assert(!q.text.includes(injection));assert(q.values.includes('%'+injection+'%'));
++});
+--- /dev/null
++++ b/test/worker.test.js
+@@ -0,0 +1,35 @@
++'use strict';
++const {test}=require('node:test');
++const assert=require('node:assert/strict');
++const vm=require('node:vm');
++const fs=require('node:fs');
++for(const file of ['worker.js','integracoes/siscom/worker.js']){
++ for(const reservation of ['owned','lost','failed']){
++  test(file+' reserva '+reservation+' antes de atualizar status',async()=>{
++   let processOne;const updates=[];
++   const supabase={from(){
++    let body=null;
++    const chain={select(){return this;},eq(){return this;},order(){return this;},limit(){return this;},update(value){body=value;updates.push(value);return this;},
++     then(resolve,reject){
++      let result;
++      if(!body)result={data:[{id:'one',operation:'healthcheck',payload:{}}]};
++      else if(body.status==='processando')result=reservation==='failed'?{error:Error('reservation failed')}:{data:reservation==='owned'?[{id:'one'}]:[]};
++      else result={data:[]};
++      return Promise.resolve(result).then(resolve,reject);
++     }};return chain;
++   }};
++   const sandbox={console:{log(){},error(){}},process:{env:{SUPABASE_URL:'https://example.test',SUPABASE_SECRET_KEY:'test-key'},platform:'linux',once(){}},setTimeout,Buffer,URL,URLSearchParams,AbortSignal,
++    require(name){
++     if(name==='dotenv')return {config(){}};
++     if(name==='@supabase/supabase-js')return {createClient:()=>supabase};
++     if(name.endsWith('/lib/worker-polling'))return {fromEnv(fn){processOne=fn;return {stop(){}};}};
++     return require(name);
++    }};
++   vm.runInNewContext(fs.readFileSync(file,'utf8'),sandbox,{filename:file});
++   const worked=await processOne();
++   assert.equal(updates[0].status,'processando');
++   if(reservation==='owned'){assert.equal(worked,true);assert.equal(updates[1].status,'concluido');assert.equal(updates.length,2);}
++   else assert.equal(updates.length,1,'nao alterar job reservado por outro processo');
++  });
++ }
++}
+--- a/worker.js
++++ b/worker.js
+@@ -24,6 +24,8 @@
+   ocupado = true;
+ 
+   let tarefaAtual = null;
++  let tarefaReservada = false;
++  let processouUmaTarefa = false;
+   try {
+     const { data: tarefas, error } = await supabase
+       .from("siscom_gateway_jobs")
+@@ -38,7 +40,7 @@
+ 
+     const tarefa = tarefas[0];
+     tarefaAtual = tarefa;
+-    let tarefaReservada = false;
++
+ 
+     const { data: reservada, error: erroReserva } = await supabase
+       .from("siscom_gateway_jobs")
+@@ -54,6 +56,7 @@
+     if (!reservada || reservada.length === 0) return;
+ 
+     tarefaReservada = true;
++    processouUmaTarefa = true;
+     console.log("Processando:", tarefa.id);
+ 
+     let resultado;
+@@ -272,7 +275,7 @@
+ 
+   } catch (erro) {
+     console.error("Erro:", erro.message);
+-    if (tarefaAtual) {
++    if (tarefaAtual && tarefaReservada) {
+       const { error: erroStatus } = await supabase.from("siscom_gateway_jobs")
+         .update({status:"erro",error_message:String(erro.message).slice(0,250),finished_at:new Date().toISOString()})
+         .eq("id",tarefaAtual.id).eq("status","processando");
+@@ -281,10 +284,10 @@
+   } finally {
+     ocupado = false;
+   }
++  return processouUmaTarefa;
+ }
+ 
+ console.log("SISCOM Worker iniciado");
+-console.log("Consultando Supabase a cada 5 segundos");
+-
+-processar();
+-setInterval(processar, 5000);
++console.log("Fila sequencial; consulta ociosa configuravel por SISCOM_POLL_IDLE_MS");
++const polling=require('./lib/worker-polling').fromEnv(processar);
++for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>polling.stop());

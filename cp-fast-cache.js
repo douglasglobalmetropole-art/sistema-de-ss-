@@ -3,6 +3,8 @@
 // A camada pode ser desativada via CP_PERSISTENT_CACHE_ENABLED=false.
 const crypto=require('node:crypto');
 const zlib=require('node:zlib');
+const {promisify}=require('node:util');
+const gzip=promisify(zlib.gzip),gunzip=promisify(zlib.gunzip);
 const TABLE='central_operacoes_cache';
 const MAX_INFLATED=18*1024*1024;
 const MAX_COMPRESSED=3*1024*1024;
@@ -34,7 +36,7 @@ function create(options={}) {
    if(!Number.isFinite(age)||age< -120000||age>maxStaleMs)return null;
    const buf=Buffer.from(row.payload_b64,'base64');
    if(!buf.length||buf.length>MAX_COMPRESSED)throw Error('compressed-size');
-   const payload=JSON.parse(zlib.gunzipSync(buf,{maxOutputLength:MAX_INFLATED}).toString('utf8'));
+   const payload=JSON.parse((await gunzip(buf,{maxOutputLength:MAX_INFLATED})).toString('utf8'));
    if(!payload||!Array.isArray(payload.dados)||typeof payload.truncado!=='boolean')return null;
    return {payload,at:row.cached_at,age,stale:age>maxAgeMs};
   }catch(err){console.warn('CP cache (leitura):',String(err.message||err).slice(0,100));return null;}
@@ -44,7 +46,7 @@ function create(options={}) {
   try {
    const raw=Buffer.from(JSON.stringify(payload));
    if(raw.length>MAX_INFLATED)return false;
-   const buf=zlib.gzipSync(raw,{level:4});
+   const buf=await gzip(raw,{level:4});
    if(buf.length>MAX_COMPRESSED)return false;
    const response=await fetch(base+'/rest/v1/'+TABLE,{
     method:'POST',headers:{...headers(),Prefer:'resolution=merge-duplicates,return=minimal'},

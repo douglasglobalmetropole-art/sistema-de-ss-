@@ -6,13 +6,21 @@
     "node": "24.x"
   },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "worker:siscom": "node integracoes/siscom/worker.js",
+    "benchmark": "node scripts/benchmark.js"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^141.0.0",
+    "@supabase/supabase-js": "^2.0.0",
+    "compression": "^1.8.2",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "pg": "^8.13.1",
-    "@sparticuz/chromium": "^141.0.0",
     "puppeteer-core": "^24.0.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16"
   }
 }

@@ -1,17 +1,19 @@
 'use strict';
 const path=require('node:path');
+const {scopedMap,singleFlight}=require('./lib/performance');
 const {timingSafeEqual}=require('node:crypto');
 
 // Modulo da Central de Operacoes. Reaproveita a instancia e o pool do GLOBAL SS.
 // Backend adaptado do index.js original da Central; nenhum servidor ou pool duplicado.
-module.exports=function registrarCentralOperacoes(app,pool){
+module.exports=function registrarCentralOperacoes(app,pool,{getScope=()=> 'principal:geral'}={}){
   require('./cp-diagnostico-inicio')(app,pool); // CP_V28_DIAGNOSTICO_TEMPORARIO
   require('./cp-excel')(app,pool); // Exportacao Excel com links oficiais do uMov
   // CP_V24_MAPA_RASTREIO - fonte de rastreio protegida e independente das SS.
   require('./cp-tracking').registrar(app);
   const SUPABASE_URL=process.env.SUPABASE_URL || 'https://vzdqjinzjdzvurnsuujb.supabase.co';
   const SUPABASE_SERVICE_ROLE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || '';
-  const cpCache=require('./cp-fast-cache').create({url:SUPABASE_URL,key:SUPABASE_SERVICE_ROLE_KEY,enabled:process.env.CP_PERSISTENT_CACHE_ENABLED!=='false'});
+  const persistentCache=require('./cp-fast-cache').create({url:SUPABASE_URL,key:SUPABASE_SERVICE_ROLE_KEY,enabled:process.env.CP_PERSISTENT_CACHE_ENABLED!=='false'});
+  const cpCache={enabled:persistentCache.enabled,load:(name,opts)=>persistentCache.load('isolado-v1:'+getScope()+':'+name,opts),save:(name,data)=>persistentCache.save('isolado-v1:'+getScope()+':'+name,data)};
   const cpToday=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'America/Sao_Paulo'});
   function supabaseHeaders(){
     const h={apikey:SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'};
@@ -20,7 +22,7 @@ module.exports=function registrarCentralOperacoes(app,pool){
   }
   async function sbRequest(url,options={}){
     if(!SUPABASE_SERVICE_ROLE_KEY)throw Error('Credencial Supabase nao configurada');
-    const r=await fetch(`${SUPABASE_URL}/rest/v1/${url}`,{...options,headers:{...supabaseHeaders(),Prefer:'return=representation',...(options.headers||{})}});
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/${url}`,{...options,headers:{...supabaseHeaders(),Prefer:'return=representation',...(options.headers||{})},signal:options.signal||AbortSignal.timeout(8000)});
     if(!r.ok)throw Error('Consulta Supabase indisponivel ('+r.status+')');
     return r.json();
   }
@@ -37,7 +39,8 @@ function equipeNumero(v){
  const m=String(v||'').match(/(?:^|\s)(\d{2,3})(?:\s|\-|$)/);
  return m?m[1]:'';
 }
-async function lerVeiculos(){return await sbRequest('frotas_veiculos?select=id,placa,prefixo,tipo,status,polo,cidade,equipe_umov,funcionario_umov&order=placa.asc')}
+const fleetRequests=singleFlight();
+async function lerVeiculos(){return fleetRequests('frota',()=>sbRequest('frotas_veiculos?select=id,placa,prefixo,tipo,status,polo,cidade,equipe_umov,funcionario_umov&order=placa.asc'))}
 async function mapaVeiculosFrotas(){
  const m=new Map();
  try{
@@ -65,8 +68,8 @@ async function mapaVeiculosFrotas(){
 
 
 
-const CACHE=new Map();
-const DATA_CACHE=new Map();
+const CACHE=scopedMap(getScope);
+const DATA_CACHE=scopedMap(getScope);
 const DATA_CACHE_TTL=5*60*1000;
 
 // CP_V21: consultas isoladas por IDs. Falha de um complemento não invalida a lista base.
@@ -568,8 +571,10 @@ app.get('/api/cp/programadas-status',async(req,res)=>{
 
 // Fonte oficial para os indicadores OPERACIONAIS: situacao e datas da dbout_task.
 // Nao aplicar filtro de data: SS que continuam Em Campo podem ter sido abertas ha meses.
-const ATIVAS_CACHE={dados:null,ts:0};
+const activeCaches=scopedMap(getScope,1);
 app.get('/api/cp/ativas',async(req,res)=>{
+ let ATIVAS_CACHE=activeCaches.get('ativas');
+ if(!ATIVAS_CACHE){ATIVAS_CACHE={dados:null,ts:0};activeCaches.set('ativas',ATIVAS_CACHE);}
  let activeFallback=null;
  try{
   const fresh=req.query.refresh==='1';
@@ -695,7 +700,7 @@ app.get('/api/cp/ativas',async(req,res)=>{
 });
 
 // GPS separado da consulta principal: falhas aqui nao afetam os KPIs.
-const GPS_CACHE=new Map();
+const GPS_CACHE=scopedMap(getScope);
 app.post('/api/cp/ss-gps',async(req,res)=>{
  const ids=[...new Set((Array.isArray(req.body?.task_ids)?req.body.task_ids:[]).map(Number).filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,40);
  if(!ids.length)return res.json([]);

@@ -1,0 +1,34 @@
+{
+  "pages": [
+    {
+      "path": "/",
+      "status": 200,
+      "title": "SS / Tarefas - Recepção"
+    },
+    {
+      "path": "/ODVV",
+      "status": 200,
+      "title": "SS / Tarefas - Recepção"
+    },
+    {
+      "path": "/ODVT",
+      "status": 200,
+      "title": "SS / Tarefas - Recepção"
+    },
+    {
+      "path": "/lote1",
+      "status": 200,
+      "title": "SS / Tarefas - Recepção"
+    },
+    {
+      "path": "/cp",
+      "status": 200,
+      "title": "Central de Operações | Global Metrópole"
+    }
+  ],
+  "page_errors": [],
+  "programmatic_direct_search_mock": {
+    "aborted_previous_request": 1
+  },
+  "note": "Dados sinteticos; smoke test de pagina, sem validar operacoes reais."
+}

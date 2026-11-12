@@ -24,6 +24,8 @@ async function processar() {
   ocupado = true;
 
   let tarefaAtual = null;
+  let tarefaReservada = false;
+  let processouUmaTarefa = false;
   try {
     const { data: tarefas, error } = await supabase
       .from("siscom_gateway_jobs")
@@ -38,7 +40,7 @@ async function processar() {
 
     const tarefa = tarefas[0];
     tarefaAtual = tarefa;
-    let tarefaReservada = false;
+
 
     const { data: reservada, error: erroReserva } = await supabase
       .from("siscom_gateway_jobs")
@@ -54,6 +56,7 @@ async function processar() {
     if (!reservada || reservada.length === 0) return;
 
     tarefaReservada = true;
+    processouUmaTarefa = true;
     console.log("Processando:", tarefa.id);
 
     let resultado;
@@ -272,7 +275,7 @@ async function processar() {
 
   } catch (erro) {
     console.error("Erro:", erro.message);
-    if (tarefaAtual) {
+    if (tarefaAtual && tarefaReservada) {
       const { error: erroStatus } = await supabase.from("siscom_gateway_jobs")
         .update({status:"erro",error_message:String(erro.message).slice(0,250),finished_at:new Date().toISOString()})
         .eq("id",tarefaAtual.id).eq("status","processando");
@@ -281,10 +284,10 @@ async function processar() {
   } finally {
     ocupado = false;
   }
+  return processouUmaTarefa;
 }
 
 console.log("SISCOM Worker iniciado");
-console.log("Consultando Supabase a cada 5 segundos");
-
-processar();
-setInterval(processar, 5000);
+console.log("Fila sequencial; consulta ociosa configuravel por SISCOM_POLL_IDLE_MS");
+const polling=require('./lib/worker-polling').fromEnv(processar);
+for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>polling.stop());

@@ -1,0 +1,103 @@
+GLOBAL SS — RELATÓRIO DE OTIMIZAÇÃO
+
+Escopo: análise estática do projeto recebido e implementação nos gargalos identificados.
+Não é uma certificação de desempenho de todas as APIs. Não houve acesso aos bancos,
+credenciais, rede privada SISCOM ou métricas de produção. Nada foi publicado.
+
+ALTERAÇÕES APLICADAS
+1. Pesquisa V6: base SQL integrada ao plano, paginação antes de enriquecer os registros,
+   joins de equipe/serviço e leitura do token concentrados na página. Filtros de status,
+   TAG, setor e divisão continuam antes do LIMIT/OFFSET. Para filtros personalizados,
+   uma etapa materializada evita a regressão de nested loops observada no benchmark.
+2. Pesquisas idênticas simultâneas compartilham o trabalho em andamento. Chave baseada
+   nos parâmetros efetivos, banco/divisão e geração, sem criar entradas por timestamp
+   de _refresh. Cache máximo de 100 pesquisas; TTL original de 30s preservado.
+3. Central de Operações: caches de histórico, ativas, GPS, KPIs e indicadores isolados
+   por contexto; cache persistente ganha namespace novo por banco/divisão. Limites
+   de memória preservam as entradas mais recentes. Frota compartilha chamadas em voo
+   sem introduzir TTL que atrasaria alterações cadastrais.
+4. Compressão/descompressão do cache passa a usar operações assíncronas de zlib,
+   mantendo formato gzip e limites de tamanho. JSON ainda é processado pelo Node.
+5. Compressão HTTP para respostas elegíveis acima de 1 KB, nível 4. Assets estáticos
+   têm cache de 1h; HTML é revalidado. Template das páginas de lotes fica em memória
+   após a primeira leitura. Alterações do template exigem reiniciar/republicar.
+6. Catálogos de macros, cidades e equipes compartilham leituras concorrentes; cache
+   principal fica limitado a 500 entradas. Metadados de formulários são reaproveitados
+   por 5min; histórico respeita DB_SCHEMA_LOTE1 configurável.
+7. Formatação de datas reutiliza Intl.DateTimeFormat nas listagens e pesquisa direta.
+8. Workers: timer único sem sobreposição, próxima tarefa imediata, polling ocioso
+   configurável (1s padrão). Validação e baixa continuam sequenciais; nenhum POST de
+   negócio recebe retry automático. Correção da propriedade de reserva: um worker
+   que perde a disputa por um job não altera o status desse job no tratamento de erro.
+9. Dependência @supabase/supabase-js declarada e lockfile atualizado. Comando do worker
+   completo e iniciador PowerShell compatíveis com a estrutura efetivamente recebida.
+10. Pesquisa direta no navegador cancela a busca anterior e a listagem pendente,
+    reduzindo requisições desnecessárias e evitando sobrescrita por resposta antiga.
+11. Sucesso em rotas de alteração de SS invalida os caches locais registrados. Criação
+    de jobs de consulta, geração de PDFs e leitura de catálogos não invalidam a lista.
+
+VALIDAÇÃO
+20 testes automatizados aprovados: SQL real em PostgreSQL embarcado (PGlite),
+equivalência com o SQL recebido em 90 combinações de aba/filtro/página, isolamento
+de caches, HTTP real, gzip, catálogos, invalidação, codec e reserva/scheduling dos workers.
+30 pesquisas V6 idênticas simultâneas: 1 consulta de metadados + 1 consulta da página,
+na fixture sem campos locais adicionais. Com complementos configurados existe outra
+consulta compartilhada para esses dados.
+20 chamadas HTTP simultâneas a macros: uma consulta SQL na fixture.
+Chromium/Playwright: /, /ODVV, /ODVT, /lote1 e /cp abriram com HTTP 200 e sem erros
+de JavaScript. Os dados eram simulados; as views dbout foram simuladas vazias. Esse
+smoke test não comprova o preenchimento operacional das telas nem fluxos SISCOM reais.
+
+BENCHMARK SQL — 20.000 TAREFAS SINTÉTICAS
+Mediana de 5 execuções aquecidas, alternando a ordem, Node 24 / PGlite, sem rede.
+Índices de apoio iguais nas duas versões; resultados das consultas comparados.
+Amostras desta execução; não são promessa de ganho ou de latência em produção.
+
+recepcao: 44.78 ms -> 12.64 ms (71.8% de redução).
+campo: 46.76 ms -> 12.02 ms (74.3% de redução).
+baixar: 122.04 ms -> 38.84 ms (68.2% de redução).
+encerradas: 356.44 ms -> 91.73 ms (74.3% de redução).
+tramitacao: 363.68 ms -> 90.45 ms (75.1% de redução).
+encerradas + TAG: 378.90 ms -> 183.24 ms (51.6% de redução).
+
+1.000 formatações de data: 41.55 ms -> 1.38 ms.
+
+COBERTURA DAS FAMÍLIAS DE API E PRÓXIMOS GARGALOS
+Pesquisa/listagem: otimizações SQL na V6; rotas legadas preservam sua estratégia.
+A rota /api/recepcao geral ainda usa a implementação anterior; nas divisões o
+encaminhamento para a V6 já existia e foi mantido. Não foi feita migração geral
+para a V6 porque há diferenças de datas e classificação entre as implementações.
+Central/KPIs/GPS: melhoria de cache, isolamento, compressão e timeout Supabase.
+Busca direta/duplicidades: reutilização de formatter e transporte HTTP; lógica de
+comparação e sincronização preservada. Sincronização mantém lock/checkpoint originais.
+SISCOM/gateway: menor espera da fila e reserva correta. Tempos remotos, login,
+consultas oficiais e confirmação de baixa continuam dependendo do SISCOM e do Windows.
+Escritas uMov, materiais e baixas: preservada ordem e proteção contra reenvios incertos.
+PDF/anexos: transporte elegível e redução do pacote; Chromium continua sendo aberto
+por operação. Reuso de browser/concurrency exige testes de memória e isolamento antes
+de alterar esse fluxo. Não se atribui ganho de geração de PDF sem medição.
+SSO: autenticação e bloqueio de permissões originais preservados; sem ganho específico
+atribuído à integração OIDC. Timeout de rede e comportamento de erro foram mantidos.
+
+O QUE DEPENDE DO AMBIENTE REAL
+Avaliar EXPLAIN (ANALYZE, BUFFERS), cardinalidades, índices existentes e estatísticas.
+O inventário SQL e sugestões de índices ficam em scripts/indices-recomendados.sql.
+Testar status, datas, TAG/setor, cidade, macro, equipe e paginação com dados reais
+em cada divisão antes da troca definitiva. Testar baixas em homologação.
+Com múltiplas instâncias, invalidação de cache em memória é local. Escritas externas
+e jobs concluídos fora do servidor dependem de refresh/TTL para aparecer. Os TTLs
+originais e fallback stale da Central foram preservados, inclusive sua indicação
+de idade via headers. Não foi criado mecanismo distribuído de invalidação.
+Medir p50/p95, taxa de erro, CPU/memória, espera do pool, fila e custo do Supabase.
+DB_POOL_MAX vale para CADA banco em CADA instância; não aumentar cegamente.
+Polling ocioso de 1s faz cinco vezes mais consultas que o intervalo antigo de 5s.
+Não escalar horizontalmente o worker individual sem externalizar sessões e definir
+roteamento/coordenação; a configuração atual permanece com um processo.
+
+ENTREGA E RESTAURAÇÃO
+Instalação e comandos estão em LEIA-ME-OTIMIZACOES.txt. Use uma pasta nova para
+homologação. Preserve o ZIP recebido e as configurações existentes para rollback.
+O ZIP entregue remove histórico .git e cópias de backup, sem apagar esses dados
+do arquivo original. Nenhuma base real, cadastro, serviço ou publicação foi alterado.
+72 declarações literais foram inventariadas em inventario-apis.csv; esse número
+não expande aliases, arrays de caminhos, loops e prefixos de divisão.

@@ -146,6 +146,7 @@ async function processar() {
   ocupado = true;
 
   let tarefaAtual = null;
+  let tarefaReservada = false;
   let processouUmaTarefa = false;
   try {
     const { data: tarefas, error } = await supabase
@@ -161,7 +162,7 @@ async function processar() {
 
     const tarefa = tarefas[0];
     tarefaAtual = tarefa;
-    let tarefaReservada = false;
+
 
     const { data: reservada, error: erroReserva } = await supabase
       .from("siscom_gateway_jobs")
@@ -632,7 +633,7 @@ async function processar() {
 
   } catch (erro) {
     console.error("Erro:", erro.message);
-    if (tarefaAtual) {
+    if (tarefaAtual && tarefaReservada) {
       const { error: erroStatus } = await supabase.from("siscom_gateway_jobs")
         .update({status:"erro",error_message:String(erro.message).slice(0,250),
           ...(tarefaAtual.operation==='siscom_login_individual'&&tarefaAtual.payload?.__siscom_identity?.sid?{payload:{__siscom_identity:{sid:tarefaAtual.payload.__siscom_identity.sid}}}:{}),
@@ -642,14 +643,11 @@ async function processar() {
     }
   } finally {
     ocupado = false;
-    // Fila ativa: busca proximo job sem aguardar o ciclo ocioso de 5 segundos.
-    // Uma operacao SISCOM por vez, sem alterar politica de reenvio.
-    if (processouUmaTarefa) setTimeout(processar, 200);
   }
+  return processouUmaTarefa;
 }
 
 console.log("SISCOM Worker iniciado");
-console.log("Consultando Supabase a cada 5 segundos");
-
-processar();
-setInterval(processar, 5000);
+console.log("Fila sequencial; consulta ociosa configuravel por SISCOM_POLL_IDLE_MS");
+const polling=require('../../lib/worker-polling').fromEnv(processar);
+for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>polling.stop());

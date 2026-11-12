@@ -1,0 +1,54 @@
+GLOBAL SS — PROJETO OTIMIZADO
+
+O pacote contém o código completo, os testes e o relatório da análise.
+O relatório detalha o alcance das alterações e o que depende de produção.
+
+VALIDAR LOCALMENTE (Node.js 24)
+1. Extraia o ZIP em uma pasta nova e preserve a instalação anterior.
+2. Configure o .env com os valores do seu ambiente, usando .env.example como referência.
+   Não substitua as credenciais existentes pelos exemplos.
+3. Execute npm ci
+4. Execute npm test
+5. Execute npm run benchmark (comparação sintética, pode levar alguns segundos).
+6. Execute npm start
+
+SERVIDOR DE PRODUÇÃO
+Use npm ci --omit=dev e npm start. Na Vercel, mantenha vercel.json e
+as variáveis já cadastradas; .vercelignore exclui testes, benchmarks e backups.
+O pacote foi preparado e validado localmente; não foi publicado em produção.
+
+WORKER SISCOM COMPLETO
+Execute npm run worker:siscom a partir da raiz do projeto, com .env na raiz.
+No Windows, INICIAR_WORKER_SISCOM.ps1 agora usa integracoes/siscom/worker.js,
+que está presente no projeto recebido. O iniciador anterior procurava uma
+pasta SISCOM-GATEWAY que não estava no ZIP.
+Se suas configurações estão nessa pasta antiga, mantenha seus valores em um
+.env na raiz e configure SISCOM_AUTH_PRIVATE_KEY_FILE com o caminho da chave.
+O iniciador reconhece também siscom_auth_private.pem na raiz.
+Copie o projeto completo: os workers agora dependem dos módulos em lib/.
+Encerre o worker antigo antes de iniciar o novo. As sessões individuais ficam
+na memória de um único worker. O worker.js da raiz continua sendo a variante
+legada; use o comando worker:siscom para as operações completas.
+
+AJUSTES
+DB_POOL_MAX=3: limite por instância e por banco. Aumentar sem medir pode
+esgotar o limite de conexões, especialmente com várias instâncias Vercel.
+SISCOM_POLL_IDLE_MS=1000: verifica a fila ociosa a cada segundo. A fila ativa
+continua imediatamente após terminar a tarefa anterior, sem sobreposição.
+O polling ocioso passa a consultar o Supabase cinco vezes mais frequentemente
+que o intervalo antigo de 5s. Use 5000 para preservar a frequência anterior.
+PERF_LOG=true: registra método, rota, status e tempo de respostas acima de 1s.
+
+BANCO
+scripts/indices-recomendados.sql contém uma consulta de inventário e exemplos
+COMENTADOS para o administrador avaliar. Nenhum índice foi aplicado.
+
+ARQUIVOS DE VALIDAÇÃO
+relatorio-otimizacao.txt: mudanças, evidências e limitações.
+benchmark-resultados.json: medições sintéticas reproduzíveis.
+inventario-apis.csv: rotas declaradas literalmente, sem expandir loops/aliases.
+alteracoes.patch: diferenças contra o conteúdo do ZIP enviado.
+
+BACKUPS
+O novo ZIP exclui .git e cópias *.backup* / BACKUP-* para reduzir o pacote
+publicado. O ZIP original recebido continua sendo a referência de restauração.

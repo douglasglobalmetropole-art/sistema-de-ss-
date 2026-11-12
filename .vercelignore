@@ -1,0 +1,16 @@
+.git
+node_modules
+work
+test
+scripts
+*.backup*
+BACKUP-*
+*.zip
+*.patch
+*.txt
+*.csv
+benchmark-resultados.json
+
+*.pem
+.env
+.env.*

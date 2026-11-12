@@ -16,3 +16,6 @@ tatus
 
 # Gateway local - contem credenciais e chave privada
 /SISCOM-GATEWAY/
+
+# Chave privada do worker local
+*.pem

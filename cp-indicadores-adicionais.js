@@ -9,7 +9,7 @@ module.exports = function registrarIndicadoresAdicionais(app, pool, { sbRequest 
     return m ? m[1] : '';
   };
   const ehAtivo = s => normalizar(s) === 'ATIVO';
-  const cache = new Map();
+  const cache = require('./lib/performance').scopedMap(pool.cacheScope);
   const getCache = key => {
     const registro = cache.get(key);
     return registro && Date.now() - registro.at < 90000 ? registro.value : null;
