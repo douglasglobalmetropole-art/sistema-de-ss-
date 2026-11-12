@@ -57,6 +57,7 @@ const DIVISOES_SS = {
  ODLN: { cidades: ['SERRA','FUNDAO','ARACRUZ'], lote1:true }
 };
 
+app.use(express.json({limit:'100kb'}));
 app.use((req,res,next)=>{
  const pathname=req.url.split('?')[0];
  const match=pathname.match(/^\/(ODVV|ODCV|ODLS|ODVT|ODLN)(\/api(?:\/.*)?)?\/?$/i);
@@ -420,7 +421,7 @@ app.use((req,res,next)=>{
  });
  next();
 });
-app.use(express.json({limit:'100kb'}));
+
 // Teste de SSO OIDC (desativado por padrÃ£o). Nunca recebe senhas do uMov.
 const crypto=require('node:crypto');
 const OIDC_ENABLED=process.env.UMOV_OIDC_ENABLED==='true';
