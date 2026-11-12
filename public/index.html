@@ -1469,7 +1469,7 @@ load();
      {credentials:'same-origin',cache:'no-store'}
     );
     const job=await resposta.json().catch(()=>({}));
-    if(!resposta.ok)throw Error(job.error||'Consulta indisponivel');
+    if(!resposta.ok)throw Error((job.error||'Consulta indisponivel')+(job.codigo?' ['+job.codigo+']':''));
     const resultado=await acompanhar(job.id);
     if(!Array.isArray(resultado.motivos)||!resultado.motivos.length)
      throw Error('Lista oficial vazia');
@@ -1505,6 +1505,9 @@ load();
    $('rejPermissao').textContent=permissao?'Rejeição oficial habilitada para esta conta.':'Envio desabilitado. Login individual e autorização de escrita são obrigatórios; consultas continuam disponíveis.';
    if(!me.authenticated){modal.classList.remove('open');$('siscomLoginTop')?.click();}
    atualizarBotao();
+   if(me.authenticated && ssValida($('rejNumero').value.trim())){
+    $('rejConsultar').click();
+   }
   }catch(e){$('rejLogin').textContent='Falha ao verificar sessão: '+e.message;}
  };
  $('rejMotivoOficial').addEventListener('change',atualizarBotao);

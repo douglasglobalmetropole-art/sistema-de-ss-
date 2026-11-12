@@ -834,7 +834,12 @@ app.get('/api/siscom-gateway/motivos-nao-execucao',async(req,res)=>{
   return res.status(202).json(job);
  }catch(e){
   console.error('Consulta motivos SISCOM:',e.message);
-  return res.status(502).json({error:'Consulta oficial indisponivel'});
+  const codigo=/23514|check constraint/i.test(String(e.message))?
+   'OPERACAO_NAO_PERMITIDA_NA_FILA':
+   /duplicate key|23505/i.test(String(e.message))?
+   'TAREFA_DUPLICADA':
+   'FALHA_AO_CRIAR_TAREFA';
+  return res.status(502).json({error:'Consulta oficial indisponivel',codigo});
  }
 });
 app.post('/api/siscom-gateway/rejeicao-validar',async(req,res)=>{
