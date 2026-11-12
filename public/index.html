@@ -891,7 +891,7 @@ load();
   const j=await r.json();if(!r.ok){const e=new Error(j.error||'Não foi possível iniciar a consulta');e.httpStatus=r.status;e.antesDoEnvio=(route==='baixar-ss'&&[400,401,403].includes(r.status));throw e;}
   for(let i=0;i<50;i++){
    if(g!==generation)throw Error('Consulta cancelada');
-   await new Promise(resolve=>setTimeout(resolve,i===0?600:i===1?900:1200));
+   await new Promise(resolve=>setTimeout(resolve,i===0?700:i===1?1200:2000));
    const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{cache:'no-store'});
    const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
    const state=String(x.status).toLowerCase();
