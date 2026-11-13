@@ -1650,7 +1650,7 @@ if(fimISO<inicioISO)return setStatus('Informe datas válidas e cronológicas.');
    const motivoId=Number($('rejMotivoOficial').value);
 if(!Number.isSafeInteger(motivoId)||motivoId<1)
  throw Error('Selecione um motivo oficial de não execução.');
-    const job=await api('/api/siscom-gateway/rejeicao-confirmar',{numero_ss:numero,motivo:'NAO_EXECUCAO',motivo_nao_execucao_id:Number($('rejMotivoOficial').value),equipe,inicio:inicioISO,fim:fimISO,observacao,confirmacao:digitado});
+    const job=await api('/api/siscom-gateway/rejeicao-confirmar',{numero_ss:numero,motivo:'NAO_EXECUCAO',motivo_nao_execucao_id:Number($('rejMotivoOficial').value),equipe,inicio:inicioISO,fim:fimISO,observacao,confirmacao:'REJEITAR '+numero});
    setStatus('Tarefa '+job.id+' registrada. Aguardando confirmação oficial...');
    const r=await acompanhar(job.id);
    if(r.status_rejeicao!=='CONFIRMADA'){

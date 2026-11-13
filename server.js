@@ -243,7 +243,11 @@ if(materiaisDivisao && rota!=='/api/materiais'){
   // Nenhuma operacao de escrita oficial e liberada aqui.
   const consultaRejeicaoDivisao =
    (req.method==='POST' &&
-    rota==='/api/siscom-gateway/rejeicao-validar') ||
+    (
+ rota==='/api/siscom-gateway/rejeicao-validar' ||
+ rota==='/api/siscom-gateway/rejeicao-confirmar' ||
+ rota==='/api/siscom-gateway/sincronizar-rejeicao'
+)) ||
    (req.method==='GET' &&
     /^\/api\/siscom-gateway\/rejeicao-tentativa\//.test(rota));
 
