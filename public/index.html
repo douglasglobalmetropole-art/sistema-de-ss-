@@ -1481,7 +1481,7 @@ load();
   </div>
  </div>
 </section>
-<section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off"></div></div></section>
+<section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><div class="rejCampoData"><input id="rejInicio" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"><label class="rejCalendarioBotao" title="Selecionar início pelo calendário">📅<input type="datetime-local" id="rejInicioCalendario" aria-label="Calendário de início da execução"></label></div></div><div><label for="rejFim">Fim da execução</label><div class="rejCampoData"><input id="rejFim" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"><label class="rejCalendarioBotao" title="Selecionar fim pelo calendário">📅<input type="datetime-local" id="rejFimCalendario" aria-label="Calendário de fim da execução"></label></div></div></div></section>
   <section class="rejSection"><div class="rejTitle">♙ &nbsp;Equipe</div><div class="rejContent"><label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe"></div></section>
   <section class="rejSection"><div class="rejTitle">▣ &nbsp;Observação obrigatória</div><div class="rejContent"><label for="rejObservacao">Motivo detalhado</label><textarea id="rejObservacao" rows="3" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea><div id="rejObsContador" class="rejCounter">0/1000</div></div></section>
   <div id="rejPermissao" hidden>Verificando autorização de escrita...</div><div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
@@ -1644,8 +1644,7 @@ try {
 if(fimISO<inicioISO)return setStatus('Informe datas válidas e cronológicas.');
   if(!observacao||observacao.length>1000)return setStatus('Informe a observação (até 1000 caracteres).');
   if(!confirm('ATENÇÃO: rejeitar oficialmente a SS '+numero+' no SISCOM como NÃO EXECUÇÃO? Esta operação não será reenviada automaticamente.'))return;
-  const digitado=prompt('Para confirmar, digite exatamente: REJEITAR '+numero);
-  if(digitado!=='REJEITAR '+numero)return setStatus('Confirmação cancelada. Nenhuma rejeição enviada.');
+
   ocupado=true;atualizarBotao();$('rejConsultar').disabled=true;setStatus('Enviando UMA ÚNICA vez para o SISCOM...');
   try{
    const motivoId=Number($('rejMotivoOficial').value);
@@ -2293,4 +2292,35 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 <script src="/relatorio-agrupado-v10.js"></script>
 <script src="/duplicidades-recepcao.js"></script>
 <script src="/duplicidades-global.js?v=matriz-v4-20261029"></script>
+<style id="rejCalendarioEstilo">
+.rejCampoData{display:flex;align-items:center;gap:6px;min-width:0}
+.rejCampoData>input[type=text]{flex:1;min-width:0}
+.rejCalendarioBotao{position:relative;flex:0 0 36px;width:36px;height:36px;border:1px solid #a7bfd6;border-radius:5px;background:#eef5fb;color:#16456e;cursor:pointer;display:grid;place-items:center;overflow:hidden}
+.rejCalendarioBotao input[type=datetime-local]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
+</style>
+<script id="rejCalendarioScript">
+(function(){
+  function configurar(textoId,calendarioId){
+    const texto=document.getElementById(textoId);
+    const calendario=document.getElementById(calendarioId);
+    if(!texto||!calendario)return;
+
+    calendario.addEventListener('change',function(){
+      if(!calendario.value)return;
+      const m=calendario.value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      if(!m)return;
+      texto.value=m[3]+'/'+m[2]+'/'+m[1]+' '+m[4]+':'+m[5];
+      texto.dispatchEvent(new Event('input',{bubbles:true}));
+      texto.dispatchEvent(new Event('change',{bubbles:true}));
+    });
+
+    texto.addEventListener('change',function(){
+      const m=texto.value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
+      if(m)calendario.value=m[3]+'-'+m[2]+'-'+m[1]+'T'+m[4]+':'+m[5];
+    });
+  }
+  configurar('rejInicio','rejInicioCalendario');
+  configurar('rejFim','rejFimCalendario');
+})();
+</script>
 </body></html>
