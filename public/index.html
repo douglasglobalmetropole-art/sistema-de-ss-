@@ -1021,6 +1021,124 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 }
 </style>
 <!-- FIM_GLOBAL_SS_LAYOUT_BAIXA_FOTOS_FINAL -->
+<!-- GLOBAL_SS_PAINEL_VERTICAL_CAMPO_BAIXADAS -->
+<style>
+@media (min-width:1100px) {
+
+  body:has(.tab[data-screen="campo"].active),
+  body:has(.tab[data-screen="encerradas"].active) {
+    --painel-ss-lateral:clamp(370px,29vw,490px);
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active),
+  body.panel-open:has(.tab[data-screen="encerradas"].active) {
+    max-height:100dvh;
+    overflow:hidden;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) .toolbar,
+  body.panel-open:has(.tab[data-screen="campo"].active) main > .box,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) .toolbar,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) main > .box {
+    margin-right:calc(var(--painel-ss-lateral) + 8px);
+    min-width:0;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) .tableScroll,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) .tableScroll {
+    height:calc(100dvh - 190px);
+    min-height:280px;
+    overflow-y:auto!important;
+    overflow-x:auto!important;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower.open,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower.open {
+    position:fixed!important;
+    top:4px!important;
+    right:4px!important;
+    bottom:4px!important;
+    left:auto!important;
+    width:var(--painel-ss-lateral)!important;
+    max-width:calc(100vw - 16px)!important;
+    height:calc(100dvh - 8px)!important;
+    max-height:calc(100dvh - 8px)!important;
+    display:flex!important;
+    flex-direction:column!important;
+    gap:9px!important;
+    padding:9px!important;
+    margin:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    background:#f1f6fc!important;
+    border:1px solid #c8d9e8!important;
+    border-radius:10px!important;
+    box-shadow:0 8px 28px rgba(8,36,70,.18)!important;
+    z-index:55!important;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower > .card,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower > .card {
+    width:100%!important;
+    min-width:0!important;
+    flex:0 0 auto!important;
+    background:#fff;
+    border:1px solid #d4e3f1;
+    border-radius:8px;
+    overflow:visible;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower .card > h3,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower .card > h3 {
+    background:linear-gradient(100deg,#073b82,#0869c0);
+    color:#fff;
+    padding:10px;
+    border-radius:6px 6px 0 0;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower .details,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower .details {
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:5px!important;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower .field,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower .field {
+    display:grid!important;
+    grid-template-columns:115px minmax(0,1fr)!important;
+    gap:7px!important;
+    align-items:start!important;
+    min-width:0!important;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower .val,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower .val {
+    min-width:0!important;
+    overflow-wrap:anywhere;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower .actions,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower .actions {
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:7px!important;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower .action,
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower .action {
+    min-width:0!important;
+    height:72px!important;
+    white-space:normal!important;
+  }
+
+  body.panel-open:has(.tab[data-screen="campo"].active) #lower .action[hidden],
+  body.panel-open:has(.tab[data-screen="encerradas"].active) #lower .action[hidden] {
+    display:none!important;
+  }
+}
+</style>
+<!-- FIM_GLOBAL_SS_PAINEL_VERTICAL_CAMPO_BAIXADAS -->
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
