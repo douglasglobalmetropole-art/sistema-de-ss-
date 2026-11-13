@@ -2639,16 +2639,72 @@ load();
  const $=id=>document.getElementById(id);
  const btn=$('siscomLoginTop'),modal=$('siscomLoginModal'),form=$('siscomLoginForm'),
   feedback=$('siscomLoginFeedback'),label=$('siscomIdentityLabel'),consult=$('siscomConsultaTop'),logout=$('siscomLogoutTop');
- let active=false;
+ let active=false,workerConnected=false,refreshBusy=false,currentUserName='Conectado';
  const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ // SISCOM_WORKER_INDICATOR_V1
  function paint(data){
   active=!!data?.authenticated;
-  label.textContent=active?'SISCOM: '+(data.user?.nome||'Conectado'):'SISCOM: não conectado';
-  btn.hidden=active;logout.hidden=!active;consult.disabled=!active;
+  currentUserName=data?.user?.nome||'Conectado';
+
+  label.textContent=active
+   ? 'SISCOM: '+currentUserName+' · Worker '+(workerConnected?'conectado':'desconectado')
+   : 'SISCOM: não conectado';
+
+  btn.hidden=active;
+  logout.hidden=!active;
+  consult.disabled=!active;
+
   document.body.dataset.siscomAuthenticated=active?'true':'false';
+  document.body.dataset.siscomWorkerConnected=workerConnected?'true':'false';
  }
- async function refresh(){try{const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'});const x=await r.json();paint(x)}catch{paint(null)}}
- btn.addEventListener('click',()=>{feedback.textContent='';modal.classList.add('open');$('siscomLoginPassword').value='';$('siscomLoginUser').focus()});
+
+ async function refreshWorker(){
+  if(!active){
+   workerConnected=false;
+   return;
+  }
+
+  try{
+   const r=await fetch('/api/siscom-worker/status',{
+    credentials:'same-origin',
+    cache:'no-store'
+   });
+
+   const x=await r.json();
+
+   workerConnected=!!(
+    r.ok &&
+    x.ok &&
+    x.worker?.connected===true
+   );
+  }catch{
+   workerConnected=false;
+  }
+
+  paint({authenticated:active,user:{nome:currentUserName}});
+ }
+
+ async function refresh(){
+  if(refreshBusy)return;
+  refreshBusy=true;
+
+  try{
+   const r=await fetch('/api/siscom-individual/me',{
+    credentials:'same-origin',
+    cache:'no-store'
+   });
+
+   const x=await r.json();
+   paint(x);
+   await refreshWorker();
+
+  }catch{
+   workerConnected=false;
+   paint(null);
+  }finally{
+   refreshBusy=false;
+  }
+ } btn.addEventListener('click',()=>{feedback.textContent='';modal.classList.add('open');$('siscomLoginPassword').value='';$('siscomLoginUser').focus()});
  $('siscomLoginCancel').addEventListener('click',()=>modal.classList.remove('open'));
  form.addEventListener('submit',async ev=>{
   ev.preventDefault();const submit=$('siscomLoginSubmit');submit.disabled=true;
@@ -2664,7 +2720,7 @@ load();
     const rr=await fetch('/api/siscom-individual/login-status',{cache:'no-store',credentials:'same-origin'});
     const x=await rr.json();if(rr.status===202)continue;
     if(!rr.ok)throw Error(x.error||'Erro de autenticação');
-    done=true;paint({authenticated:true,user:x.user});modal.classList.remove('open');break;
+    done=true;paint({authenticated:true,user:x.user});await refreshWorker();modal.classList.remove('open');break;
    }
    if(!done)throw Error('Tempo excedido. Confira o worker Windows conectado à VPN.');
   }catch(e){feedback.style.color='#a52828';feedback.textContent=e.message}
@@ -2695,6 +2751,7 @@ load();
   }catch(e){alert('Consulta SISCOM: '+e.message)}finally{consult.disabled=!active}
  });
  refresh();
+ setInterval(refresh,10000);
 })();
 </script>
 <style>

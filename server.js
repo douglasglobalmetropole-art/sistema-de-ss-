@@ -123,6 +123,7 @@ req.divisaoSS={
 
   // Somente consultas que podem ser isoladas com seguranca.
   const consultas=new Set([
+    '/api/siscom-worker/status',
    '/api/gis/localizar-ss',
    '/api/recepcao',
    '/api/pesquisa-global',
@@ -899,6 +900,72 @@ async function gatewayRest(route, options = {}) {
  if (!response.ok) throw Error('Supabase HTTP '+response.status);
  return response.json();
 }
+// SISCOM_WORKER_STATUS_API_V1
+app.get('/api/siscom-worker/status', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  if (!siscomIndividual(req) && !gatewayAuthorized(req)) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Autenticacao necessaria.'
+    });
+  }
+
+  try {
+    const rows = await gatewayRest(
+      'siscom_worker_status?select=status,last_seen,started_at&id=eq.siscom-global-worker&limit=1'
+    );
+
+    const registro = rows?.[0] || null;
+    const ultimaData = registro?.last_seen
+      ? Date.parse(registro.last_seen)
+      : NaN;
+
+    const idade = Number.isFinite(ultimaData)
+      ? Math.max(0, Math.floor((Date.now() - ultimaData) / 1000))
+      : null;
+
+    const conectado =
+      registro?.status === 'online' &&
+      idade !== null &&
+      idade <= 45;
+
+    return res.json({
+      ok: true,
+      worker: {
+        connected: conectado,
+        state: conectado ? 'connected' : 'disconnected',
+        last_seen: registro?.last_seen || null,
+        age_seconds: idade,
+        started_at: registro?.started_at || null
+      },
+      siscom: {
+        state: 'not_verified',
+        message: 'Disponibilidade da API SISCOM ainda nao verificada.'
+      },
+      checked_at: new Date().toISOString()
+    });
+
+  } catch (erro) {
+    console.error(
+      '[SISCOM STATUS] Falha na consulta do Worker:',
+      erro.message
+    );
+
+    return res.status(503).json({
+      ok: false,
+      worker: {
+        connected: false,
+        state: 'unknown'
+      },
+      siscom: {
+        state: 'not_verified'
+      },
+      error: 'Nao foi possivel verificar a conexao do Worker.'
+    });
+  }
+});
+// FIM_SISCOM_WORKER_STATUS_API_V1
 app.post('/api/siscom-gateway/healthcheck', async (req,res) => {
  if (!gatewayAuthorized(req)) return res.status(401).json({error:'NÃ£o autorizado'});
  try {
