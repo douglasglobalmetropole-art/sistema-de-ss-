@@ -1139,6 +1139,119 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 }
 </style>
 <!-- FIM_GLOBAL_SS_PAINEL_VERTICAL_CAMPO_BAIXADAS -->
+<!-- GLOBAL_SS_BAIXA_FOTOS_LADO_A_LADO -->
+<style>
+@media (min-width:1100px) {
+
+  /* Mesma largura utilizada no painel Detalhes da SS */
+  body:has(#siscomBaixaModal.open) {
+    --ss-fotos-largura:clamp(370px,29vw,490px);
+    --ss-fotos-espaco:6px;
+    --ss-baixa-largura:min(
+      1260px,
+      calc(100vw - var(--ss-fotos-largura) - 28px)
+    );
+  }
+
+  /* A janela de baixa ocupa o lado esquerdo do conjunto */
+  body:has(#siscomBaixaModal.open) #siscomBaixaModal {
+    position:fixed!important;
+    inset:0!important;
+    width:100vw!important;
+    height:100dvh!important;
+    max-width:none!important;
+    max-height:none!important;
+    padding:8px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    overflow:hidden!important;
+  }
+
+  body:has(#siscomBaixaModal.open) #siscomBaixaModal .sbShell {
+    position:relative!important;
+    flex:0 0 auto!important;
+    width:var(--ss-baixa-largura)!important;
+    max-width:var(--ss-baixa-largura)!important;
+    height:min(940px,96dvh)!important;
+    max-height:96dvh!important;
+    margin:0!important;
+    transform:translateX(
+      calc(
+        (var(--ss-fotos-largura) + var(--ss-fotos-espaco)) / -2
+      )
+    )!important;
+  }
+
+  /* Fotos encostadas no lado direito da janela de baixa */
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open {
+    position:fixed!important;
+    inset:0!important;
+    width:100vw!important;
+    max-width:none!important;
+    height:100dvh!important;
+    max-height:none!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    padding:0!important;
+    background:transparent!important;
+    pointer-events:none!important;
+    z-index:12000!important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open .ufDialog {
+    position:relative!important;
+    flex:0 0 auto!important;
+    width:var(--ss-fotos-largura)!important;
+    max-width:var(--ss-fotos-largura)!important;
+    height:min(940px,96dvh)!important;
+    max-height:96dvh!important;
+    margin:0!important;
+    transform:translateX(
+      calc(
+        (
+          var(--ss-baixa-largura) +
+          var(--ss-fotos-espaco)
+        ) / 2
+      )
+    )!important;
+    border-radius:10px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+    pointer-events:auto!important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open .ufBody {
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open .ufGrid {
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:10px!important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open figure img {
+    width:100%!important;
+    height:180px!important;
+    object-fit:cover!important;
+  }
+}
+
+/* Telas menores: evitar sobreposicao dos dois quadros */
+@media (max-width:1099px) {
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open {
+    width:min(370px,45vw)!important;
+    max-width:45vw!important;
+  }
+}
+</style>
+<!-- FIM_GLOBAL_SS_BAIXA_FOTOS_LADO_A_LADO -->
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
