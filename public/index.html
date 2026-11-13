@@ -169,6 +169,210 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
   font-size: 16px;
 }
 </style>
+<style id="recepcaoLateral2026">
+/*
+  Painel lateral exclusivo da Recepcao.
+  Os IDs, botoes e eventos existentes sao preservados.
+*/
+
+@media (min-width: 1100px) {
+
+  body:has(.tab[data-screen="recepcao"].active) {
+    --recepcao-painel: clamp(370px, 29vw, 490px);
+  }
+
+  /* Com detalhes abertos, reservar espaco a direita */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  .toolbar,
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  main > .box {
+    margin-right: calc(var(--recepcao-painel) + 8px);
+  }
+
+  /* Tabela utiliza a altura do navegador */
+  body:has(.tab[data-screen="recepcao"].active)
+  .tableScroll,
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  .tableScroll {
+    height: calc(100dvh - 190px);
+    min-height: 280px;
+    overflow: auto;
+  }
+
+  /* Painel fixo a direita */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower.open {
+    display: flex !important;
+    flex-direction: column;
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: var(--recepcao-painel);
+    margin: 0;
+    padding: 0;
+    gap: 10px;
+    z-index: 55;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: #eef4fa;
+    border: 1px solid #cbdceb;
+    border-radius: 10px;
+    box-shadow: -5px 0 24px rgba(8,48,88,.14);
+  }
+
+  /* Tres quadros verticais */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower > .card {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(11,54,94,.06);
+  }
+
+  /* Cabecalhos */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .card > h3 {
+    background: linear-gradient(100deg,#06477e,#096ab4);
+    color: #fff;
+    margin: -12px -12px 12px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 7px 7px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower #titleSS {
+    color: #fff !important;
+    font-weight: 800;
+  }
+
+  /* Botao fechar sobre o cabecalho */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #closeDetail {
+    position: relative;
+    z-index: 2;
+    float: right;
+    color: #fff;
+    background: rgba(255,255,255,.16) !important;
+    cursor: pointer;
+    font-size: 19px;
+  }
+
+  /* Dados da SS em linhas */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .details {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .field {
+    grid-template-columns: 115px minmax(0,1fr);
+    gap: 7px;
+    min-width: 0;
+    align-items: start;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .field > span {
+    font-size: 11px;
+    font-weight: 700;
+    padding-top: 7px;
+    color: #315c82;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .val {
+    min-width: 0;
+    min-height: 28px;
+    padding: 6px 8px;
+    background: #f0f6fc;
+    border-color: #d9e7f3;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+
+  /* Observacoes com rolagem propria */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower #note {
+    height: 125px;
+    min-height: 95px;
+    max-height: 200px;
+    resize: vertical;
+    font-size: 12px;
+    line-height: 1.5;
+    background: #fff;
+  }
+
+  /* Acoes: duas linhas de tres botoes */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .actions {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 7px;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .action {
+    height: 72px;
+    min-width: 0;
+    padding: 8px 4px;
+    background: linear-gradient(#fff,#f1f7fd);
+    border: 1px solid #bfd5e9;
+    border-radius: 8px;
+    color: #07599a;
+    font-size: 10px;
+    white-space: normal;
+    cursor: pointer;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .action:hover {
+    background: #e4f2ff;
+    border-color: #73aee0;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .action:focus-visible {
+    outline: 2px solid #0879f7;
+    outline-offset: 2px;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .action[hidden] {
+    display: none !important;
+  }
+
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #lower .action b {
+    font-size: 20px;
+  }
+
+  /* Rejeitar: destaque visual, sem alterar operacao */
+  body.panel-open:has(.tab[data-screen="recepcao"].active)
+  #rejectBtn {
+    background: #fff1f1;
+    color: #b42318;
+    border-color: #f0aaaa;
+  }
+
+}
+
+/* Em telas menores, conservar o layout original */
+@media (max-width: 1099px) {
+  body:has(.tab[data-screen="recepcao"].active)
+  #lower.open {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+</style>
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
