@@ -797,8 +797,11 @@ app.get('/api/siscom-individual/me',(req,res)=>{
 });
 function individualWriteAllowed(user){
  if(process.env.SISCOM_INDIVIDUAL_WRITE_ENABLED!=='true')return false;
- const ids=String(process.env.SISCOM_INDIVIDUAL_WRITE_USERS||'').split(',').map(x=>x.trim()).filter(Boolean);
- return ids.length>0&&ids.includes(String(user?.uid||''));
+
+ // AUTORIZACAO CENTRALIZADA:
+ // Qualquer usuario com sessao individual SISCOM valida.
+ // O SISCOM continua sendo responsavel pela autorizacao oficial.
+ return !!(user && String(user.uid||'').trim());
 }
 // NÃ£o expor endpoint de login em HTTP nem aceitar chamadas cross-site.
 function siscomSameOrigin(req){
