@@ -1481,7 +1481,7 @@ load();
   </div>
  </div>
 </section>
-<section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="datetime-local"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="datetime-local"></div></div></section>
+<section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off"></div></div></section>
   <section class="rejSection"><div class="rejTitle">♙ &nbsp;Equipe</div><div class="rejContent"><label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe"></div></section>
   <section class="rejSection"><div class="rejTitle">▣ &nbsp;Observação obrigatória</div><div class="rejContent"><label for="rejObservacao">Motivo detalhado</label><textarea id="rejObservacao" rows="3" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea><div id="rejObsContador" class="rejCounter">0/1000</div></div></section>
   <div id="rejPermissao" hidden>Verificando autorização de escrita...</div><div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
@@ -1618,9 +1618,30 @@ load();
  };
  $('rejConfirmar').onclick=async()=>{
   const numero=$('rejNumero').value.trim();if(!validada||validada.numero_ss!==numero||!permissao)return setStatus('Valide a SS e verifique a permissão.');
-  const equipe=Number($('rejEquipe').value),ini=$('rejInicio').value,fim=$('rejFim').value,observacao=$('rejObservacao').value.trim();
+  function rejDataTextoParaISO(valor){
+ const m=String(valor||'').trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
+ if(!m)throw Error('Use DD/MM/AAAA HH:mm nas datas.');
+ const [,dd,mm,aaaa,hh,min]=m;
+ const d=new Date(Number(aaaa),Number(mm)-1,Number(dd),Number(hh),Number(min));
+ if(d.getFullYear()!==Number(aaaa)||
+    d.getMonth()!==Number(mm)-1||
+    d.getDate()!==Number(dd)||
+    d.getHours()!==Number(hh)||
+    d.getMinutes()!==Number(min)){
+   throw Error('Data ou horario invalido.');
+ }
+ return d.toISOString();
+}
+const equipe=Number($('rejEquipe').value),ini=$('rejInicio').value,fim=$('rejFim').value,observacao=$('rejObservacao').value.trim();
   if(!Number.isSafeInteger(equipe)||equipe<1)return setStatus('Informe o código da equipe.');
-  if(!ini||!fim||!Number.isFinite(new Date(ini).getTime())||!Number.isFinite(new Date(fim).getTime())||new Date(fim)<new Date(ini))return setStatus('Informe datas válidas e cronológicas.');
+  let inicioISO,fimISO;
+try {
+ inicioISO=rejDataTextoParaISO(ini);
+ fimISO=rejDataTextoParaISO(fim);
+} catch(e) {
+ return setStatus(e.message);
+}
+if(fimISO<inicioISO)return setStatus('Informe datas válidas e cronológicas.');
   if(!observacao||observacao.length>1000)return setStatus('Informe a observação (até 1000 caracteres).');
   if(!confirm('ATENÇÃO: rejeitar oficialmente a SS '+numero+' no SISCOM como NÃO EXECUÇÃO? Esta operação não será reenviada automaticamente.'))return;
   const digitado=prompt('Para confirmar, digite exatamente: REJEITAR '+numero);
@@ -1630,7 +1651,7 @@ load();
    const motivoId=Number($('rejMotivoOficial').value);
 if(!Number.isSafeInteger(motivoId)||motivoId<1)
  throw Error('Selecione um motivo oficial de não execução.');
-    const job=await api('/api/siscom-gateway/rejeicao-confirmar',{numero_ss:numero,motivo:'NAO_EXECUCAO',motivo_nao_execucao_id:Number($('rejMotivoOficial').value),equipe,inicio:new Date(ini).toISOString(),fim:new Date(fim).toISOString(),observacao,confirmacao:digitado});
+    const job=await api('/api/siscom-gateway/rejeicao-confirmar',{numero_ss:numero,motivo:'NAO_EXECUCAO',motivo_nao_execucao_id:Number($('rejMotivoOficial').value),equipe,inicio:inicioISO,fim:fimISO,observacao,confirmacao:digitado});
    setStatus('Tarefa '+job.id+' registrada. Aguardando confirmação oficial...');
    const r=await acompanhar(job.id);
    if(r.status_rejeicao!=='CONFIRMADA'){
