@@ -155,6 +155,20 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
  </style>
 <link rel="stylesheet" href="/siscom-consulta-baixa-v7.css?v=20261023v7">
 <script defer src="/siscom-consulta-baixa-v7.js?v=20261023v7"></script>
+<style id="rejSucessoEstilo">
+#siscomRejeicaoModal #rejStatus.rejSucesso {
+  background: #dcfce7 !important;
+  color: #166534 !important;
+  border: 1px solid #86efac !important;
+  border-left: 5px solid #16a34a !important;
+  font-weight: 700 !important;
+  padding: 12px 14px !important;
+}
+#siscomRejeicaoModal #rejStatus.rejSucesso::before {
+  content: "✓ ";
+  font-size: 16px;
+}
+</style>
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
@@ -1493,7 +1507,14 @@ load();
 (()=>{
  const $=id=>document.getElementById(id),modal=$('siscomRejeicaoModal');
  let validada=null,permissao=false,ocupado=false,ultimoConfirmado=null;
- const setStatus=s=>{$('rejStatus').textContent=s};
+ const setStatus=s=>{
+  const el=$('rejStatus');
+  el.textContent=s;
+  el.classList.toggle(
+    'rejSucesso',
+    s==='Rejeição CONFIRMADA no SISCOM e status atualizado no uMov. Atualize a listagem.'
+  );
+};
  const ssValida=s=>/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(s);
  const wait=ms=>new Promise(r=>setTimeout(r,ms));
  function atualizarBotao(){
