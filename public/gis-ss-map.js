@@ -7,4 +7,33 @@ function loadLeaflet(){if(window.L)return Promise.resolve();if(window.__gisLeafl
 async function update(ss){const box=card();if(!box)return;const token=++seq;const status=document.getElementById('gisSSStatus'),mapEl=document.getElementById('gisSSMap'),ref=document.getElementById('gisSSRef'),open=document.getElementById('gisSSOpen');mapEl.hidden=true;open.hidden=true;ref.textContent='';status.textContent='Consultando localizaÃ§Ã£o oficial da SS...';try{let j=cached.get(ss);if(!j){const r=await fetch('/api/gis/localizar-ss?ss='+encodeURIComponent(ss),{credentials:'same-origin'});j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'LocalizaÃ§Ã£o nÃ£o encontrada');cached.set(ss,j)}if(token!==seq)return;status.textContent='LocalizaÃ§Ã£o oficial confirmada';ref.textContent='MatrÃ­cula: '+(j.matricula||'â€”')+' | HidrÃ´metro: '+(j.hidrometro||'â€”');const lat=j.lat,lon=j.lon;open.href='https://www.openstreetmap.org/?mlat='+lat+'&mlon='+lon+'#map=18/'+lat+'/'+lon;open.hidden=false;mapEl.hidden=false;try{await loadLeaflet();if(token!==seq)return;if(!map){map=L.map(mapEl,{zoomControl:true,scrollWheelZoom:false});L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'Â© OpenStreetMap contributors'}).addTo(map);marker=L.marker([lat,lon]).addTo(map)}else{marker.setLatLng([lat,lon])}map.setView([lat,lon],18);setTimeout(()=>map.invalidateSize(),120)}catch(e){status.textContent='LocalizaÃ§Ã£o confirmada. Abra no OpenStreetMap para visualizar.';mapEl.hidden=true}}catch(e){if(token!==seq)return;status.textContent=e.message||'GIS indisponÃ­vel';mapEl.hidden=true}}
 function scan(){const lower=document.getElementById('lower');const ss=document.getElementById('titleSS')?.textContent.trim();if(!lower?.classList.contains('open')||!/^\d{2}\/\d{2}-\d{6}-\d{1,2}$/.test(ss||'')){previous='';return}if(ss===previous)return;previous=ss;update(ss)}
 const start=()=>{const title=document.getElementById('titleSS'),lower=document.getElementById('lower');if(!title||!lower)return;new MutationObserver(scan).observe(title,{childList:true,characterData:true,subtree:true});new MutationObserver(scan).observe(lower,{attributes:true,attributeFilter:['class']});scan()};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
-})();
+
+/* GIS_RESIZE_OBSERVER_FINAL_2026 */
+let gisResizeObserver=null;
+function observarDimensoesGIS(){
+  const el=document.getElementById('gisSSMap');
+  const box=document.getElementById('gisSSCard');
+  if(!el || !box || !window.ResizeObserver)return;
+  if(gisResizeObserver)gisResizeObserver.disconnect();
+  gisResizeObserver=new ResizeObserver(()=>{
+    if(!map || el.hidden)return;
+    if(el.clientWidth>0 && el.clientHeight>0){
+      requestAnimationFrame(()=>map.invalidateSize({pan:false}));
+    }
+  });
+  gisResizeObserver.observe(el);
+  gisResizeObserver.observe(box);
+}
+window.addEventListener('resize',()=>{
+  if(map){
+    requestAnimationFrame(()=>map.invalidateSize({pan:false}));
+  }
+});
+const gisPainel=document.getElementById('lower');
+if(gisPainel && window.MutationObserver){
+  new MutationObserver(()=>{
+    if(map && !document.getElementById('gisSSMap')?.hidden){
+      requestAnimationFrame(()=>map.invalidateSize({pan:false}));
+    }
+  }).observe(gisPainel,{attributes:true,attributeFilter:['class'],childList:true});
+}})();
