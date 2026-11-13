@@ -2338,7 +2338,9 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
     wrapper.appendChild(picker);
 
     // Ao clicar na propria caixa, abrir calendario.
-    texto.addEventListener('click', function () {
+    // Clique simples: digitar, selecionar texto, copiar e colar.
+    // Clique duplo: abrir o calendario com horario.
+    texto.addEventListener('dblclick', function () {
       try {
         if (typeof picker.showPicker === 'function') {
           picker.showPicker();
