@@ -123,6 +123,7 @@ req.divisaoSS={
 
   // Somente consultas que podem ser isoladas com seguranca.
   const consultas=new Set([
+   '/api/gis/localizar-ss',
    '/api/recepcao',
    '/api/pesquisa-global',
    '/api/macros',
@@ -348,7 +349,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -1948,6 +1949,7 @@ require('./duplicidades-index').registrar(app,{
 });
 require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal});
 require('./busca-ss-fisica').registrar(app,{pool,hostRelatorioUmov});
+require('./gis-ss').registrar(app);
 // No computador local, mantenha o comportamento original: `npm start`.
 // Na Vercel, o adaptador Node importa este Express app e nÃ£o abre uma porta.
 if (require.main === module) {
