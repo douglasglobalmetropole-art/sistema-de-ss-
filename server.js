@@ -464,7 +464,78 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  // ANEXAR_RELATORIO_DIVISAO_20261113
+  const anexarRelatorioDivisao =
+    req.method === 'POST' &&
+    rota === '/api/siscom-gateway/anexar-relatorio';
+
+  if(anexarRelatorioDivisao){
+
+    const numero = String(req.body?.numero_ss || '').trim();
+    const tarefa = Number(req.body?.tarefa);
+
+    if(config.lote1){
+      return res.status(403).json({
+        error:'Anexos do Lote 1 ainda nao configurados.'
+      });
+    }
+
+    if(
+      !/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero) ||
+      !Number.isSafeInteger(tarefa) ||
+      tarefa < 1
+    ){
+      return res.status(400).json({
+        error:'SS ou tarefa invalida.'
+      });
+    }
+
+    return pool.query({
+      text:`
+        SELECT
+          d.tsk_id,
+          d.tss_id,
+          l.loc_integrationid AS numero_ss,
+          l.loc_city AS cidade
+        FROM u45468.dbout_task d
+        JOIN u45468.task t
+          ON t.tsk_id=d.tsk_id
+        JOIN u45468.local l
+          ON l.loc_id=t.loc_id
+        WHERE d.tsk_id=$1
+        LIMIT 1
+      `,
+      values:[tarefa],
+      query_timeout:8000
+    }).then(resultado=>{
+
+      const registro=resultado.rows[0];
+      const cidade=normalizarCidade(registro?.cidade || '');
+      const permitidas=config.cidades.map(normalizarCidade);
+
+      if(
+        !registro ||
+        String(registro.numero_ss || '').trim() !== numero ||
+        Number(registro.tss_id) !== 50 ||
+        !cidade ||
+        !permitidas.includes(cidade)
+      ){
+        return res.status(403).json({
+          error:'Tarefa, SS ou divisao nao autorizada. Nenhum anexo enviado.'
+        });
+      }
+
+      return next();
+
+    }).catch(erro=>{
+      console.error('Validacao de anexo por divisao:',erro.message);
+
+      return res.status(503).json({
+        error:'Nao foi possivel validar a SS antes do envio do anexo.'
+      });
+    });
+  }
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
