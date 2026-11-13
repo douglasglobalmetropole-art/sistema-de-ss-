@@ -2323,4 +2323,61 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
   configurar('rejFim','rejFimCalendario');
 })();
 </script>
+<style id="rejCampoClicavelEstilo">
+/* Um campo visivel; seletor nativo auxiliar invisivel */
+.rejCampoData {
+  position: relative !important;
+  display: block !important;
+}
+.rejCampoData > input[type="text"] {
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  cursor: text !important;
+}
+.rejCampoData .rejCalendarioBotao {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.rejCampoData .rejCalendarioBotao input[type="datetime-local"] {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  opacity: 0 !important;
+}
+</style>
+<script id="rejCampoClicavelScript">
+(function () {
+  function configurar(campoId, calendarioId) {
+    const campo = document.getElementById(campoId);
+    const calendario = document.getElementById(calendarioId);
+
+    if (!campo || !calendario) return;
+
+    campo.addEventListener('click', function () {
+      try {
+        if (typeof calendario.showPicker === 'function') {
+          calendario.showPicker();
+        } else {
+          calendario.focus();
+          calendario.click();
+        }
+      } catch (erro) {
+        console.warn('Calendario nativo indisponivel:', erro.message);
+      }
+    });
+  }
+
+  configurar('rejInicio', 'rejInicioCalendario');
+  configurar('rejFim', 'rejFimCalendario');
+})();
+</script>
 </body></html>
