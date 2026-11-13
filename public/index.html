@@ -882,6 +882,75 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
   }
 }
 </style>
+<style>
+/* GLOBAL SS - FOTOS LATERAIS NA BAIXA V1 */
+
+/* Formulario ocupa a area esquerda quando as fotos estao abertas */
+@media (min-width: 1050px) {
+  body:has(#siscomBaixaModal.open) #siscomBaixaModal {
+    padding: 6px 322px 6px 6px !important;
+  }
+
+  body:has(#siscomBaixaModal.open) #siscomBaixaModal .sbShell {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: calc(100dvh - 12px) !important;
+    max-height: calc(100dvh - 12px) !important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open {
+    display: block !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 110000 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    pointer-events: none !important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal.open .ufDialog {
+    position: absolute !important;
+    top: 6px !important;
+    right: 6px !important;
+    bottom: 6px !important;
+    width: 310px !important;
+    max-width: 310px !important;
+    height: calc(100dvh - 12px) !important;
+    max-height: calc(100dvh - 12px) !important;
+    margin: 0 !important;
+    border-radius: 9px !important;
+    pointer-events: auto !important;
+    box-shadow: 0 3px 14px #001e3b35 !important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal .ufBody {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    padding: 10px !important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal .ufGrid {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr) !important;
+    gap: 10px !important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal figure {
+    margin: 0 !important;
+  }
+
+  body:has(#siscomBaixaModal.open) #umovFotosModal figure img {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 16 / 10;
+    object-fit: cover !important;
+  }
+}
+
+/* Em telas menores, preserva o comportamento original */
+</style>
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
