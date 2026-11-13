@@ -1481,7 +1481,7 @@ load();
   </div>
  </div>
 </section>
-<section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><div class="rejCampoData"><input id="rejInicio" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"><label class="rejCalendarioBotao" title="Selecionar início pelo calendário">📅<input type="datetime-local" id="rejInicioCalendario" aria-label="Calendário de início da execução"></label></div></div><div><label for="rejFim">Fim da execução</label><div class="rejCampoData"><input id="rejFim" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"><label class="rejCalendarioBotao" title="Selecionar fim pelo calendário">📅<input type="datetime-local" id="rejFimCalendario" aria-label="Calendário de fim da execução"></label></div></div></div></section>
+<section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"></div></div></section>
   <section class="rejSection"><div class="rejTitle">♙ &nbsp;Equipe</div><div class="rejContent"><label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe"></div></section>
   <section class="rejSection"><div class="rejTitle">▣ &nbsp;Observação obrigatória</div><div class="rejContent"><label for="rejObservacao">Motivo detalhado</label><textarea id="rejObservacao" rows="3" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea><div id="rejObsContador" class="rejCounter">0/1000</div></div></section>
   <div id="rejPermissao" hidden>Verificando autorização de escrita...</div><div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
@@ -2292,92 +2292,105 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 <script src="/relatorio-agrupado-v10.js"></script>
 <script src="/duplicidades-recepcao.js"></script>
 <script src="/duplicidades-global.js?v=matriz-v4-20261029"></script>
-<style id="rejCalendarioEstilo">
-.rejCampoData{display:flex;align-items:center;gap:6px;min-width:0}
-.rejCampoData>input[type=text]{flex:1;min-width:0}
-.rejCalendarioBotao{position:relative;flex:0 0 36px;width:36px;height:36px;border:1px solid #a7bfd6;border-radius:5px;background:#eef5fb;color:#16456e;cursor:pointer;display:grid;place-items:center;overflow:hidden}
-.rejCalendarioBotao input[type=datetime-local]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}
-</style>
-<script id="rejCalendarioScript">
-(function(){
-  function configurar(textoId,calendarioId){
-    const texto=document.getElementById(textoId);
-    const calendario=document.getElementById(calendarioId);
-    if(!texto||!calendario)return;
 
-    calendario.addEventListener('change',function(){
-      if(!calendario.value)return;
-      const m=calendario.value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-      if(!m)return;
-      texto.value=m[3]+'/'+m[2]+'/'+m[1]+' '+m[4]+':'+m[5];
-      texto.dispatchEvent(new Event('input',{bubbles:true}));
-      texto.dispatchEvent(new Event('change',{bubbles:true}));
-    });
 
-    texto.addEventListener('change',function(){
-      const m=texto.value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
-      if(m)calendario.value=m[3]+'-'+m[2]+'-'+m[1]+'T'+m[4]+':'+m[5];
-    });
-  }
-  configurar('rejInicio','rejInicioCalendario');
-  configurar('rejFim','rejFimCalendario');
-})();
-</script>
-<style id="rejCampoClicavelEstilo">
-/* Um campo visivel; seletor nativo auxiliar invisivel */
-.rejCampoData {
-  position: relative !important;
-  display: block !important;
+
+
+<style id="rejCalendarioUnicoEstilo">
+.rejDataUnica {
+  position: relative;
+  width: 100%;
 }
-.rejCampoData > input[type="text"] {
-  display: block !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
-  cursor: text !important;
+
+.rejDataUnica > input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  cursor: text;
 }
-.rejCampoData .rejCalendarioBotao {
-  position: absolute !important;
-  top: 0 !important;
-  right: 0 !important;
-  width: 1px !important;
-  height: 1px !important;
-  padding: 0 !important;
-  border: 0 !important;
-  overflow: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-.rejCampoData .rejCalendarioBotao input[type="datetime-local"] {
-  position: absolute !important;
-  width: 1px !important;
-  height: 1px !important;
-  opacity: 0 !important;
+
+.rejDataUnica > input[type="datetime-local"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 </style>
-<script id="rejCampoClicavelScript">
+
+<script id="rejCalendarioUnicoScript">
 (function () {
-  function configurar(campoId, calendarioId) {
-    const campo = document.getElementById(campoId);
-    const calendario = document.getElementById(calendarioId);
 
-    if (!campo || !calendario) return;
+  function instalar(id) {
 
-    campo.addEventListener('click', function () {
+    const texto = document.getElementById(id);
+    if (!texto) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'rejDataUnica';
+
+    texto.parentNode.insertBefore(wrapper, texto);
+    wrapper.appendChild(texto);
+
+    const picker = document.createElement('input');
+    picker.type = 'datetime-local';
+    picker.tabIndex = -1;
+    picker.setAttribute('aria-label', 'Selecionar data e hora');
+    wrapper.appendChild(picker);
+
+    // Ao clicar na propria caixa, abrir calendario.
+    texto.addEventListener('click', function () {
       try {
-        if (typeof calendario.showPicker === 'function') {
-          calendario.showPicker();
+        if (typeof picker.showPicker === 'function') {
+          picker.showPicker();
         } else {
-          calendario.focus();
-          calendario.click();
+          picker.focus();
+          picker.click();
         }
-      } catch (erro) {
-        console.warn('Calendario nativo indisponivel:', erro.message);
+      } catch (e) {
+        console.warn('Calendario indisponivel:', e.message);
       }
     });
+
+    // Converter data selecionada para DD/MM/AAAA HH:mm.
+    picker.addEventListener('change', function () {
+
+      const m = picker.value.match(
+        /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/
+      );
+
+      if (!m) return;
+
+      texto.value =
+        m[3] + '/' + m[2] + '/' + m[1] +
+        ' ' + m[4] + ':' + m[5];
+
+      texto.dispatchEvent(
+        new Event('input', { bubbles: true })
+      );
+
+      texto.dispatchEvent(
+        new Event('change', { bubbles: true })
+      );
+    });
+
+    // Sincronizar digitacao manual com calendario.
+    texto.addEventListener('change', function () {
+
+      const m = texto.value.trim().match(
+        /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/
+      );
+
+      if (!m) return;
+
+      picker.value =
+        m[3] + '-' + m[2] + '-' + m[1] +
+        'T' + m[4] + ':' + m[5];
+    });
   }
 
-  configurar('rejInicio', 'rejInicioCalendario');
-  configurar('rejFim', 'rejFimCalendario');
+  instalar('rejInicio');
+  instalar('rejFim');
+
 })();
 </script>
 </body></html>
