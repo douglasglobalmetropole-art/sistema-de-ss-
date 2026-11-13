@@ -2776,4 +2776,83 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 
 })();
 </script>
+<script id="baixaFotosAuto2026">
+(function(){
+  'use strict';
+
+  const baixa = document.getElementById('siscomBaixaModal');
+  const fotos = document.getElementById('umovFotosModal');
+  const botaoFotos = document.getElementById('viewPhotosBtn');
+
+  if (!baixa || !fotos || !botaoFotos) return;
+
+  let abertura = 0;
+  let ultimaSS = '';
+
+  function numeroAtual(){
+    const ss = window.__siscomBaixaSelecionada;
+    return ss && ss.ss ? String(ss.ss) : '';
+  }
+
+  function abrirFotos(){
+    if (!baixa.classList.contains('open')) return;
+
+    const ss = numeroAtual();
+
+    // Aguarda a SS selecionada ficar disponivel.
+    if (!ss) return;
+
+    // Nao repete a consulta para a mesma abertura.
+    if (ultimaSS === ss && fotos.classList.contains('open')) return;
+
+    ultimaSS = ss;
+
+    if (!fotos.classList.contains('open')) {
+      botaoFotos.click();
+    }
+  }
+
+  function verificarAbertura(){
+    if (!baixa.classList.contains('open')) {
+      abertura++;
+      ultimaSS = '';
+      return;
+    }
+
+    const tentativa = ++abertura;
+
+    // A abertura da baixa pode preencher a SS de forma assincrona.
+    // Verifica por um periodo limitado, sem repetir consultas.
+    let vezes = 0;
+
+    function verificar(){
+      if (tentativa !== abertura) return;
+      if (!baixa.classList.contains('open')) return;
+
+      if (numeroAtual()) {
+        abrirFotos();
+        return;
+      }
+
+      if (++vezes < 30) {
+        setTimeout(verificar, 100);
+      }
+    }
+
+    setTimeout(verificar, 80);
+  }
+
+  const observador = new MutationObserver(verificarAbertura);
+
+  observador.observe(baixa, {
+    attributes:true,
+    attributeFilter:['class']
+  });
+
+  // Caso o script seja carregado com a janela ja aberta.
+  if (baixa.classList.contains('open')) {
+    verificarAbertura();
+  }
+})();
+</script>
 </body></html>
