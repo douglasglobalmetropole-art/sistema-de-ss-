@@ -1949,7 +1949,7 @@ require('./duplicidades-index').registrar(app,{
 });
 require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal});
 require('./busca-ss-fisica').registrar(app,{pool,hostRelatorioUmov});
-require('./gis-ss').registrar(app);
+require('./gis-ss').registrar(app,{gatewayRest,gatewayAuthorized,individualJobPayload});
 // No computador local, mantenha o comportamento original: `npm start`.
 // Na Vercel, o adaptador Node importa este Express app e nÃ£o abre uma porta.
 if (require.main === module) {
