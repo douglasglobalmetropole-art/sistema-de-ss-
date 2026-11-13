@@ -2485,7 +2485,7 @@ load();
   const aba=window.open('','_blank');if(!aba)return anexoSet('anexoAndamento','Permita pop-ups para visualizar o PDF.');
   aba.document.title='Preparando PDF uMov';aba.document.body.textContent='Gerando PDF do relatório original uMov...';
   try{
-   const r=await fetch('/api/relatorio-original-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:anexoAtual.link,ss:anexoAtual.ss})});
+   const r=await fetch('/api/relatorio-original-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:anexoAtual.link,ss:anexoAtual.ss,tarefa:anexoAtual.tarefa})});
    if(!r.ok){const j=await r.json().catch(()=>({}));throw Error(j.error||'Falha ao gerar PDF.');}
    const blob=await r.blob();if(!blob.type.includes('pdf'))throw Error('Resposta não é PDF.');
    const url=URL.createObjectURL(blob);aba.location.href=url;setTimeout(()=>URL.revokeObjectURL(url),120000);
