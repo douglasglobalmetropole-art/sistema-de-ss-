@@ -2294,7 +2294,15 @@ load();
  }
  function renderEquipes(){
   const q=$('sbEquipeBusca').value.trim(),chosen=$('sbEquipes').value;
-  options('sbEquipes',equipes.filter(e=>String(e.cdEquipe).includes(q)),'Selecione a equipe',e=>e.cdEquipe,e=>String(e.cdEquipe)+(e.nomeEquipe?" — "+e.nomeEquipe:""));
+  options('sbEquipes',equipes.filter(e=>
+    (String(e.cdEquipe)+" "+String(e.nomeEquipe||""))
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g,"")
+      .toLowerCase()
+      .includes(q.normalize("NFD")
+        .replace(/[\u0300-\u036f]/g,"")
+        .toLowerCase())
+  ),'Selecione a equipe',e=>e.cdEquipe,e=>String(e.cdEquipe)+(e.nomeEquipe?" — "+e.nomeEquipe:""));
   if(equipes.some(e=>String(e.cdEquipe)===q))$('sbEquipes').value=q;
   else if([...$('sbEquipes').options].some(o=>o.value===chosen))$('sbEquipes').value=chosen;
  }

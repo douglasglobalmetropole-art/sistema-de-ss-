@@ -239,7 +239,17 @@ async function processar() {
           const cd = Number(e?.cdEquipe);
           if (!Number.isSafeInteger(cd) || vistos.has(cd)) return false;
           vistos.add(cd); return true;
-        }).map(e => ({cdEquipe: Number(e.cdEquipe), id: e.id ?? null}));
+        }).map(e => ({cdEquipe: Number(e.cdEquipe),
+          id: e.id ?? null,
+          nomeEquipe: String(
+            e.nomeEquipe ??
+            e.nmEquipe ??
+            e.descricaoEquipe ??
+            e.dcEquipe ??
+            e.nome ??
+            e.descricao ??
+            ""
+          ).trim()}));
       } else if (tarefa.operation === "listar_micros") {
         resultado = dados.map(e => ({
           cdServico: e.cdServico, dcServico: e.dcServico,
