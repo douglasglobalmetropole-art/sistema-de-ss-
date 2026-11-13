@@ -296,6 +296,58 @@ if(materiaisDivisao && rota!=='/api/materiais'){
     });
    });
   }
+  // FOTOS_DIVISAO_CACHE_2026
+  // Consulta somente leitura, restrita a tarefa, SS e cidade da divisao.
+  if(req.method==='POST' && rota==='/api/relatorio-fotos'){
+    const tarefa=Number(req.body?.tarefa);
+    const numero=String(req.body?.ss||'').trim();
+
+    if(!Number.isSafeInteger(tarefa) || tarefa<=0 ||
+       !/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)){
+      return res.status(400).json({
+        ok:false,error:'Tarefa ou SS invalida.'
+      });
+    }
+
+    // A rota de fotos atual utiliza exclusivamente u45468.
+    // Nao encaminhar tarefas do Lote 1 para o banco de outro lote.
+    if(config.lote1){
+      return res.status(403).json({
+        ok:false,error:'Fotos do Lote 1 ainda nao configuradas.'
+      });
+    }
+
+    return pool.query({
+      text:`SELECT l.loc_city AS cidade
+            FROM u45468.dbout_task d
+            JOIN u45468.task t ON t.tsk_id=d.tsk_id
+            JOIN u45468.local l ON l.loc_id=t.loc_id
+            WHERE d.tsk_id=$1
+              AND l.loc_integrationid=$2
+              AND d.tss_id=50
+            LIMIT 1`,
+      values:[tarefa,numero],
+      query_timeout:7000
+    }).then(resultado=>{
+      const cidade=normalizarCidade(resultado.rows[0]?.cidade||'');
+      const permitidas=config.cidades.map(normalizarCidade);
+
+      if(!cidade || !permitidas.includes(cidade)){
+        return res.status(403).json({
+          ok:false,
+          error:'Fotos nao autorizadas para esta divisao.'
+        });
+      }
+
+      return next();
+    }).catch(erro=>{
+      console.error('Validacao de fotos por divisao:',erro.message);
+      return res.status(503).json({
+        ok:false,
+        error:'Nao foi possivel validar a divisao das fotos.'
+      });
+    });
+  }
   if(!consultaRejeicaoDivisao && !materiaisDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
@@ -1742,11 +1794,21 @@ app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
 });
 
 // Fotos: renderiza apenas imagens do relatÃ³rio ORIGINAL do uMov, sem copiar o relatÃ³rio inteiro.
+const fotosUmovCache = new Map();
+const FOTOS_UMOV_TTL = 5 * 60 * 1000;
 app.post('/api/relatorio-fotos',async(req,res)=>{
  res.set('Cache-Control','no-store');
  if(!siscomIndividual(req)||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'FaÃ§a login individual no SISCOM para visualizar fotos.'});
  const tarefa=Number(req.body?.tarefa),ss=String(req.body?.ss||'').trim();
  if(!Number.isSafeInteger(tarefa)||tarefa<=0||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'Informe uma SS vÃ¡lida.'});
+ const chaveFotos=String(tarefa)+'|'+ss;
+ const agoraFotos=Date.now();
+ const fotosGuardadas=fotosUmovCache.get(chaveFotos);
+
+ if(fotosGuardadas && fotosGuardadas.expira>agoraFotos){
+   return res.json(fotosGuardadas.dados);
+ }
+
  let browser;
  try{
   const q=await pool.query({text:`SELECT d.tss_id,d.tsk_accesstoken,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
@@ -1772,7 +1834,19 @@ app.post('/api/relatorio-fotos',async(req,res)=>{
     if(buffer.length>2500&&buffer.length<1800000)fotos.push('data:image/jpeg;base64,'+Buffer.from(buffer).toString('base64'));
    }catch(e){console.warn('Foto uMov ignorada:',String(e.message).slice(0,100))}
   }
-  return res.json({ok:true,fotos,truncado:candidatas>40,total:candidatas});
+  const dadosFotos={ok:true,fotos,truncado:candidatas>40,total:candidatas};
+
+  // Limite de memoria: no maximo 12 conjuntos de fotos por instancia.
+  if(fotosUmovCache.size>=12){
+    fotosUmovCache.delete(fotosUmovCache.keys().next().value);
+  }
+
+  fotosUmovCache.set(chaveFotos,{
+    expira:Date.now()+FOTOS_UMOV_TTL,
+    dados:dadosFotos
+  });
+
+  return res.json(dadosFotos);
  }catch(e){console.error('Fotos uMov:',e.message);return res.status(502).json({ok:false,error:'NÃ£o foi possÃ­vel extrair as fotos do relatÃ³rio original. Verifique se o relatÃ³rio estÃ¡ acessÃ­vel.'})}
  finally{if(browser)await browser.close().catch(()=>{})}
 });
