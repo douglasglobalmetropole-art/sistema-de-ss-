@@ -2055,7 +2055,7 @@ load();
     try{
       const response=await fetch('/api/remover-equipe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:comEquipe.map(x=>x.tarefa)})});
       const result=await response.json();
-      if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível remover a equipe.');
+      if(!response.ok||!result.sucesso)throw Error(result.error||'Não foi possível remover a equipe.');
       const okIds=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));for(const id of okIds)equipesPendentes.delete(id);
       for(const x of raw){if(okIds.has(String(x.tarefa))){x.equipe_executou='';x.tecnico='';}}
       if(window.__detailSS&&okIds.has(String(window.__detailSS.tarefa))){window.__detailSS.equipe_executou='';window.__detailSS.tecnico='';}
@@ -2104,12 +2104,12 @@ load();
     try{
       const response=await fetch('/api/tags',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:limpar?'limpar':'adicionar',tag:valor,tarefas:tagModalItems.map(x=>x.tarefa)})});
       const result=await response.json();
-      if(!response.ok&&!result.sucesso)throw Error(result.error||'Não foi possível atualizar a tag.');
+      if(!response.ok||!result.sucesso)throw Error(result.error||'Não foi possível atualizar a tag.');
       const ids=new Set((result.resultados||[]).filter(x=>x.ok).map(x=>String(x.tarefa)));
       for(const item of tagModalItems)if(ids.has(String(item.tarefa)))item.tags=valor;
       for(const item of raw)if(ids.has(String(item.tarefa)))item.tags=valor;
       if(window.__detailSS&&ids.has(String(window.__detailSS.tarefa))){window.__detailSS.tags=valor;$('dtag').textContent=valor;}
-      selected={};apply();closeTagModal();
+      selected={};apply();if(!result.falhas)closeTagModal();
       notify(`${limpar?'Limpeza':'Atualização'} de tag enviada ao uMov para ${result.sucesso||0} SS${result.falhas?' • '+result.falhas+' falha(s)':''}.`,result.falhas?'error':'success');
     }catch(error){$('tagModalError').textContent=error.message||'Erro ao atualizar tag.'}
     finally{buttons.forEach(b=>b.disabled=false)}

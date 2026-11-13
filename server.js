@@ -1924,7 +1924,7 @@ app.post('/api/tags',async(req,res)=>{try{
  const acao=String(req.body?.acao||'adicionar');
  if(!['adicionar','limpar'].includes(acao))return res.status(400).json({ok:false,error:'AÃ§Ã£o de tag invÃ¡lida.'});
  const tag=acao==='limpar'?'':String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
- const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(Number.isInteger))].slice(0,25);
+ const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,25);
  if(acao==='adicionar'&&!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
  if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
  const resultados=[];
