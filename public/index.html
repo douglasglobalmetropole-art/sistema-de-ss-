@@ -2946,25 +2946,126 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  fotoModal.addEventListener('keydown',e=>{if(e.key==='Escape'){if(el('umovFotosZoom').classList.contains('open'))el('umovFotosZoom').classList.remove('open');else fecharFotos()}});
  el('sbVerFotos').onclick=()=>el('viewPhotosBtn').click();
  el('sbBaixarUmov').onclick=()=>el('syncUmovBaixaBtn').click();
+ // Cache temporario por SS e tarefa, com limite de memoria.
+ const cacheFotos = new Map();
+ const consultasFotos = new Map();
+ let geracaoFotos = 0;
+ const CHAVE_FOTOS = x => String(x.ss)+'|'+String(x.tarefa);
+
+ async function obterFotos(x){
+   const chave = CHAVE_FOTOS(x);
+   const existente = cacheFotos.get(chave);
+
+   if(existente && Date.now()-existente.hora < 300000){
+     return existente.dados;
+   }
+
+   if(consultasFotos.has(chave)){
+     return consultasFotos.get(chave);
+   }
+
+   const consulta = (async()=>{
+     const r = await fetch('/api/relatorio-fotos',{
+       method:'POST',
+       headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({tarefa:x.tarefa,ss:x.ss}),
+       cache:'no-store'
+     });
+
+     const j = await r.json();
+
+     if(!r.ok || !j.ok){
+       throw Error(j.error||'Nao foi possivel carregar as fotos.');
+     }
+
+     cacheFotos.set(chave,{hora:Date.now(),dados:j});
+
+     while(cacheFotos.size>8){
+       cacheFotos.delete(cacheFotos.keys().next().value);
+     }
+
+     return j;
+   })();
+
+   consultasFotos.set(chave,consulta);
+
+   try{
+     return await consulta;
+   }finally{
+     consultasFotos.delete(chave);
+   }
+ }
+
  el('viewPhotosBtn').onclick=async()=>{
-  const x=current();if(!x?.tarefa)return window.notify?.('Selecione uma SS para ver as fotos.','error');
-  fotoModal.classList.add('open');el('umovFotosTitle').textContent='▧ Fotos da SS '+(x.ss||'');
-  grid.replaceChildren();status.textContent='Carregando somente as fotos do relatório original uMov...';el('umovFotosCount').textContent='Aguarde';
-  el('viewPhotosBtn').disabled=true;
-  try{
-   const r=await fetch('/api/relatorio-fotos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefa:x.tarefa,ss:x.ss}),cache:'no-store'});
-   const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Não foi possível carregar as fotos.');
-   const fotos=Array.isArray(j.fotos)?j.fotos:[];
-   status.textContent=fotos.length?'':'Nenhuma foto foi encontrada no relatório original desta SS.';
-   el('umovFotosCount').textContent=fotos.length+' foto(s) encontrada(s)'+(j.truncado?' • Exibindo as primeiras 40':'');
-   fotos.forEach((src,i)=>{
-    const figure=document.createElement('figure'),img=document.createElement('img'),caption=document.createElement('figcaption');
-    img.src=src;img.alt='Foto '+(i+1)+' da SS '+(x.ss||'');img.loading='lazy';
-    img.onclick=()=>{el('umovFotosZoomImg').src=src;el('umovFotosZoom').classList.add('open')};
-    caption.textContent='Foto '+(i+1);figure.append(img,caption);grid.append(figure);
-   });
-  }catch(e){status.textContent='Erro ao consultar fotos: '+e.message;el('umovFotosCount').textContent='Consulta não concluída'}
-  finally{el('viewPhotosBtn').disabled=false}
+   const x=current();
+
+   if(!x?.tarefa || !x?.ss){
+     return window.notify?.('Selecione uma SS para ver as fotos.','error');
+   }
+
+   const minhaGeracao=++geracaoFotos;
+   const chave=CHAVE_FOTOS(x);
+
+   fotoModal.classList.add('open');
+   el('umovFotosTitle').textContent='▧ Fotos da SS '+x.ss;
+
+   grid.replaceChildren();
+   status.textContent=cacheFotos.has(chave)
+     ? 'Exibindo fotos armazenadas...'
+     : 'Consultando fotos do relatorio original uMov...';
+
+   el('umovFotosCount').textContent='Carregando...';
+
+   try{
+     const j=await obterFotos(x);
+
+     // Impede que a resposta de outra SS sobrescreva o painel.
+     if(minhaGeracao!==geracaoFotos)return;
+
+     const fotos=Array.isArray(j.fotos)?j.fotos:[];
+
+     status.textContent=fotos.length
+       ? ''
+       : 'Nenhuma foto encontrada no relatorio original desta SS.';
+
+     el('umovFotosCount').textContent=
+       fotos.length+' foto(s) encontrada(s)'+
+       (j.truncado?' - Exibindo as primeiras 40':'');
+
+     const fragmento=document.createDocumentFragment();
+
+     fotos.forEach((src,i)=>{
+       const figure=document.createElement('figure');
+       const img=document.createElement('img');
+       const caption=document.createElement('figcaption');
+
+       img.alt='Foto '+(i+1)+' da SS '+x.ss;
+       img.loading=i===0?'eager':'lazy';
+       img.decoding='async';
+
+       if(i===0){
+         img.fetchPriority='high';
+       }
+
+       img.src=src;
+
+       img.onclick=()=>{
+         el('umovFotosZoomImg').src=src;
+         el('umovFotosZoom').classList.add('open');
+       };
+
+       caption.textContent='Foto '+(i+1);
+       figure.append(img,caption);
+       fragmento.append(figure);
+     });
+
+     grid.append(fragmento);
+
+   }catch(e){
+     if(minhaGeracao!==geracaoFotos)return;
+     status.textContent='Erro ao consultar fotos: '+e.message;
+     el('umovFotosCount').textContent='Consulta nao concluida';
+   }
  };
  // Operação não envia baixa ao SISCOM; somente sincroniza o uMov após verificação oficial do evento 9.
  el('syncUmovBaixaBtn').onclick=async()=>{
