@@ -549,7 +549,7 @@ function sealedCredentials(login,senha){
 app.get('/api/siscom-individual/me',(req,res)=>{
  res.set('Cache-Control','no-store');
  const user=siscomIndividual(req);
- res.json({configured:!!siscomIndividualReady(),authenticated:!!user,user:user?{idUsuario:user.uid,nome:user.name,login:user.login}:null,writeEnabled:!!(user&&individualWriteAllowed(user)),rejeicaoEnabled:!!(user&&individualWriteAllowed(user)&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true')});
+ res.json({configured:!!siscomIndividualReady(),authenticated:!!user,user:user?{idUsuario:user.uid,nome:user.name,login:user.login}:null,writeEnabled:!!(user&&individualWriteAllowed(user)),rejeicaoEnabled:!!(user&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true')});
 });
 function individualWriteAllowed(user){
  if(process.env.SISCOM_INDIVIDUAL_WRITE_ENABLED!=='true')return false;
@@ -820,7 +820,7 @@ const SS_REJEICAO_FORMATO=/^\d{2}\/\d{2}-\d{6}-\d{2}$/;
 const REJEICAO_OPS=['validar_ss_rejeicao','listar_motivos_nao_execucao','rejeitar_ss_real'];
 function rejectionEnabled(req){
  const user=siscomIndividual(req);
- return !!(user&&individualWriteAllowed(user)&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true');
+ return !!(user&&process.env.SISCOM_REJEICAO_WRITE_ENABLED==='true');
 }
 app.get('/api/siscom-gateway/motivos-nao-execucao',async(req,res)=>{
  const user=siscomIndividual(req);
