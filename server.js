@@ -178,6 +178,7 @@ const sincronizacaoExistenteDivisao =
      '/api/siscom-gateway/complementar-areas',
      '/api/siscom-gateway/complementar-servicos',
      '/api/siscom-gateway/complementar-consultar',
+      '/api/siscom-gateway/complementar-criar',
      '/api/siscom-gateway/tramitacao'
     ].includes(rota)
    )
@@ -192,12 +193,126 @@ const sincronizacaoExistenteDivisao =
    )
   );
 
+const criarComplementarDivisao =
+  req.method==='POST' &&
+  rota==='/api/siscom-gateway/complementar-criar';
+
+// COMPLEMENTAR_DIVISAO_VALIDACAO_20261113
+if(criarComplementarDivisao){
+  const numero=String(req.body?.numero_ss||'').trim();
+
+  if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)){
+    return res.status(400).json({
+      error:'Numero da SS invalido.'
+    });
+  }
+
+  const schema=config.lote1?'u46915':'u45468';
+
+  return pool.query({
+    text:`
+      SELECT DISTINCT l.loc_city AS cidade
+      FROM ${schema}.task t
+      JOIN ${schema}.local l ON l.loc_id=t.loc_id
+      WHERE l.loc_integrationid=$1
+    `,
+    values:[numero],
+    query_timeout:7000
+  }).then(resultado=>{
+    const permitidas=config.cidades.map(normalizarCidade);
+    const cidades=resultado.rows.map(
+      x=>normalizarCidade(x.cidade||'')
+    );
+
+    if(!cidades.length ||
+       cidades.some(c=>!c || !permitidas.includes(c))){
+      return res.status(403).json({
+        error:'SS nao localizada ou nao pertence a esta divisao.'
+      });
+    }
+
+    return next();
+
+  }).catch(erro=>{
+    console.error('Validacao complementar por divisao:',erro.message);
+    return res.status(503).json({
+      error:'Nao foi possivel validar a divisao da SS.'
+    });
+  });
+}
 const materiaisDivisao =
   (req.method==='GET' &&
    (rota==='/api/materiais' || rota==='/api/itens')) ||
   (req.method==='POST' &&
    (rota==='/api/itens' || rota==='/api/itens/lote'));
 
+  // TAGS_DIVISAO_VALIDACAO_20261113
+  const tagsDivisao =
+    req.method==='POST' && rota==='/api/tags';
+
+  if(tagsDivisao){
+    const tarefasRecebidas = req.body?.tarefas;
+
+    const tarefas = [...new Set(
+      (Array.isArray(tarefasRecebidas) ? tarefasRecebidas : [])
+        .map(Number)
+        .filter(x => Number.isSafeInteger(x) && x > 0)
+    )];
+
+    if(
+      !Array.isArray(tarefasRecebidas) ||
+      tarefas.length !== tarefasRecebidas.length ||
+      tarefas.length === 0 ||
+      tarefas.length > 25
+    ){
+      return res.status(400).json({
+        ok:false,
+        error:'Selecione de 1 a 25 tarefas validas.'
+      });
+    }
+
+    const schema = config.lote1 ? 'u46915' : 'u45468';
+
+    return pool.query({
+      text:`
+        SELECT
+          t.tsk_id,
+          l.loc_city AS cidade
+        FROM ${schema}.task t
+        JOIN ${schema}.local l
+          ON l.loc_id = t.loc_id
+        WHERE t.tsk_id = ANY($1::bigint[])
+      `,
+      values:[tarefas],
+      query_timeout:7000
+    }).then(resultado=>{
+      const permitidas = config.cidades.map(normalizarCidade);
+      const localizadas = resultado.rows;
+
+      const todasPertencem =
+        localizadas.length === tarefas.length &&
+        localizadas.every(row =>
+          permitidas.includes(normalizarCidade(row.cidade || ''))
+        );
+
+      if(!todasPertencem){
+        return res.status(403).json({
+          ok:false,
+          error:'Uma ou mais SS nao pertencem a esta divisao. Nenhuma tag foi alterada.'
+        });
+      }
+
+      return next();
+
+    }).catch(erro=>{
+      console.error('Validacao de tags por divisao:',erro.message);
+
+      return res.status(503).json({
+        ok:false,
+        error:'Nao foi possivel validar as SS antes de gravar as tags.'
+      });
+    });
+  }
 if(materiaisDivisao && rota!=='/api/materiais'){
   const numero=String(
     req.method==='GET' ? req.query?.ss : req.body?.ss
@@ -349,7 +464,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
