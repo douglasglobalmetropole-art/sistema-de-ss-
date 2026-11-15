@@ -139,6 +139,9 @@ req.divisaoSS={
 
   const enviarEquipeDivisao =
    req.method==='POST' && rota==='/api/enviar-equipe';
+
+  const removerEquipeDivisao =
+   req.method==='POST' && rota==='/api/remover-equipe';
   const pdfDivisao =
    req.method==='POST' &&
    (
@@ -536,7 +539,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -2139,6 +2142,43 @@ app.post('/api/remover-equipe',async(req,res)=>{
   const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number))];
   if(!tarefas.length||tarefas.length>100||tarefas.some(x=>!Number.isSafeInteger(x)||x<=0))
    return res.status(400).json({ok:false,error:'Selecione de 1 a 100 SS vÃ¡lidas.'});
+
+   // Validacao obrigatoria das SS na divisao autorizada.
+   if(req.divisaoSS){
+    const schema=req.divisaoSS.lote1?'u46915':'u45468';
+    const permitidas=new Set(
+     (req.divisaoSS.cidades||[]).map(normalizarCidade)
+    );
+
+    if(!permitidas.size){
+     return res.status(403).json({
+      ok:false,error:'Divisao sem cidades autorizadas.'
+     });
+    }
+
+    const verificacao=await pool.query({
+     text:`SELECT t.tsk_id,l.loc_city AS cidade
+           FROM ${schema}.task t
+           JOIN ${schema}.local l ON l.loc_id=t.loc_id
+           WHERE t.tsk_id=ANY($1::bigint[])`,
+     values:[tarefas],
+     query_timeout:7000
+    });
+
+    const idsValidos=new Set(
+     verificacao.rows
+      .filter(x=>permitidas.has(normalizarCidade(x.cidade)))
+      .map(x=>String(x.tsk_id))
+    );
+
+    if(idsValidos.size!==tarefas.length ||
+       tarefas.some(id=>!idsValidos.has(String(id)))){
+     return res.status(403).json({
+      ok:false,
+      error:'Retirada bloqueada: uma ou mais SS nao pertencem a sua divisao. Nenhuma equipe foi retirada.'
+     });
+    }
+   }
   const resultados=[];
   for(const tarefa of tarefas){
    try{
