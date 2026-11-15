@@ -4006,4 +4006,68 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 })();
 </script>
 <script src="/gis-ss-map.js" defer></script>
+
+<!-- GLOBAL_SS_CORRECAO_FECHAR_FOTOS_V2 -->
+<style id="globalSsFecharFotosV2">
+#umovFotosModal.open .ufZoom {
+    pointer-events: auto !important;
+    z-index: 999999 !important;
+}
+#umovFotosModal.open .ufZoom button {
+    pointer-events: auto !important;
+    z-index: 1000000 !important;
+    cursor: pointer !important;
+}
+#umovFotosModal.open .ufZoom img {
+    pointer-events: auto !important;
+}
+</style>
+<script id="globalSsFecharFotosV2JS">
+(function () {
+    'use strict';
+
+    function fecharAmpliacao() {
+        const zoom = document.getElementById('umovFotosZoom');
+        if (zoom) zoom.classList.remove('open');
+
+        const imagem = document.getElementById('umovFotosZoomImg');
+        if (imagem) imagem.removeAttribute('src');
+    }
+
+    function fecharGaleria() {
+        fecharAmpliacao();
+
+        const galeria = document.getElementById('umovFotosModal');
+        if (galeria) galeria.classList.remove('open');
+    }
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+
+        const galeria = document.getElementById('umovFotosModal');
+        const zoom = document.getElementById('umovFotosZoom');
+
+        if (!galeria || !galeria.classList.contains('open')) return;
+
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        if (zoom && zoom.classList.contains('open')) {
+            fecharAmpliacao();
+        } else {
+            fecharGaleria();
+        }
+    }, true);
+
+    document.addEventListener('click', function (e) {
+        if (e.target.closest &&
+            e.target.closest('#umovFotosZoomClose')) {
+            fecharAmpliacao();
+        }
+    }, true);
+
+})();
+</script>
+<!-- FIM_GLOBAL_SS_CORRECAO_FECHAR_FOTOS_V2 -->
+
 </body></html>
