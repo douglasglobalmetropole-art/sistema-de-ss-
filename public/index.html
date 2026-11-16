@@ -1998,7 +1998,7 @@ let equipeFilterTimer;
   clearTimeout(equipeFilterTimer);
   equipeFilterTimer=setTimeout(()=>{window.__pageOffset=0;load()},300);
 });
-$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');if(currentScreen==='campo'){$('dateIni').value='';$('dateFim').value=''}else setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
+$('clearBtn').onclick=()=>{cities=[];macros=[];document.querySelectorAll('.filter input').forEach(x=>x.value='');if(currentScreen==='campo'||currentScreen==='baixar'){$('dateIni').value='';$('dateFim').value=''}else setDefaultDateRange();window.__pageOffset=0;loadMenus();load()};
 document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener('click',()=>{window.__pageOffset=0},{capture:true}));
 // Pesquisa direta no PostgreSQL, exibida na própria lista principal.
 (()=>{
