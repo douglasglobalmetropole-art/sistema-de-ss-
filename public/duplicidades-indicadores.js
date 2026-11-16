@@ -115,6 +115,39 @@
     .dup-indicator:hover {outline:2px solid #8ab7df}
   `;
   document.head.append(css);
+
+  css.textContent += `
+    .dup-indicator-cell {
+      min-width: 145px;
+      width: 145px;
+      text-align: center;
+      white-space: nowrap;
+      padding: 4px 6px !important;
+    }
+    .dup-indicator {
+      width: auto !important;
+      min-width: 0 !important;
+      height: 25px !important;
+      padding: 4px 9px !important;
+      border-radius: 5px !important;
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      white-space: nowrap;
+      gap: 5px;
+    }
+    .dup-indicator.found {
+      background: #fff0ed !important;
+      color: #bd2929 !important;
+    }
+    .dup-indicator:not(.found):not(.error) {
+      background: #e8f5ed !important;
+      color: #147b49 !important;
+    }
+    .dup-indicator.error {
+      background: #fff2dc !important;
+      color: #98600b !important;
+    }
+  `;
   document.body.append(modal);
 
   const content = document.getElementById('dgmContent');
@@ -140,7 +173,19 @@
     const matrizSS = ssVal(matriz);
     const duplicataSet = new Set(duplicatas.map(ssVal));
 
-    const lista = resultados.map(r => {
+    const relacionados = [...resultados];
+    const vistos = new Set(resultados.map(ssVal).filter(Boolean));
+
+    duplicatas.forEach(r => {
+      if (!r || typeof r !== 'object') return;
+      const numero = ssVal(r);
+      if (numero && !vistos.has(numero)) {
+        relacionados.push(r);
+        vistos.add(numero);
+      }
+    });
+
+    const lista = relacionados.map(r => {
       const isDuplicata = duplicataSet.has(ssVal(r));
       const categoria = r.categoria || 'proximidade';
       const classe = isDuplicata ? 'dgm-red' :
@@ -175,10 +220,10 @@
 
       <div class="dgm-section">
         POSSÍVEIS DUPLICATAS E CORRESPONDÊNCIAS
-        (${resultados.length})
+        (${relacionados.length})
       </div>
 
-      ${resultados.length ? `
+      ${relacionados.length ? `
         <div class="dgm-scroll">
           <table class="dgm-table">
             <thead>
@@ -280,8 +325,15 @@
     const ativo = typeof currentScreen !== 'undefined' &&
       currentScreen === 'recepcao';
 
-    const header = document.getElementById('dupIndicatorHeader');
-    const filtro = document.getElementById('dupIndicatorFilter');
+    let header = document.getElementById('dupIndicatorHeader');
+    let filtro = document.getElementById('dupIndicatorFilter');
+
+    const equipeHeader = document.getElementById('receptionTeamHeader');
+    const equipeFiltro = document.getElementById('receptionTeamFilterCell');
+
+
+
+
 
     if (header) header.hidden = !ativo;
     if (filtro) filtro.hidden = !ativo;
@@ -308,21 +360,25 @@
       const dado = cache.get(ss);
       let classe = 'dup-indicator';
       let titulo = 'Consultar possíveis duplicidades';
-      let simbolo = '…';
+      let simbolo = '◌';
+      let rotulo = 'Verificando';
 
       if (dado && dado.erro) {
         classe += ' error';
-        simbolo = '?';
+        simbolo = '●';
+        rotulo = 'Revisar';
         titulo = 'Falha na consulta. Clique para tentar novamente.';
       } else if (dado?.resposta) {
         const j = dado.resposta;
-        const n = (j.resultados || []).length;
+        const n = Math.max((j.duplicatas || []).length, (j.resultados || []).length);
         if (n) {
           classe += ' found';
           simbolo = '●';
+          rotulo = 'Possível duplicata';
           titulo = n + ' correspondência(s). Clique para ver as SS.';
         } else {
           simbolo = '●';
+          rotulo = 'Única';
           titulo = 'Sem correspondências encontradas. Clique para consultar.';
         }
       }
@@ -331,7 +387,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = classe;
-      btn.textContent = simbolo;
+      btn.textContent = rotulo;
       btn.title = titulo;
       btn.setAttribute('aria-label',titulo);
 
