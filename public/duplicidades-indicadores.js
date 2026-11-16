@@ -302,14 +302,14 @@
     content.innerHTML = '<p>Consultando índice global de duplicidades...</p>';
 
     const dado = cache.get(ss);
-    if (dado && Date.now() - dado.tempo < CACHE_MS) {
+    if (dado && dado.detalhes === true && Date.now() - dado.tempo < CACHE_MS) {
       mostrar(dado.resposta);
       return;
     }
 
     try {
       const r = await fetch(
-        '/api/duplicidades/consulta?ss=' + encodeURIComponent(ss),
+        '/api/duplicidades/consulta?detalhes=1&ss=' + encodeURIComponent(ss),
         {credentials:'same-origin',cache:'no-store'}
       );
       const j = await r.json();
@@ -318,7 +318,7 @@
         throw new Error(j.erro || 'Falha na consulta');
       }
 
-      cache.set(ss,{resposta:j,tempo:Date.now()});
+      cache.set(ss,{resposta:j,detalhes:true,tempo:Date.now()});
       mostrar(j);
     } catch (e) {
       content.innerHTML = `
@@ -348,7 +348,7 @@
         );
         const j = await r.json();
         if (r.ok && j.ok) {
-          cache.set(ss,{resposta:j,tempo:Date.now()});
+          if (!cache.get(ss)?.detalhes) cache.set(ss,{resposta:j,detalhes:false,tempo:Date.now()});
         } else {
           cache.set(ss,{resposta:null,erro:true,tempo:Date.now()});
         }
