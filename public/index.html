@@ -1561,6 +1561,11 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 }
 </style>
 
+<!-- GLOBAL_SS_LINHAS_ALINHADAS_V8 -->
+
+
+
+
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
@@ -1856,6 +1861,11 @@ function setScreen(screen,btn){
   const h=$('lastHeader'), f=$('lastFilter'), teamHeader=$('teamHeader'), teamFilterCell=$('teamFilterCell'), teamFilter=$('teamFilter'), integrationHeader=$('integrationHeader'), integrationFilterCell=$('integrationFilterCell'), integrationFilter=$('integrationFilter');
   $('dupIndicatorHeader').hidden=screen!=='recepcao';
   $('dupIndicatorFilter').hidden=screen!=='recepcao';
+
+  // GLOBAL_SS_ALINHAMENTO_ESTRUTURAL_V10
+  const indicadorVisivel = screen === 'recepcao';
+  $('dupIndicatorHeader').hidden = !indicadorVisivel;
+  $('dupIndicatorFilter').hidden = !indicadorVisivel;
   $('receptionTeamHeader').hidden=screen!=='recepcao';
   $('receptionTeamFilterCell').hidden=screen!=='recepcao';
   const mostraEquipeComData=screen==='baixar'||screen==='encerradas'||screen==='tramitacao';
@@ -4166,126 +4176,12 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 
 <script src="/duplicidades-indicadores.js?v=abas-20261116-023353"></script>
 <!-- SS_DATAS_BAIXAR_V1 -->
-<script>
-(function(){
-  'use strict';
 
-  function limparDatasBaixar(){
-    if(typeof currentScreen === 'undefined' || currentScreen !== 'baixar') return;
 
-    const inicio = document.getElementById('dateIni');
-    const fim = document.getElementById('dateFim');
 
-    if(inicio) inicio.value = '';
-    if(fim) fim.value = '';
-  }
 
-  document.addEventListener('click', function(event){
-    const aba = event.target.closest('[data-screen="baixar"]');
 
-    if(aba){
-      setTimeout(limparDatasBaixar, 0);
-    }
-  });
 
-  window.addEventListener('load', function(){
-    setTimeout(limparDatasBaixar, 0);
-  });
-})();
-</script>
-<!-- SS_INDICADORES_SO_RECEPCAO_V1 -->
-<script>
-(function(){
-  'use strict';
-
-  const SELETORES = [
-    '[data-duplicidade-indicador]',
-    '.duplicidade-indicador',
-    '.ss-duplicidade-indicador',
-    '.dup-indicador'
-  ];
-
-  function atualizarIndicadores(){
-    const recepcao =
-      typeof currentScreen !== 'undefined' &&
-      currentScreen === 'recepcao';
-
-    document.querySelectorAll(SELETORES.join(',')).forEach(function(el){
-      el.hidden = !recepcao;
-      el.style.display = recepcao ? '' : 'none';
-    });
-  }
-
-  document.addEventListener('click',function(event){
-    if(event.target.closest('[data-screen]')){
-      setTimeout(atualizarIndicadores,0);
-    }
-  });
-
-  window.addEventListener('load',atualizarIndicadores);
-})();
-</script>
-<!-- SS_COLUNA_DUP_SO_RECEPCAO_V2 -->
-<script>
-(function(){
-  'use strict';
-
-  function atualizarColunaDuplicidade(){
-    const recepcao =
-      typeof currentScreen !== 'undefined' &&
-      currentScreen === 'recepcao';
-
-    document.querySelectorAll('table').forEach(function(tabela){
-      const cabecalhos = Array.from(
-        tabela.querySelectorAll('thead th')
-      );
-
-      const indice = cabecalhos.findIndex(function(th){
-        return /duplicat|duplicidade|indicador/i.test(
-          th.textContent || ''
-        );
-      });
-
-      if(indice < 0) return;
-
-      const linhas = tabela.querySelectorAll('tr');
-
-      linhas.forEach(function(linha){
-        const celulas = Array.from(linha.children).filter(function(el){
-          return el.tagName === 'TH' || el.tagName === 'TD';
-        });
-
-        const celula = celulas[indice];
-        if(!celula) return;
-
-        celula.hidden = !recepcao;
-        celula.style.display = recepcao ? '' : 'none';
-      });
-    });
-  }
-
-  document.addEventListener('click',function(event){
-    if(event.target.closest('[data-screen]')){
-      setTimeout(atualizarColunaDuplicidade,50);
-    }
-  });
-
-  const observador = new MutationObserver(function(){
-    atualizarColunaDuplicidade();
-  });
-
-  window.addEventListener('load',function(){
-    atualizarColunaDuplicidade();
-
-    document.querySelectorAll('table').forEach(function(tabela){
-      observador.observe(tabela,{
-        childList:true,
-        subtree:true
-      });
-    });
-  });
-})();
-</script>
 
 
 
