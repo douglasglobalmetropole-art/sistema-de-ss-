@@ -4271,4 +4271,47 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
   });
 })();
 </script>
+
+
+
+
+<script>
+/* GLOBAL_SS_COLUNAS_CORRIGIDAS_V2 */
+(function(){
+  function ajustar(){
+    const tela=typeof currentScreen!=='undefined'?currentScreen:'recepcao';
+
+    const configuracao={
+      dupIndicatorHeader: tela==='recepcao',
+      dupIndicatorFilter: tela==='recepcao',
+      receptionTeamHeader: tela==='recepcao',
+      receptionTeamFilterCell: tela==='recepcao',
+      teamHeader: ['baixar','encerradas','tramitacao'].includes(tela),
+      teamFilterCell: ['baixar','encerradas','tramitacao'].includes(tela),
+      integrationHeader: ['encerradas','tramitacao'].includes(tela),
+      integrationFilterCell: ['encerradas','tramitacao'].includes(tela)
+    };
+
+    Object.entries(configuracao).forEach(([id,visivel])=>{
+      const el=document.getElementById(id);
+      if(el)el.hidden=!visivel;
+    });
+  }
+
+  function iniciar(){
+    ajustar();
+
+    document.querySelectorAll('.tab[data-screen]').forEach(tab=>{
+      tab.addEventListener('click',()=>setTimeout(ajustar,0));
+    });
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',iniciar);
+  }else{
+    iniciar();
+  }
+})();
+</script>
+
 </body></html>
