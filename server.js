@@ -1830,6 +1830,40 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
   res.status(502).json({ok:false,code:tipo,etapa:'consulta_sequencias',error:mensagem});
  }
 });
+const { consultarMateriais } = require('./umov-materiais');
+
+app.get('/api/umov/materiais', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+
+  try {
+    const ss = String(req.query.ss || '').trim();
+
+    if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Numero de SS invalido.'
+      });
+    }
+
+    const materiais = await consultarMateriais(pool, ss);
+
+    return res.json({
+      ok: true,
+      numero_ss: ss,
+      total: materiais.length,
+      materiais
+    });
+
+  } catch (error) {
+    console.error('Consulta materiais uMov:', error.code || error.message);
+
+    return res.status(502).json({
+      ok: false,
+      error: 'Falha ao consultar materiais no uMov.'
+    });
+  }
+});
+
 // GLOBAL_SS_RELATORIO_AGRUPADO_V10_END
 
 // Converte a prÃ³pria pÃ¡gina original do relatÃ³rio uMov, inclusive imagens, em PDF.
