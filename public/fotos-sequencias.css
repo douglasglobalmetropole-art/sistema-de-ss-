@@ -1,93 +1,52 @@
-/* CGM_FOTOS_SEPARADAS_V3: tres paineis irmaos; centro nao comprimido */
-#siscomBaixaModal.open{display:flex!important;justify-content:flex-start!important;align-items:flex-start!important;overflow:auto!important;padding:10px!important}
-#siscomBaixaModal #cgmFotosPalco{display:grid;grid-template-columns:290px 1060px 290px;gap:14px;align-items:stretch;width:max-content;min-width:max-content;margin:auto;max-height:calc(100dvh - 20px)}
-#siscomBaixaModal #cgmFotosPalco>.sbShell{width:1060px!important;min-width:1060px!important;max-height:calc(100dvh - 20px)!important;margin:0!important}
-#siscomBaixaModal .sbColumns{display:grid!important;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)!important;gap:14px!important}
-#siscomBaixaModal .sbColumns>.sbPane{min-width:0}
-#siscomBaixaModal .cgmFotosLateral{min-width:0;max-height:calc(100dvh - 20px);display:flex;flex-direction:column;border:1px solid #bfd5e8;border-radius:10px;background:white;overflow:hidden;box-shadow:0 10px 30px #001c3b30}
-#siscomBaixaModal .cgmFotosLateral[hidden]{display:none!important}
-#siscomBaixaModal .cgmFotosLateral h4{margin:0;padding:13px 10px;background:linear-gradient(90deg,#07539b,#0879cb);color:white;font-size:14px}
-#siscomBaixaModal .cgmFotosLateral label{padding:8px 10px 0;font-size:12px;color:#1b5083}
-#siscomBaixaModal .cgmFotosLateral select{display:block;width:100%;margin-top:5px;min-height:34px;border:1px solid #b7cee3;border-radius:5px;background:white}
-#siscomBaixaModal .cgmFotosLateral p{margin:6px 10px;color:#365d80;font-size:12px}
-#siscomBaixaModal .cgmFotosMiniaturas{flex:1;min-height:0;overflow-y:auto;padding:9px;display:flex;flex-direction:column;gap:10px}
-#siscomBaixaModal .cgmFotosMiniaturas figure{margin:0;border:1px solid #d1e1ef;border-radius:6px;overflow:hidden;flex-shrink:0;background:#fff}
-#siscomBaixaModal .cgmFotosMiniaturas img{display:block;width:100%;height:170px;object-fit:contain;background:#eef4fa;cursor:zoom-in}
-#siscomBaixaModal .cgmFotosMiniaturas figcaption{text-align:center;color:#14518b;font-size:12px;padding:5px}
-#siscomBaixaModal .cgmFotosLateral footer{display:flex;justify-content:space-between;align-items:center;padding:9px;border-top:1px solid #d3e3f0;font-size:12px;color:#164d80}
-#siscomBaixaModal .cgmFotosLateral footer button{background:#f1f7fd;border:1px solid #b9d1e5;border-radius:5px;padding:7px 10px;color:#095194;cursor:pointer}
-#umovFotosModal.cgmZoomSomente{background:transparent;pointer-events:none}
-#umovFotosModal.cgmZoomSomente>.ufDialog{display:none!important}
-#umovFotosModal.cgmZoomSomente .ufZoom{pointer-events:auto}
-@media(min-width:1800px){#siscomBaixaModal #cgmFotosPalco{grid-template-columns:320px minmax(1060px,1fr) 320px;width:min(98vw,1900px)}#siscomBaixaModal #cgmFotosPalco>.sbShell{width:100%!important;min-width:1060px!important}}
-@media(max-width:1690px){#siscomBaixaModal #cgmFotosPalco{margin:0}}
-
-/* CGM_FOTOS_VISIVEIS_V4 */
+/* CGM_FOTOS_LAYOUT_V6: regras unicas, sem sobreposicao */
 #siscomBaixaModal.open {
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
-    overflow: hidden !important;
-    padding: 8px !important;
+ display:flex!important; justify-content:center!important; align-items:center!important;
+ padding:8px!important; overflow-x:auto!important; overflow-y:hidden!important;
 }
-
 #siscomBaixaModal #cgmFotosPalco {
-    display: grid !important;
-    grid-template-columns:
-        clamp(210px, 17vw, 290px)
-        minmax(0, 1fr)
-        clamp(250px, 21vw, 360px) !important;
-    gap: 10px !important;
-    width: calc(100vw - 16px) !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    margin: 0 !important;
-    height: calc(100dvh - 16px);
-    max-height: calc(100dvh - 16px);
-    overflow: visible !important;
-    align-items: stretch !important;
+ box-sizing:border-box!important; display:grid!important;
+ grid-template-columns:minmax(225px,1fr) minmax(790px,920px) minmax(270px,1.2fr)!important;
+ gap:10px!important; width:calc(100vw - 16px)!important; min-width:1325px!important;
+ max-width:none!important; height:calc(100dvh - 16px)!important;
+ max-height:calc(100dvh - 16px)!important;
+ margin:0!important; padding:0!important; align-items:stretch!important;
+ position:relative!important; overflow:visible!important;
 }
-
+#siscomBaixaModal #cgmFotosPalco > #cgmFotosAnteriorLateral {
+ grid-column:1!important; grid-row:1!important; min-width:0!important;
+ position:relative!important; inset:auto!important; transform:none!important;
+ display:flex!important; visibility:visible!important; opacity:1!important;
+}
 #siscomBaixaModal #cgmFotosPalco > .sbShell {
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    height: 100% !important;
-    max-height: 100% !important;
-    margin: 0 !important;
+ grid-column:2!important; grid-row:1!important;
+ position:relative!important; inset:auto!important; transform:none!important;
+ width:100%!important; min-width:0!important; max-width:none!important;
+ height:100%!important; max-height:100%!important; margin:0!important;
 }
-
-#siscomBaixaModal #cgmFotosAnteriorLateral,
-#siscomBaixaModal #cgmFotosAtualLateral {
-    display: flex;
-    position: relative !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    min-width: 0 !important;
-    max-height: 100% !important;
+#siscomBaixaModal #cgmFotosPalco > #cgmFotosAtualLateral {
+ grid-column:3!important; grid-row:1!important; min-width:0!important;
+ position:relative!important; inset:auto!important; transform:none!important;
+ display:flex!important; visibility:visible!important; opacity:1!important;
 }
-
-#siscomBaixaModal #cgmFotosAnteriorLateral[hidden],
-#siscomBaixaModal #cgmFotosAtualLateral[hidden] {
-    display: none !important;
-}
-
+#siscomBaixaModal #cgmFotosPalco > .cgmFotosLateral[hidden] { display:none!important; }
 #siscomBaixaModal .sbColumns {
-    grid-template-columns:
-        minmax(0, 1.1fr)
-        minmax(0, 1fr) !important;
+ display:grid!important; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)!important;
+ gap:14px!important;
 }
-
-@media (max-width: 1100px) {
-    #siscomBaixaModal.open {
-        overflow-x: auto !important;
-        justify-content: flex-start !important;
-    }
-
-    #siscomBaixaModal #cgmFotosPalco {
-        width: 1450px !important;
-        min-width: 1450px !important;
-        grid-template-columns:
-            240px 900px 290px !important;
-    }
+#siscomBaixaModal .cgmFotosLateral {
+ box-sizing:border-box!important; height:100%!important; max-height:100%!important;
+ overflow:hidden!important;
+}
+#siscomBaixaModal .cgmFotosMiniaturas {
+ flex:1 1 auto!important; min-height:0!important; overflow-y:auto!important;
+}
+#siscomBaixaModal .cgmFotosMiniaturas img {
+ width:100%!important; height:190px!important; object-fit:contain!important;
+}
+@media(max-width:1340px) {
+ #siscomBaixaModal.open { justify-content:flex-start!important; }
+ #siscomBaixaModal #cgmFotosPalco {
+  grid-template-columns:225px 790px 290px!important;
+  width:1325px!important; min-width:1325px!important;
+ }
 }
