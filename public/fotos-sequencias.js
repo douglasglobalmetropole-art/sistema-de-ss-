@@ -1,39 +1,273 @@
-/* CGM_FOTOS_SEPARADAS_V3 */
-(function(){
-'use strict';
-const $=id=>document.getElementById(id);
-const baixa=$('siscomBaixaModal'), cols=baixa?.querySelector('.sbColumns');
-if(!baixa||!cols||!$('viewPhotosBtn'))return;
-const esquerdo=document.createElement('section'),direito=document.createElement('section');
-esquerdo.id='cgmFotosAnteriorLateral';direito.id='cgmFotosAtualLateral';
-esquerdo.className=direito.className='cgmFotosLateral';
-esquerdo.innerHTML='<h4>â–§ Fotos da SS â€” antes / apoio</h4><label>SequÃªncia anterior<select id="cgmSeqAnterior"></select></label><label id="cgmRelLabel">RelatÃ³rio uMov<select id="cgmRelAnterior"></select></label><p id="cgmStatusAnterior" role="status"></p><div id="cgmGridAnterior" class="cgmFotosMiniaturas"></div><footer><span id="cgmCountAnterior">0 fotos</span><button type="button" id="cgmAmpliarAnterior">Ampliar â†—</button></footer>';
-direito.innerHTML='<h4>â–§ Fotos da SS â€” execuÃ§Ã£o / detalhe</h4><p id="cgmNumeroAtual"></p><p id="cgmStatusAtual" role="status"></p><div id="cgmGridAtual" class="cgmFotosMiniaturas"></div><footer><span id="cgmCountAtual">0 fotos</span><button type="button" id="cgmAmpliarAtual">Ampliar â†—</button></footer>';
-// PainÃ©is IRMAOS da janela de baixa, nunca filhos das colunas centrais.
-const palco=document.createElement('div');palco.id='cgmFotosPalco';
-const shell=baixa.querySelector('.sbShell'),pai=shell?.parentElement;
-if(!pai)return;
-pai.insertBefore(palco,shell);
-palco.append(esquerdo,shell,direito);
-let gen=0,genAnterior=0,registros=[],ssAtual='',fotosAnterior=[],fotosAtual=[],zoomFotos=[],zoomIndice=0;
-const zoom=$('umovFotosZoom'),zoomImg=$('umovFotosZoomImg'),galeria=$('umovFotosModal');
-function ampliar(lista,i=0){if(!lista.length)return;zoomFotos=lista;zoomIndice=i;zoomImg.src=lista[i];galeria.classList.add('cgmZoomSomente','open');zoom.classList.add('open');}
-function fecharZoom(){zoom.classList.remove('open');galeria.classList.remove('open','cgmZoomSomente');zoomImg.removeAttribute('src');}
-function navegar(d){if(!zoomFotos.length)return;zoomIndice=(zoomIndice+d+zoomFotos.length)%zoomFotos.length;zoomImg.src=zoomFotos[zoomIndice];}
-$('cgmAmpliarAnterior').onclick=()=>ampliar(fotosAnterior);
-$('cgmAmpliarAtual').onclick=()=>ampliar(fotosAtual);
-$('umovFotosZoomClose')?.addEventListener('click',fecharZoom);
-zoom.addEventListener('click',e=>{if(e.target===zoom)fecharZoom();});
-document.addEventListener('keydown',e=>{if(!zoom.classList.contains('open'))return;if(e.key==='Escape'){e.preventDefault();fecharZoom();}if(e.key==='ArrowLeft')navegar(-1);if(e.key==='ArrowRight')navegar(1);},true);
-function render(tipo,lista){const grid=$(tipo==='Atual'?'cgmGridAtual':'cgmGridAnterior');grid.replaceChildren();$(tipo==='Atual'?'cgmCountAtual':'cgmCountAnterior').textContent=lista.length+' foto(s)';const fragmento=document.createDocumentFragment();lista.forEach((src,i)=>{const fig=document.createElement('figure'),img=document.createElement('img'),cap=document.createElement('figcaption');img.src=src;img.loading=i<2?'eager':'lazy';img.alt='Foto '+(i+1);img.onclick=()=>ampliar(lista,i);cap.textContent='Foto '+(i+1);fig.append(img,cap);fragmento.append(fig);});grid.append(fragmento);}
-async function fotos(ss,tarefa){const r=await fetch('/api/relatorio-fotos',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({ss,tarefa})});const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'Falha ao carregar fotos');return Array.isArray(j.fotos)?j.fotos:[];}
-const seq=$('cgmSeqAnterior'),rel=$('cgmRelAnterior');
-async function carregarAnterior(){const n=++genAnterior,registro=registros.find(x=>x.numero_ss===seq.value&&String(x.tarefa)===rel.value);fotosAnterior=[];render('Anterior',[]);if(!registro)return;$('cgmStatusAnterior').textContent='Consultando fotos anteriores...';try{const lista=await fotos(registro.numero_ss,registro.tarefa);if(n!==genAnterior)return;fotosAnterior=lista;render('Anterior',lista);$('cgmStatusAnterior').textContent=lista.length?'':'Sem fotos neste relatÃ³rio.';}catch(e){if(n===genAnterior)$('cgmStatusAnterior').textContent=e.message;}}
-function atualizarRel(){rel.replaceChildren();const itens=registros.filter(x=>x.numero_ss===seq.value);itens.forEach((x,i)=>{const o=document.createElement('option');o.value=String(x.tarefa);o.textContent='RelatÃ³rio '+(i+1)+' â€” '+(x.data_execucao?new Date(x.data_execucao).toLocaleString('pt-BR'):'Sem data');rel.append(o);});$('cgmRelLabel').hidden=itens.length<=1;void carregarAnterior();}
-seq.onchange=atualizarRel;rel.onchange=carregarAnterior;
-async function carregar(x){const n=++gen;++genAnterior;ssAtual=String(x.ss);$('cgmNumeroAtual').textContent=ssAtual;fotosAtual=[];fotosAnterior=[];render('Atual',[]);render('Anterior',[]);esquerdo.hidden=false;$('cgmStatusAtual').textContent='Consultando fotos atuais...';$('cgmStatusAnterior').textContent='';void fotos(ssAtual,x.tarefa).then(lista=>{if(n!==gen)return;fotosAtual=lista;render('Atual',lista);$('cgmStatusAtual').textContent=lista.length?'':'Nenhuma foto encontrada.';}).catch(e=>{if(n===gen)$('cgmStatusAtual').textContent=e.message;});try{const r=await fetch('/api/umov/sequencias-fotos?ss='+encodeURIComponent(ssAtual),{credentials:'same-origin',cache:'no-store'}),j=await r.json();if(n!==gen)return;if(!r.ok||!j.ok)throw Error(j.error||'Falha na consulta');registros=Array.isArray(j.sequencias)?j.sequencias:[];seq.replaceChildren();[...new Set(registros.map(x=>x.numero_ss))].forEach(ss=>{const o=document.createElement('option');o.value=ss;o.textContent=ss;seq.append(o);});esquerdo.hidden=false;if(!registros.length)cgmStatusAnterior.textContent='Nenhuma sequencia anterior com relatorio uMov encontrada.';if(registros.length)atualizarRel();}catch(e){if(n!==gen)return;esquerdo.hidden=false;$('cgmStatusAnterior').textContent='Consulta indisponÃ­vel: '+e.message;}}
-function abrirBaixa(){const x=window.__siscomBaixaSelecionada;if(!x?.ss||!x?.tarefa)return;if(ssAtual===String(x.ss)&&direito.querySelector('img'))return;void carregar(x);}
-const obs=new MutationObserver(()=>{if(baixa.classList.contains('open'))setTimeout(abrirBaixa,120);else{gen++;genAnterior++;ssAtual='';fecharZoom();}});obs.observe(baixa,{attributes:true,attributeFilter:['class']});
-document.addEventListener('click',e=>{if(baixa.classList.contains('open')&&e.target.closest?.('#viewPhotosBtn,#sbVerFotos')){e.preventDefault();e.stopImmediatePropagation();abrirBaixa();}},true);
-if(baixa.classList.contains('open'))abrirBaixa();
+/* CGM_FOTOS_FIXO_V7 - paineis independentes; baixa SISCOM intacta */
+(function () {
+  'use strict';
+  const el = id => document.getElementById(id);
+  const modal = el('siscomBaixaModal');
+  const shell = modal && modal.querySelector('.sbShell');
+  if (!modal || !shell || el('cgmFotosAnteriorLateral')) return;
+
+  // Os tres paineis sao irmaos. Nao mover ou modificar o formulario original.
+  const esquerda = document.createElement('section');
+  const direita = document.createElement('section');
+  esquerda.id = 'cgmFotosAnteriorLateral';
+  direita.id = 'cgmFotosAtualLateral';
+  esquerda.className = direita.className = 'cgmFotosLateral';
+  esquerda.setAttribute('aria-label', 'Fotos das sequencias anteriores');
+  direita.setAttribute('aria-label', 'Fotos da SS atual');
+  esquerda.innerHTML = `
+    <h4>\u25a3 Fotos da SS \u2014 antes / apoio</h4>
+    <div class="cgmFotosSeletores">
+      <label for="cgmSeqAnterior">Sequ\u00eancia anterior</label>
+      <select id="cgmSeqAnterior" aria-label="Selecionar sequencia anterior"></select>
+      <label id="cgmRelLabel" for="cgmRelAnterior">Relat\u00f3rio uMov</label>
+      <select id="cgmRelAnterior" aria-label="Selecionar relatorio uMov"></select>
+    </div>
+    <p class="cgmFotosStatus" id="cgmStatusAnterior" role="status"></p>
+    <div class="cgmFotosMiniaturas" id="cgmGridAnterior"></div>
+    <footer><span id="cgmCountAnterior">0 foto(s)</span><button type="button" id="cgmAmpliarAnterior">Ampliar \u2197</button></footer>`;
+  direita.innerHTML = `
+    <h4>\u25a3 Fotos da SS \u2014 execu\u00e7\u00e3o / detalhe</h4>
+    <p class="cgmNumeroSS" id="cgmNumeroAtual"></p>
+    <p class="cgmFotosStatus" id="cgmStatusAtual" role="status"></p>
+    <div class="cgmFotosMiniaturas" id="cgmGridAtual"></div>
+    <footer><span id="cgmCountAtual">0 foto(s)</span><button type="button" id="cgmAmpliarAtual">Ampliar \u2197</button></footer>`;
+  modal.insertBefore(esquerda, shell);
+  modal.insertBefore(direita, shell.nextSibling);
+
+  // Zoom proprio, sem abrir a antiga galeria sobre o formulario.
+  const zoom = document.createElement('div');
+  zoom.id = 'cgmFotosZoomV7';
+  zoom.hidden = true;
+  zoom.setAttribute('role', 'dialog');
+  zoom.setAttribute('aria-modal', 'true');
+  zoom.setAttribute('aria-label', 'Fotografia ampliada');
+  zoom.innerHTML = `<button type="button" data-photo-action="close" class="cgmZoomFechar" aria-label="Fechar amplia\u00e7\u00e3o">\u00d7</button>
+   <button type="button" data-photo-action="prev" class="cgmZoomAnterior" aria-label="Foto anterior">\u2039</button>
+   <figure><img alt="Fotografia ampliada"><figcaption></figcaption></figure>
+   <button type="button" data-photo-action="next" class="cgmZoomProxima" aria-label="Pr\u00f3xima foto">\u203a</button>`;
+  document.body.appendChild(zoom);
+
+  let atualSS = '';
+  let tarefaAtual = 0;
+  let versao = 0;
+  let versaoAnterior = 0;
+  let registros = [];
+  let fotosAtuais = [];
+  let fotosAnteriores = [];
+  let fotosZoom = [];
+  let indiceZoom = 0;
+  let abertaAntes = false;
+  let jaCarregando = false;
+  const seq = el('cgmSeqAnterior');
+  const rel = el('cgmRelAnterior');
+
+  function zoomDesenhar() {
+    if (!fotosZoom.length) return;
+    zoom.querySelector('img').src = fotosZoom[indiceZoom];
+    zoom.querySelector('figcaption').textContent = 'Foto ' + (indiceZoom + 1) + ' de ' + fotosZoom.length;
+  }
+  function zoomAbrir(lista, indice) {
+    if (!lista.length) return;
+    fotosZoom = lista;
+    indiceZoom = indice;
+    zoom.hidden = false;
+    zoomDesenhar();
+  }
+  function zoomFechar() {
+    zoom.hidden = true;
+    zoom.querySelector('img').removeAttribute('src');
+    fotosZoom = [];
+  }
+  zoom.addEventListener('click', e => {
+    const acao = e.target.closest('[data-photo-action]')?.dataset.photoAction;
+    if (acao === 'close' || e.target === zoom) zoomFechar();
+    if ((acao === 'prev' || acao === 'next') && fotosZoom.length) {
+      const delta = acao === 'prev' ? -1 : 1;
+      indiceZoom = (indiceZoom + delta + fotosZoom.length) % fotosZoom.length;
+      zoomDesenhar();
+    }
+  });
+  document.addEventListener('keydown', e => {
+    if (zoom.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); zoomFechar(); }
+    if (['ArrowLeft', 'ArrowRight'].includes(e.key) && fotosZoom.length) {
+      e.preventDefault();
+      indiceZoom = (indiceZoom + (e.key === 'ArrowLeft' ? -1 : 1) + fotosZoom.length) % fotosZoom.length;
+      zoomDesenhar();
+    }
+  }, true);
+
+  function renderizar(lado, fotos) {
+    const esquerdaLado = lado === 'anterior';
+    const grade = el(esquerdaLado ? 'cgmGridAnterior' : 'cgmGridAtual');
+    const contador = el(esquerdaLado ? 'cgmCountAnterior' : 'cgmCountAtual');
+    grade.replaceChildren();
+    const fragmento = document.createDocumentFragment();
+    fotos.forEach((src, indice) => {
+      if (typeof src !== 'string' || !src) return;
+      const figura = document.createElement('figure');
+      const img = document.createElement('img');
+      const legenda = document.createElement('figcaption');
+      img.src = src;
+      img.loading = indice < 2 ? 'eager' : 'lazy';
+      img.alt = 'Foto ' + (indice + 1);
+      img.title = 'Clique para ampliar';
+      img.onclick = () => zoomAbrir(fotos, indice);
+      legenda.textContent = 'Foto ' + (indice + 1);
+      figura.append(img, legenda);
+      fragmento.append(figura);
+    });
+    grade.append(fragmento);
+    contador.textContent = fotos.length + ' foto(s)';
+  }
+  function mensagem(lado, texto) {
+    el(lado === 'anterior' ? 'cgmStatusAnterior' : 'cgmStatusAtual').textContent = texto || '';
+  }
+  async function obterJson(caminho, opcoes) {
+    const resposta = await fetch(caminho, {credentials: 'same-origin', cache: 'no-store', ...opcoes});
+    let dado;
+    try { dado = await resposta.json(); } catch (_) { throw new Error('Resposta invalida da API (HTTP ' + resposta.status + ')'); }
+    if (!resposta.ok || !dado.ok) {
+      throw new Error(dado.error || ('Erro HTTP ' + resposta.status));
+    }
+    return dado;
+  }
+  async function buscarFotos(ss, tarefa) {
+    const dado = await obterJson('/api/relatorio-fotos', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ss, tarefa})
+    });
+    return Array.isArray(dado.fotos) ? dado.fotos : [];
+  }
+  async function carregarAnterior() {
+    const token = ++versaoAnterior;
+    const registro = registros.find(r => r.numero_ss === seq.value && String(r.tarefa) === rel.value);
+    fotosAnteriores = [];
+    renderizar('anterior', []);
+    if (!registro) return;
+    mensagem('anterior', 'Consultando fotos anteriores...');
+    try {
+      const fotos = await buscarFotos(registro.numero_ss, registro.tarefa);
+      if (token !== versaoAnterior || !modal.classList.contains('open')) return;
+      fotosAnteriores = fotos;
+      renderizar('anterior', fotos);
+      mensagem('anterior', fotos.length ? '' : 'Nenhuma foto neste relat\u00f3rio.');
+    } catch (err) {
+      if (token === versaoAnterior) mensagem('anterior', 'Falha ao carregar: ' + err.message);
+    }
+  }
+  function preencherRelatorios() {
+    ++versaoAnterior;
+    rel.replaceChildren();
+    const lista = registros.filter(r => r.numero_ss === seq.value);
+    lista.forEach((item, i) => {
+      const option = document.createElement('option');
+      option.value = String(item.tarefa);
+      const data = item.data_execucao ? new Date(item.data_execucao).toLocaleString('pt-BR') : 'Sem data';
+      option.textContent = 'Relat\u00f3rio ' + (i + 1) + ' \u2014 ' + data;
+      rel.append(option);
+    });
+    el('cgmRelLabel').hidden = lista.length <= 1;
+    rel.hidden = lista.length <= 1;
+    void carregarAnterior();
+  }
+  seq.addEventListener('change', preencherRelatorios);
+  rel.addEventListener('change', () => { void carregarAnterior(); });
+  el('cgmAmpliarAnterior').onclick = () => zoomAbrir(fotosAnteriores, 0);
+  el('cgmAmpliarAtual').onclick = () => zoomAbrir(fotosAtuais, 0);
+
+  async function carregarDados(ss, tarefa) {
+    const token = ++versao;
+    ++versaoAnterior;
+    atualSS = String(ss);
+    tarefaAtual = Number(tarefa);
+    jaCarregando = true;
+    esquerda.hidden = false;
+    direita.hidden = false;
+    registros = [];
+    seq.replaceChildren();
+    rel.replaceChildren();
+    fotosAtuais = [];
+    fotosAnteriores = [];
+    renderizar('atual', []);
+    renderizar('anterior', []);
+    el('cgmNumeroAtual').textContent = atualSS;
+    mensagem('atual', 'Consultando fotos atuais...');
+    mensagem('anterior', 'Consultando sequ\u00eancias anteriores...');
+
+    const atualPromise = buscarFotos(atualSS, tarefaAtual).then(fotos => {
+      if (token !== versao || !modal.classList.contains('open')) return;
+      fotosAtuais = fotos;
+      renderizar('atual', fotos);
+      mensagem('atual', fotos.length ? '' : 'Nenhuma fotografia encontrada.');
+    }).catch(err => {
+      if (token === versao) mensagem('atual', 'Falha ao consultar: ' + err.message);
+    });
+
+    const anteriorPromise = obterJson('/api/umov/sequencias-fotos?ss=' + encodeURIComponent(atualSS)).then(dado => {
+      if (token !== versao || !modal.classList.contains('open')) return;
+      registros = Array.isArray(dado.sequencias) ? dado.sequencias : [];
+      const opcoes = [...new Set(registros.map(r => r.numero_ss))].filter(Boolean);
+      if (!opcoes.length) {
+        esquerda.hidden = true; // Somente quando a consulta confirmou ausencia de sequencias.
+        return;
+      }
+      esquerda.hidden = false;
+      opcoes.forEach(numero => {
+        const opt = document.createElement('option');
+        opt.value = numero;
+        opt.textContent = numero;
+        seq.append(opt);
+      });
+      mensagem('anterior', '');
+      preencherRelatorios();
+    }).catch(err => {
+      if (token !== versao) return;
+      esquerda.hidden = false; // Erros nao sao confundidos com ausencia de sequencias.
+      mensagem('anterior', 'Consulta indispon\u00edvel: ' + err.message);
+    });
+    await Promise.allSettled([atualPromise, anteriorPromise]);
+    if (token === versao) jaCarregando = false;
+  }
+  function obterSelecionada() {
+    const selecionada = window.__siscomBaixaSelecionada;
+    return selecionada?.ss && selecionada?.tarefa ? selecionada : null;
+  }
+  function tentarCarregar(tentativas = 0) {
+    if (!modal.classList.contains('open')) return;
+    const ss = obterSelecionada();
+    if (!ss) {
+      if (tentativas < 30) setTimeout(() => tentarCarregar(tentativas + 1), 120);
+      return;
+    }
+    if (String(ss.ss) === atualSS && Number(ss.tarefa) === tarefaAtual && jaCarregando) return;
+    if (String(ss.ss) === atualSS && Number(ss.tarefa) === tarefaAtual && direita.querySelector('img')) return;
+    void carregarDados(ss.ss, ss.tarefa);
+  }
+  const observer = new MutationObserver(() => {
+    const aberta = modal.classList.contains('open');
+    if (aberta && !abertaAntes) {
+      abertaAntes = true;
+      setTimeout(() => tentarCarregar(), 90);
+    } else if (!aberta && abertaAntes) {
+      abertaAntes = false;
+      ++versao;
+      ++versaoAnterior;
+      atualSS = '';
+      jaCarregando = false;
+      zoomFechar();
+    }
+  });
+  observer.observe(modal, {attributes:true, attributeFilter:['class']});
+  if (modal.classList.contains('open')) { abertaAntes = true; tentarCarregar(); }
+
+  // Evita abrir o modal antigo ao clicar em Ver fotos; abre zoom no painel atual.
+  document.addEventListener('click', e => {
+    const botao = e.target.closest?.('#viewPhotosBtn, #sbVerFotos');
+    if (!botao || !modal.classList.contains('open')) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (botao.id === 'sbVerFotos' && fotosAtuais.length) zoomAbrir(fotosAtuais, 0);
+    else tentarCarregar();
+  }, true);
 })();
