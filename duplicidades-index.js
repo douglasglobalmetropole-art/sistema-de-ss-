@@ -19,7 +19,7 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
  if(typeof autorizado!=='function'||typeof podeEscrever!=='function'||typeof origemOk!=='function'||typeof escreverTag!=='function')
   throw Error('Configuracao de autorizacao da Matriz incompleta.');
  const caminho=(col,val,limit)=>`${TABELA}?select=${COL}&${col}=eq.${encodeURIComponent(val)}&order=tsk_id.desc&limit=${limit}`;
- async function buscarMatriz(ss,req,comDetalhes=false){
+ async function buscarMatriz(ss,req){
    const candidatas=arr(await rest(`${TABELA}?select=${COL}&ss=eq.${encodeURIComponent(ss)}&order=tsk_id.desc&limit=100`));
    const fontePreferida=fonteReq(req);
    let base=candidatas.find(x=>(!fontePreferida||x.origem===fontePreferida)&&cidadeOk(x.cidade,req));
@@ -121,7 +121,7 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
       }));
     };
 
-    if (comDetalhes) await enriquecerStatus([base, ...todos]);
+    await enriquecerStatus([base, ...todos]);
 
    const grupo=definirMatriz(base,todos);
    const estados=arr(await rest('ss_duplicidades_controle?select=fonte,varredura_concluida,total_lidos,atualizado_em&fonte=in.(umov,umov_lote1)'));
@@ -140,7 +140,7 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
    if(!SS_RE.test(ss))return res.status(400).json({ok:false,erro:'Numero da SS invalido.'});
    const inicio=Date.now();
    try{
-     const dados=await buscarMatriz(ss,req,req.query.detalhes==='1');
+     const dados=await buscarMatriz(ss,req);
      if(!dados)return res.status(404).json({ok:false,codigo:'nao_indexada',erro:'SS nao localizada no indice ou uMov.'});
      const {alvo,origem,resultados,grupo,grupoSeguro,cobertura,truncado}=dados;
      res.json({ok:true,alvo,origem_alvo:origem,resultados,cobertura,
