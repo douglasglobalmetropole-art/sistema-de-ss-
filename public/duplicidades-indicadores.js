@@ -330,7 +330,8 @@
 
   function atualizar() {
     const ativo = typeof currentScreen !== 'undefined' &&
-      currentScreen === 'recepcao';
+      ['recepcao','campo','baixar','encerradas','tramitacao']
+        .includes(currentScreen);
 
     let header = document.getElementById('dupIndicatorHeader');
     let filtro = document.getElementById('dupIndicatorFilter');
@@ -358,8 +359,8 @@
       if (!td) {
         td = document.createElement('td');
         td.className = 'dup-indicator-cell';
-        const equipe = tr.children[2];
-        if (equipe) equipe.after(td);
+        const celulaSS = tr.children[1];
+        if (celulaSS) celulaSS.after(td);
         else tr.appendChild(td);
       }
 
