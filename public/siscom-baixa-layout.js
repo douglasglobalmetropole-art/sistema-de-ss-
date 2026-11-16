@@ -82,7 +82,7 @@
    for(const btn of nav.querySelectorAll('[data-sbtab]')){const active=btn.dataset.sbtab===key;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',String(active));}
    for(const panel of [columns,complement,material,anexos]){panel.hidden=panel.dataset.sbpanel!==key;}
    if(key==='complementar')root.dispatchEvent(new CustomEvent('siscom:complementar-open'));
-   if(key==='materiais')loadMaterials().catch(e=>{reviewLoaded=false;reviewConfirm.checked=false;matMessage(e.message,true);reviewMsg('Consulta falhou; tente novamente antes de conferir.',true);});
+   if(key==='materiais'){loadMaterials().then(()=>suggestUmov()).catch(e=>{reviewLoaded=false;reviewConfirm.checked=false;matMessage(e.message,true);reviewMsg('Consulta falhou; tente novamente antes de conferir.',true);});}
    if(key==='anexos')modoManualAnexos();
   };
   nav.addEventListener('click',e=>{const btn=e.target.closest('[data-sbtab]');if(btn)activate(btn.dataset.sbtab);});
