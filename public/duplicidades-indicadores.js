@@ -306,6 +306,11 @@
       mostrar(dado.resposta);
       return;
     }
+    if (dado?.resposta && Date.now() - dado.tempo < CACHE_MS) {
+      mostrar(dado.resposta);
+      content.insertAdjacentHTML('beforeend',
+        '<div class="dgm-note">Atualizando Status da Integração e Situação de Campo...</div>');
+    }
 
     try {
       const r = await fetch(
@@ -321,11 +326,19 @@
       cache.set(ss,{resposta:j,detalhes:true,tempo:Date.now()});
       mostrar(j);
     } catch (e) {
-      content.innerHTML = `
-        <div class="dgm-empty">
-          Não foi possível consultar esta SS.<br>
-          ${safe(e.message)}
-        </div>`;
+      if (dado?.resposta) {
+        mostrar(dado.resposta);
+        content.insertAdjacentHTML(
+          'beforeend',
+          '<div class="dgm-note">Status detalhados indisponíveis nesta consulta.</div>'
+        );
+      } else {
+        content.innerHTML = `
+          <div class="dgm-empty">
+            Não foi possível consultar esta SS.
+            ${safe(e.message)}
+          </div>`;
+      }
     }
   }
 

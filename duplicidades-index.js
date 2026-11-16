@@ -63,67 +63,71 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
    const todos=[...porSS.values()].map(r=>({...r,...comparar(base,r)})).filter(r=>r.pontos>=3)
     .sort((a,b)=>b.pontos-a.pontos||Number(b.tsk_id)-Number(a.tsk_id));
 
-    // CGM_DUPLICIDADES_STATUS_REAIS_V3
-    // Enriquecimento somente de leitura, separado por origem.
-    const enriquecerStatus = async registros => {
-      const porFonte = new Map();
-
-      for (const registro of registros) {
-        if (!['umov', 'umov_lote1'].includes(registro.origem)) continue;
-        const id = Number(registro.tsk_id);
-        if (!Number.isSafeInteger(id) || id <= 0) continue;
-
-        if (!porFonte.has(registro.origem)) {
-          porFonte.set(registro.origem, []);
-        }
-        porFonte.get(registro.origem).push(registro);
-      }
-
-      await Promise.all([...porFonte.entries()].map(async ([fonte, lista]) => {
-        const {db, schema} = fonteBanco(fonte);
-        if (!db) return;
-
-        const ids = [...new Set(lista.map(r => Number(r.tsk_id)))];
-
-        try {
-          const consulta = await db.query({
-            text: `
-              SELECT t.tsk_id,
-                     t.tsk_situation AS situacao_campo,
-                     d.e_situacao AS status_integracao
-              FROM ${schema}.task t
-              LEFT JOIN ${schema}.dbout_task d
-                ON d.tsk_id = t.tsk_id
-              WHERE t.tsk_id = ANY($1::bigint[])
-            `,
-            values: [ids],
-            query_timeout: 7000
-          });
-
-          const dados = new Map(
-            consulta.rows.map(r => [String(r.tsk_id), r])
-          );
-
-          for (const registro of lista) {
-            const atual = dados.get(String(registro.tsk_id));
-            if (!atual) continue;
-
-            registro.situacao_campo = atual.situacao_campo || '';
-            registro.status_integracao = atual.status_integracao || '';
-          }
-        } catch (erro) {
-          console.warn(
-            '[duplicidades] status indisponivel para',
-            fonte,
-            erro.code || erro.message
-          );
-        }
-      }));
-    };
-
-    if (comDetalhes) await enriquecerStatus([base, ...todos]);
-
    const grupo=definirMatriz(base,todos);
+
+   // CGM_STATUS_FISICOS_V5: somente na janela detalhada.
+   if (comDetalhes) {
+     const porFonte = new Map();
+     const registros = [base,...todos.slice(0,80),...grupo.duplicatas];
+
+     for (const registro of registros) {
+       if (!['umov','umov_lote1'].includes(registro.origem)) continue;
+       const id = Number(registro.tsk_id);
+       if (!Number.isSafeInteger(id) || id <= 0) continue;
+       if (!porFonte.has(registro.origem)) porFonte.set(registro.origem,[]);
+       porFonte.get(registro.origem).push(registro);
+     }
+
+     await Promise.all([...porFonte.entries()].map(async ([fonte,lista]) => {
+       const {db,schema} = fonteBanco(fonte);
+       if (!db) return;
+       const ids = [...new Set(lista.map(r => Number(r.tsk_id)))];
+
+       try {
+         const consulta = await db.query({
+           text: `
+             SELECT t.tsk_id,
+                    t.tsk_situation AS situacao_campo,
+                    COALESCE((
+                      SELECT COALESCE(
+                        NULLIF(ce.cev_description::text,''),
+                        NULLIF(v.cfv_externalvalue::text,''),
+                        NULLIF(v.cfv_internalvalue::text,''),
+                        '')
+                      FROM ${schema}.customfieldvalue v
+                      JOIN ${schema}.customfield f ON f.cfd_id=v.cfd_id
+                      LEFT JOIN ${schema}.customentityvalue ce
+                        ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$'
+                        THEN v.cfv_internalvalue::bigint ELSE NULL END
+                      WHERE v.cfv_registerid=t.tsk_id
+                        AND f.cfd_table='task'
+                        AND LOWER(TRIM(f.cfd_integrationid))='situacao'
+                      LIMIT 1
+                    ),'') AS status_integracao
+             FROM ${schema}.task t
+             WHERE t.tsk_id=ANY($1::bigint[])
+           `,
+           values:[ids],
+           query_timeout:4500
+         });
+
+         const dados=new Map(consulta.rows.map(r=>[String(r.tsk_id),r]));
+         for(const registro of lista){
+           const atual=dados.get(String(registro.tsk_id));
+           if(!atual)continue;
+           registro.situacao_campo=atual.situacao_campo || '';
+           registro.status_integracao=atual.status_integracao || '';
+         }
+       } catch(erro) {
+         console.warn('[duplicidades] consulta pontual:',fonte,erro.code||erro.message);
+         for(const registro of lista){
+           registro.situacao_campo='Consulta indisponível';
+           registro.status_integracao='Consulta indisponível';
+         }
+       }
+     }));
+   }
+
    const estados=arr(await rest('ss_duplicidades_controle?select=fonte,varredura_concluida,total_lidos,atualizado_em&fonte=in.(umov,umov_lote1)'));
    const porFonte=Object.fromEntries(estados.map(x=>[x.fonte,x]));
    const cobertura={completa:fontes.every(f=>porFonte[f]?.varredura_concluida===true),
