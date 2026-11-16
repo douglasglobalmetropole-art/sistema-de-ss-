@@ -1,239 +1,144 @@
-/* CGM_FOTOS_GRID_V8 - 3 independent columns, no overlays */
+/* CGM_FOTOS_LATERAIS_V9 - posicoes fixas independentes do layout da pagina */
+#siscomBaixaModal {
+  --cgm-fotos-lado: clamp(205px, 17.5vw, 320px);
+  --cgm-fotos-margem: 8px;
+  --cgm-fotos-intervalo: 8px;
+}
 #siscomBaixaModal.open {
-  display: grid !important;
-  grid-template-columns: minmax(240px,300px) minmax(790px,1fr) minmax(260px,320px) !important;
-  grid-template-rows: minmax(0,1fr) !important;
-  gap: 10px !important;
-  padding: 8px !important;
+  position: fixed !important;
+  inset: 0 !important;
+  display: block !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
   box-sizing: border-box !important;
-  align-items: stretch !important;
-  justify-items: stretch !important;
-  justify-content: stretch !important;
-  align-content: stretch !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
 }
-#siscomBaixaModal > #cgmFotosAnteriorLateral {
-  grid-column: 1 !important;
-  grid-row: 1 !important;
-}
+/* Campo principal: permanece no DOM original; nenhuma janela e reposicionada por JS. */
 #siscomBaixaModal > .sbShell {
-  grid-column: 2 !important;
-  grid-row: 1 !important;
-  box-sizing: border-box !important;
-  width: 100% !important;
+  position: fixed !important;
+  top: var(--cgm-fotos-margem) !important;
+  bottom: var(--cgm-fotos-margem) !important;
+  left: calc(var(--cgm-fotos-margem) + var(--cgm-fotos-lado) + var(--cgm-fotos-intervalo)) !important;
+  right: auto !important;
+  width: calc(100vw - 2 * var(--cgm-fotos-lado) - 2 * var(--cgm-fotos-margem) - 2 * var(--cgm-fotos-intervalo)) !important;
   min-width: 0 !important;
   max-width: none !important;
-  height: calc(100dvh - 16px) !important;
-  max-height: calc(100dvh - 16px) !important;
+  height: calc(100dvh - 2 * var(--cgm-fotos-margem)) !important;
+  max-height: calc(100dvh - 2 * var(--cgm-fotos-margem)) !important;
   min-height: 0 !important;
   margin: 0 !important;
   padding: 0 !important;
-  position: relative !important;
-  inset: auto !important;
+  box-sizing: border-box !important;
   transform: none !important;
+  flex: none !important;
   z-index: 2 !important;
 }
+/* As duas galerias sao irmas da janela original, nunca dentro do formulario. */
+#siscomBaixaModal > #cgmFotosAnteriorLateral,
 #siscomBaixaModal > #cgmFotosAtualLateral {
-  grid-column: 3 !important;
-  grid-row: 1 !important;
-}
-#siscomBaixaModal > .cgmFotosLateral {
-  position: relative !important;
-  inset: auto !important;
-  transform: none !important;
-  box-sizing: border-box !important;
-  width: 100% !important;
+  position: fixed !important;
+  top: var(--cgm-fotos-margem) !important;
+  bottom: var(--cgm-fotos-margem) !important;
+  width: var(--cgm-fotos-lado) !important;
   min-width: 0 !important;
   max-width: none !important;
-  height: calc(100dvh - 16px) !important;
-  max-height: calc(100dvh - 16px) !important;
-  min-height: 0 !important;
+  height: calc(100dvh - 2 * var(--cgm-fotos-margem)) !important;
+  max-height: calc(100dvh - 2 * var(--cgm-fotos-margem)) !important;
   margin: 0 !important;
-  border: 1px solid #bfd5e8;
-  border-radius: 10px;
-  background: #fff;
+  transform: none !important;
+  box-sizing: border-box !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
+  border: 1px solid #bfd5e8 !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  box-shadow: 0 8px 24px #001c3b30 !important;
+  z-index: 3 !important;
   visibility: visible !important;
   opacity: 1 !important;
-  box-shadow: 0 8px 24px #001c3b30;
-  z-index: 3 !important;
+}
+#siscomBaixaModal > #cgmFotosAnteriorLateral {
+  left: var(--cgm-fotos-margem) !important;
+  right: auto !important;
+}
+#siscomBaixaModal > #cgmFotosAtualLateral {
+  right: var(--cgm-fotos-margem) !important;
+  left: auto !important;
 }
 #siscomBaixaModal > .cgmFotosLateral[hidden] {
   display: none !important;
 }
-#siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) {
-  grid-template-columns: minmax(790px,1fr) minmax(260px,320px) !important;
-}
-#siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) > .sbShell {
-  grid-column: 1 !important;
-}
-#siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) > #cgmFotosAtualLateral {
-  grid-column: 2 !important;
-}
 #siscomBaixaModal .sbColumns {
   display: grid !important;
-  grid-template-columns: minmax(0,1.1fr) minmax(0,1fr) !important;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) !important;
   gap: 14px !important;
 }
 #siscomBaixaModal .sbColumns > .sbPane { min-width: 0 !important; }
 #siscomBaixaModal > .cgmFotosLateral h4 {
-  flex: 0 0 auto;
+  flex: 0 0 auto !important;
   margin: 0 !important;
-  padding: 13px 12px !important;
-  background: linear-gradient(95deg,#07529a,#077ac9);
-  color: white !important;
+  padding: 12px 10px !important;
+  background: linear-gradient(95deg,#07529a,#077ac9) !important;
+  color: #fff !important;
   font-size: 14px !important;
   line-height: 1.3 !important;
 }
-#siscomBaixaModal .cgmFotosSeletores {
-  padding: 10px 12px 4px;
-  flex: 0 0 auto;
-}
-#siscomBaixaModal .cgmFotosSeletores label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #174e82;
-  margin: 5px 0;
-}
+#siscomBaixaModal .cgmFotosSeletores { padding: 10px 10px 4px !important; flex: 0 0 auto !important; }
+#siscomBaixaModal .cgmFotosSeletores label { display:block; font-size:12px; font-weight:600; color:#174e82; margin:5px 0; }
 #siscomBaixaModal .cgmFotosSeletores label[hidden],
-#siscomBaixaModal .cgmFotosSeletores select[hidden] {
-  display: none !important;
-}
+#siscomBaixaModal .cgmFotosSeletores select[hidden] { display:none!important; }
 #siscomBaixaModal .cgmFotosSeletores select {
-  display: block;
-  width: 100%;
-  min-height: 36px;
-  padding: 6px;
-  color: #123c65;
-  border: 1px solid #b9d0e6;
-  border-radius: 5px;
-  background: #fff;
+  display:block; width:100%; min-height:36px; padding:6px;
+  color:#123c65; border:1px solid #b9d0e6; border-radius:5px; background:#fff;
 }
-#siscomBaixaModal .cgmNumeroSS {
-  padding: 8px 12px;
-  margin: 0;
-  color: #14518b;
-  background: #edf5fc;
-  font-weight: 700;
-  font-size: 13px;
-}
+#siscomBaixaModal .cgmNumeroSS { padding:8px 10px; margin:0; color:#14518b; background:#edf5fc; font-weight:700; font-size:13px; }
 #siscomBaixaModal .cgmFotosStatus {
-  flex: 0 0 auto;
-  padding: 5px 12px;
-  margin: 0 !important;
-  color: #315d83;
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
+  flex:0 0 auto!important; padding:5px 10px; margin:0!important;
+  color:#315d83; font-size:12px; line-height:1.4; overflow-wrap:anywhere;
 }
-#siscomBaixaModal .cgmFotosStatus:empty {
-  display: none !important;
-}
+#siscomBaixaModal .cgmFotosStatus:empty {display:none!important;}
 #siscomBaixaModal .cgmFotosMiniaturas {
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  padding: 10px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 11px !important;
+  flex:1 1 auto!important; min-height:0!important;
+  overflow-y:auto!important; overflow-x:hidden!important;
+  padding:8px!important; display:flex!important;
+  flex-direction:column!important; gap:10px!important;
 }
 #siscomBaixaModal .cgmFotosMiniaturas figure {
-  flex: 0 0 auto !important;
-  margin: 0 !important;
-  border: 1px solid #d1e1ef;
-  border-radius: 7px;
-  background: white;
-  overflow: hidden;
+  flex:0 0 auto!important; margin:0!important;
+  border:1px solid #d1e1ef; border-radius:6px;
+  background:#fff; overflow:hidden;
 }
 #siscomBaixaModal .cgmFotosMiniaturas img {
-  display: block !important;
-  width: 100% !important;
-  height: 170px !important;
-  object-fit: contain !important;
-  background: #eef4fa !important;
-  cursor: zoom-in !important;
+  display:block!important; width:100%!important; height:180px!important;
+  object-fit:contain!important; background:#eef4fa!important; cursor:zoom-in!important;
 }
 #siscomBaixaModal .cgmFotosMiniaturas figcaption {
-  padding: 5px;
-  color: #14518b;
-  font-size: 12px;
-  text-align: center;
+  padding:5px; color:#14518b; font-size:12px; text-align:center;
 }
 #siscomBaixaModal .cgmFotosLateral footer {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  flex: 0 0 auto !important;
-  padding: 9px 11px !important;
-  margin-top: auto !important;
-  border-top: 1px solid #d3e3f0 !important;
-  background: #fff !important;
-  color: #164d80 !important;
-  font-size: 12px !important;
+  display:flex!important; align-items:center!important; justify-content:space-between!important;
+  flex:0 0 auto!important; padding:9px 10px!important; margin-top:auto!important;
+  border-top:1px solid #d3e3f0!important; background:#fff!important;
+  color:#164d80!important; font-size:12px!important;
 }
 #siscomBaixaModal .cgmFotosLateral footer button {
-  padding: 7px 11px !important;
-  border: 1px solid #b9d1e5 !important;
-  border-radius: 5px !important;
-  background: #f1f7fd !important;
-  color: #095194 !important;
-  cursor: pointer !important;
+  padding:7px 10px!important; border:1px solid #b9d1e5!important;
+  border-radius:5px!important; background:#f1f7fd!important;
+  color:#095194!important; cursor:pointer!important;
 }
-#cgmFotosZoomV7[hidden] { display: none !important; }
+/* Zoom da V7 permanece funcional. */
+#cgmFotosZoomV7[hidden]{display:none!important;}
 #cgmFotosZoomV7 {
-  position: fixed !important;
-  inset: 0 !important;
-  z-index: 300000 !important;
-  background: rgba(1,12,25,.95) !important;
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  gap: 16px !important;
-  padding: 45px 15px !important;
-  box-sizing: border-box !important;
+ position:fixed!important; inset:0!important; z-index:300000!important;
+ background:rgba(1,12,25,.95)!important; display:flex!important;
+ align-items:center!important; justify-content:center!important;
+ gap:16px!important; padding:45px 15px!important; box-sizing:border-box!important;
 }
-#cgmFotosZoomV7 figure {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: calc(100vw - 145px);
-  max-height: 100%;
-}
-#cgmFotosZoomV7 figure img {
-  max-width: 100%;
-  max-height: calc(100dvh - 120px);
-  object-fit: contain;
-}
-#cgmFotosZoomV7 figcaption {
-  color: white;
-  text-align: center;
-  padding: 10px;
-}
-#cgmFotosZoomV7 button {
-  border: 0;
-  background: transparent;
-  color: white;
-  cursor: pointer;
-  font-size: 50px;
-}
-#cgmFotosZoomV7 .cgmZoomFechar {
-  position: absolute;
-  right: 18px;
-  top: 7px;
-  font-size: 36px;
-}
-@media(max-width:1365px) {
-  #siscomBaixaModal.open {
-    justify-content: start !important;
-  }
-  #siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) {
-    grid-template-columns: minmax(790px,1fr) minmax(260px,320px) !important;
-  }
-}
+#cgmFotosZoomV7 figure { margin:0; display:flex; flex-direction:column; align-items:center; max-width:calc(100vw - 145px); max-height:100%; }
+#cgmFotosZoomV7 figure img {max-width:100%;max-height:calc(100dvh - 120px);object-fit:contain;}
+#cgmFotosZoomV7 figcaption{color:#fff;text-align:center;padding:10px;}
+#cgmFotosZoomV7 button{border:0;background:transparent;color:#fff;cursor:pointer;font-size:50px;}
+#cgmFotosZoomV7 .cgmZoomFechar{position:absolute;right:18px;top:7px;font-size:36px;}
+@media (max-width: 1420px) { #siscomBaixaModal { --cgm-fotos-lado:205px; } }
+@media (max-width: 1150px) { #siscomBaixaModal { --cgm-fotos-lado:170px; } }

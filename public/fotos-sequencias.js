@@ -128,7 +128,7 @@
     let dado;
     try { dado = await resposta.json(); } catch (_) { throw new Error('Resposta invalida da API (HTTP ' + resposta.status + ')'); }
     if (!resposta.ok || !dado.ok) {
-      throw new Error(dado.error || ('Erro HTTP ' + resposta.status));
+      throw new Error((dado.code ? '[' + dado.code + '] ' : '') + (dado.error || 'Falha na consulta') + ' (HTTP ' + resposta.status + ')');
     }
     return dado;
   }
