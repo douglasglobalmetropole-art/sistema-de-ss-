@@ -539,7 +539,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
