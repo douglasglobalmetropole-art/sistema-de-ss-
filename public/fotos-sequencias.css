@@ -148,3 +148,45 @@
 #cgmFotosZoomV7 figcaption{color:#fff;text-align:center;padding:10px;}
 #cgmFotosZoomV7 button{border:0;background:transparent;color:#fff;cursor:pointer;font-size:50px;}
 #cgmFotosZoomV7 .cgmZoomFechar{position:absolute;right:18px;top:7px;font-size:36px;}
+
+/* CGM_FOTOS_PROPORCOES_V12: largura maior, altura original preservada */
+#siscomBaixaModal {
+  --cgm-largura-foto: 375px;
+  --cgm-largura-centro: clamp(850px, calc(100vw - 790px), 1080px);
+}
+@media (max-width: 1850px) {
+  #siscomBaixaModal {
+    --cgm-largura-foto: 345px;
+    --cgm-largura-centro: clamp(830px, calc(100vw - 730px), 1050px);
+  }
+}
+@media (max-width: 1650px) {
+  #siscomBaixaModal {
+    --cgm-largura-foto: 305px;
+    --cgm-largura-centro: clamp(800px, calc(100vw - 650px), 1020px);
+  }
+}
+@media (max-width: 1450px) {
+  #siscomBaixaModal {
+    --cgm-largura-foto: 275px;
+    --cgm-largura-centro: clamp(790px, calc(100vw - 590px), 1000px);
+  }
+}
+@media (max-width: 1200px) {
+  #siscomBaixaModal.open { justify-content: flex-start !important; }
+  #siscomBaixaModal {
+    --cgm-largura-foto: 275px;
+    --cgm-largura-centro: 830px;
+  }
+}
+#siscomBaixaModal .cgmFotosMiniaturas {
+  padding: 7px !important;
+  gap: 9px !important;
+}
+#siscomBaixaModal .cgmFotosMiniaturas figure { padding: 0 !important; }
+#siscomBaixaModal .cgmFotosMiniaturas figure img {
+  width: 100% !important;
+  height: 225px !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
