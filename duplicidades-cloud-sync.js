@@ -1,8 +1,8 @@
 'use strict';
 /**
- * GLOBAL SS — índice de duplicidades 100% na nuvem (uMov/PostgreSQL -> Supabase).
+ * GLOBAL SS â€” Ã­ndice de duplicidades 100% na nuvem (uMov/PostgreSQL -> Supabase).
  * Adicione ao Express: require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal});
- * Somente leitura no uMov. Escreve EXCLUSIVAMENTE nas duas tabelas de índice Supabase.
+ * Somente leitura no uMov. Escreve EXCLUSIVAMENTE nas duas tabelas de Ã­ndice Supabase.
  * Proibido gravar TAGs, baixar ou rejeitar SS nesta rotina.
  */
 const crypto = require('node:crypto');
@@ -10,7 +10,7 @@ const {normalizarRegistro,extrairReferenciasSs,ehReclamacaoRelacionada} = requir
 const SS_RE = /^\d{2}\/\d{2}-\d{6}-\d{2}$/;
 const MAX_BIGINT = '9223372036854775807';
 const PAGE_SIZE = 100;
-const BACKFILL_PAGES = 2;   // Curtas execuções: evita timeout em Functions.
+const BACKFILL_PAGES = 2;   // Curtas execuÃ§Ãµes: evita timeout em Functions.
 const LOCK_A = 221029;
 const LOCK_B = 2026;
 
@@ -43,7 +43,11 @@ function criarRest({base,key}) {
       body:opts.body == null ? undefined : JSON.stringify(opts.body),
       signal:AbortSignal.timeout(13000)
     });
-    if (!response.ok) throw Error('Supabase HTTP '+response.status+' em '+route.split('?')[0]);
+    if (!response.ok) {
+      const detalhe = await response.text();
+      throw Error('Supabase HTTP ' + response.status +
+        ' em ' + route.split('?')[0] + ': ' + detalhe.slice(0,1500));
+    }
     if (response.status === 204) return null;
     const raw = await response.text();
     return raw ? JSON.parse(raw) : null;
@@ -186,7 +190,7 @@ async function extrairPagina(db, campos, where, arg, limiteInferior) {
       ...(porLocal.get(String(x.loc_id)) || {})
     }));
 
-  // Identifica reclamações que citam SS anteriores.
+  // Identifica reclamaÃ§Ãµes que citam SS anteriores.
   const relacoes = await resolverRelacoes(db,indices);
 
   return {rows,indices,relacoes};
@@ -278,7 +282,7 @@ async function gravarIndice(rest, items) {
     });
 }
 
-// Enriquecimento histórico: omite campos vazios para nunca apagar dados já gravados.
+// Enriquecimento histÃ³rico: omite campos vazios para nunca apagar dados jÃ¡ gravados.
 async function gravarIndiceEnriquecido(rest, items) {
   if (!items || !items.length) return;
   const preservados = items.map(item => Object.fromEntries(
@@ -303,7 +307,7 @@ async function sincronizar({pool,rest}) {
   try {
     const l=await db.query({text:'SELECT pg_try_advisory_lock($1::int,$2::int) AS obtido',values:[LOCK_A,LOCK_B]});
     locked=!!l.rows[0]?.obtido;
-    if (!locked) return {ok:true,em_execucao:true,mensagem:'Outra sincronização já está ativa.'};
+    if (!locked) return {ok:true,em_execucao:true,mensagem:'Outra sincronizaÃ§Ã£o jÃ¡ estÃ¡ ativa.'};
     const estado=(await rest('ss_duplicidades_controle?select=*&fonte=eq.umov&limit=1'))?.[0]||{
       fonte:'umov',ultimo_id_processado:null,maior_id_capturado:null,
       varredura_concluida:false,total_lidos:0,
@@ -316,16 +320,16 @@ async function sincronizar({pool,rest}) {
       estado.ultimo_erro=null;
       await rest('ss_duplicidades_controle?on_conflict=fonte',{method:'POST',body:estado,upsert:true});
     };
-    // Congela a faixa de IDs que já existe no índice Supabase. Isso cobre
-    // inclusive registros antigos que não estejam refletidos no contador/cursor
-    // do backfill principal. A rotina não altera os checkpoints da varredura.
+    // Congela a faixa de IDs que jÃ¡ existe no Ã­ndice Supabase. Isso cobre
+    // inclusive registros antigos que nÃ£o estejam refletidos no contador/cursor
+    // do backfill principal. A rotina nÃ£o altera os checkpoints da varredura.
     if (!estado.enriquecimento_concluido &&
         estado.limite_id_enriquecimento == null &&
         estado.ultimo_id_enriquecimento == null) {
       const faixa=await obterFaixaIndice(rest);
       if (faixa.menor != null && faixa.maior != null) {
         const maior=BigInt(faixa.maior);
-        if (maior >= BigInt(MAX_BIGINT)) throw Error('ID máximo do índice excede o limite seguro para iniciar enriquecimento.');
+        if (maior >= BigInt(MAX_BIGINT)) throw Error('ID mÃ¡ximo do Ã­ndice excede o limite seguro para iniciar enriquecimento.');
         estado.limite_id_enriquecimento=faixa.menor;
         estado.ultimo_id_enriquecimento=String(maior+1n);
         estado.total_enriquecidos=Number(estado.total_enriquecidos||0);
@@ -347,7 +351,7 @@ async function sincronizar({pool,rest}) {
           await persistir();
           break;
         }
-        // Primeiro grava índice e relações; só depois avança o checkpoint.
+        // Primeiro grava Ã­ndice e relaÃ§Ãµes; sÃ³ depois avanÃ§a o checkpoint.
         await gravarIndiceEnriquecido(rest,pag.indices);
         await gravarRelacoes(rest,pag.relacoes);
         cursor=String(pag.rows[pag.rows.length-1].tsk_id);
@@ -362,7 +366,7 @@ async function sincronizar({pool,rest}) {
       }
     }
 
-    // Novas tarefas: ASC, sem perder registros se houver >100 inserções entre execuções.
+    // Novas tarefas: ASC, sem perder registros se houver >100 inserÃ§Ãµes entre execuÃ§Ãµes.
     // Sem indexar registros anteriores ao maior_id_capturado duas vezes aqui.
     if (estado.maior_id_capturado != null) {
       const pag=await extrairPagina(db,campos,'recent',bancoNumero(estado.maior_id_capturado,1));
@@ -374,7 +378,7 @@ async function sincronizar({pool,rest}) {
         paginas++;tarefas+=pag.rows.length;indexadas+=pag.indices.length;novos+=pag.indices.length;
       }
     }
-    // Histórico: retoma do cursor da última execução. Não recomeça do zero.
+    // HistÃ³rico: retoma do cursor da Ãºltima execuÃ§Ã£o. NÃ£o recomeÃ§a do zero.
     if (!estado.varredura_concluida) {
       let cursor=bancoNumero(estado.ultimo_id_processado,MAX_BIGINT);
       for(let i=0;i<BACKFILL_PAGES;i++) {
@@ -385,7 +389,7 @@ async function sincronizar({pool,rest}) {
           await persistir();
           break;
         }
-        // Grava primeiro, atualiza cursor depois: falhas não causam perda de SS.
+        // Grava primeiro, atualiza cursor depois: falhas nÃ£o causam perda de SS.
         await gravarIndice(rest,pag.indices);
         await gravarRelacoes(rest,pag.relacoes);
         cursor=String(pag.rows[pag.rows.length-1].tsk_id);
@@ -398,7 +402,7 @@ async function sincronizar({pool,rest}) {
         if (pag.rows.length<PAGE_SIZE) break;
       }
     } else if (novos===0) {
-      // Atualiza estado das últimas 100 tarefas, sem varrer tabela inteira a cada 5min.
+      // Atualiza estado das Ãºltimas 100 tarefas, sem varrer tabela inteira a cada 5min.
       const pag=await extrairPagina(db,campos,'latest');
       if (pag.indices.length) {
         await gravarIndice(rest,pag.indices);
@@ -431,11 +435,11 @@ async function sincronizar({pool,rest}) {
   }
 }
 function registrar(app,{pool}) {
-  if (!pool || typeof pool.connect!=='function') throw Error('Pool PostgreSQL uMov não configurado para sincronização.');
+  if (!pool || typeof pool.connect!=='function') throw Error('Pool PostgreSQL uMov nÃ£o configurado para sincronizaÃ§Ã£o.');
   const auth=(req,res,next)=>{
     let secret;
-    try{secret=config().secret;}catch(e){return res.status(503).json({ok:false,erro:'Sincronização não configurada no servidor.'});}
-    if (!segredoValido(req.get('Authorization')||'',secret))return res.status(401).json({ok:false,erro:'Acesso não autorizado.'});
+    try{secret=config().secret;}catch(e){return res.status(503).json({ok:false,erro:'SincronizaÃ§Ã£o nÃ£o configurada no servidor.'});}
+    if (!segredoValido(req.get('Authorization')||'',secret))return res.status(401).json({ok:false,erro:'Acesso nÃ£o autorizado.'});
     next();
   };
   app.get('/api/duplicidades/sync/status',auth,async(req,res)=>{
@@ -444,7 +448,7 @@ function registrar(app,{pool}) {
       const r=criarRest(config());
       const status=(await r('ss_duplicidades_controle?select=fonte,ultimo_id_processado,maior_id_capturado,varredura_concluida,total_lidos,ultimo_id_enriquecimento,limite_id_enriquecimento,enriquecimento_concluido,total_enriquecidos,atualizado_em,ultimo_erro&fonte=eq.umov&limit=1'))?.[0]||null;
       res.json({ok:true,status});
-    }catch(e){console.error('[dup-sync] status:',e.message);res.status(503).json({ok:false,erro:'Falha ao consultar controle da sincronização.'});}
+    }catch(e){console.error('[dup-sync] status:',e.message);res.status(503).json({ok:false,erro:'Falha ao consultar controle da sincronizaÃ§Ã£o.'});}
   });
   app.get('/api/duplicidades/sync',auth,async(req,res)=>{
     res.set('Cache-Control','no-store');
@@ -454,7 +458,7 @@ function registrar(app,{pool}) {
       console.log('[dup-sync]',JSON.stringify(saida));
       res.json(saida);
     }catch(e){console.error('[dup-sync] erro:',e.message);
-      res.status(503).json({ok:false,erro:'Sincronização não concluída. Consulte os logs da Vercel. O checkpoint anterior foi preservado.'});}
+      res.status(503).json({ok:false,erro:'SincronizaÃ§Ã£o nÃ£o concluÃ­da. Consulte os logs da Vercel. O checkpoint anterior foi preservado.'});}
   });
 }
 module.exports={registrar,sincronizar,segredoValido,criarRest,PAGE_SIZE};
