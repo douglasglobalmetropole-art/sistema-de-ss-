@@ -1549,10 +1549,14 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 }
 </style>
 
+
+
+
 <style>
-/* GLOBAL_SS_TABELA_HIDDEN_FIX_V5 */
-.tableScroll table th[hidden],
-.tableScroll table td[hidden] {
+/* GLOBAL_SS_ALINHAMENTO_DEFINITIVO_V6 */
+.tableScroll th[hidden],
+.tableScroll td[hidden],
+.tableScroll [hidden] {
   display: none !important;
 }
 </style>
@@ -1850,6 +1854,8 @@ function setScreen(screen,btn){
   configureActions(screen);
   document.querySelectorAll('.tab[data-screen]').forEach(x=>x.classList.toggle('active',x===btn));
   const h=$('lastHeader'), f=$('lastFilter'), teamHeader=$('teamHeader'), teamFilterCell=$('teamFilterCell'), teamFilter=$('teamFilter'), integrationHeader=$('integrationHeader'), integrationFilterCell=$('integrationFilterCell'), integrationFilter=$('integrationFilter');
+  $('dupIndicatorHeader').hidden=screen!=='recepcao';
+  $('dupIndicatorFilter').hidden=screen!=='recepcao';
   $('receptionTeamHeader').hidden=screen!=='recepcao';
   $('receptionTeamFilterCell').hidden=screen!=='recepcao';
   const mostraEquipeComData=screen==='baixar'||screen==='encerradas'||screen==='tramitacao';
