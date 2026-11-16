@@ -82,7 +82,7 @@
    for(const btn of nav.querySelectorAll('[data-sbtab]')){const active=btn.dataset.sbtab===key;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',String(active));}
    for(const panel of [columns,complement,material,anexos]){panel.hidden=panel.dataset.sbpanel!==key;}
    if(key==='complementar')root.dispatchEvent(new CustomEvent('siscom:complementar-open'));
-   if(key==='materiais')loadMaterials().catch(e=>matMessage(e.message,true));
+   if(key==='materiais')loadMaterials().catch(e=>{reviewLoaded=false;reviewConfirm.checked=false;matMessage(e.message,true);reviewMsg('Consulta falhou; tente novamente antes de conferir.',true);});
    if(key==='anexos')modoManualAnexos();
   };
   nav.addEventListener('click',e=>{const btn=e.target.closest('[data-sbtab]');if(btn)activate(btn.dataset.sbtab);});
@@ -164,6 +164,68 @@
     const ss=anexoSS();if(ss&&ss===anexoConsultadoSS){if(/INCERTO|Resultado incerto|Anexo não confirmado|NÃO reenvie|Não reenvie/i.test(texto))anexoResultadoIncertoSS=ss;anexoBtn.disabled=false;consultarAnexos();}
    }
   }).observe(andamento,{childList:true,characterData:true,subtree:true});}
+  // Conferencia apenas local: nao altera quantidades ja gravadas na API.
+  const reviewBox=node('section','sbV3Review');
+  reviewBox.style.cssText='margin-top:16px;padding:14px;border:1px solid #cbd5e1;border-radius:8px';
+  const reviewTitle=node('h4','sbV3Subheading','Conferência dos materiais lançados');
+  const reviewHelp=node('p','sbV3Note','Selecione os materiais realmente utilizados. Ajustes de quantidade aqui servem somente ao resumo; não alteram itens já gravados. Materiais reaproveitados ficam fora do resumo.');
+  const reviewList=node('div','sbV3ReviewList');
+  const reviewConfirmLabel=node('label','sbV3Field');reviewConfirmLabel.style.cssText='display:flex;align-items:center;gap:8px;margin:12px 0';
+  const reviewConfirm=node('input');reviewConfirm.type='checkbox';
+  reviewConfirmLabel.append(reviewConfirm,node('span','','Conferi os materiais, quantidades e unidades acima.'));
+  const reviewPreview=node('textarea','sbV3ReviewPreview');reviewPreview.readOnly=true;reviewPreview.rows=4;reviewPreview.placeholder='Prévia do resumo para as observações da baixa';reviewPreview.style.cssText='width:100%;box-sizing:border-box;margin:8px 0';
+  const reviewAdd=node('button','btn primary','Adicionar resumo às observações da baixa');reviewAdd.type='button';
+  const reviewStatus=node('p','sbV3MatStatus');reviewStatus.setAttribute('role','status');
+  reviewBox.append(reviewTitle,reviewHelp,reviewList,reviewConfirmLabel,reviewPreview,reviewAdd,reviewStatus);
+  material.append(reviewBox);
+  let reviewRows=[],reviewSS='',reviewLoaded=false;
+  const reviewMsg=(msg,err=false)=>{reviewStatus.textContent=msg;reviewStatus.classList.toggle('error',err);};
+  const fmtQty=v=>Number(v).toLocaleString('pt-BR',{maximumFractionDigits:4});
+  const reviewName=r=>String(r.material_nome||r.nome||r.material||'').trim();
+  function reviewReset(ss){reviewSS=ss;reviewRows=[];reviewLoaded=false;reviewConfirm.checked=false;reviewPreview.value='';reviewList.replaceChildren();reviewMsg('Consulte os itens lançados para iniciar a conferência.');}
+  function reviewText(){
+   if(!reviewLoaded||reviewSS!==ssAtual())return '';
+   const itens=reviewRows.filter(r=>r.usar&&!r.reaproveitado&&Number.isFinite(Number(r.qtd))&&Number(r.qtd)>0&&r.nome&&r.unidade);
+   return itens.length?'Materiais utilizados: '+itens.map(r=>fmtQty(r.qtd)+' '+r.unidade+' '+r.nome).join('; ')+'.':'';
+  }
+  function reviewUpdate(){reviewConfirm.checked=false;reviewPreview.value=reviewText();}
+  function reviewRender(rows){
+   reviewList.replaceChildren();reviewConfirm.checked=false;
+   reviewRows=rows.map(r=>({nome:reviewName(r),unidade:String(r.unidade||'').trim(),qtd:String(r.quantidade??''),usar:false,reaproveitado:false}));
+   reviewLoaded=true;
+   if(!reviewRows.length){reviewList.append(node('p','sbV3Empty','Nenhum material gravado encontrado para conferência.'));reviewUpdate();return;}
+   const table=node('table','sbV3Table');table.style.width='100%';const head=node('thead'),tr=node('tr');
+   for(const h of ['Usar','Material','UN','Qtd. conferida','Reaproveitado'])tr.append(node('th','',h));head.append(tr);table.append(head);
+   const body=node('tbody');
+   reviewRows.forEach(r=>{
+    const line=node('tr');const cell=()=>{const td=node('td');line.append(td);return td;};
+    const use=node('input');use.type='checkbox';use.addEventListener('change',()=>{r.usar=use.checked;reviewUpdate();});cell().append(use);
+    cell().textContent=r.nome||'(sem descrição)';cell().textContent=r.unidade||'(sem unidade)';
+    const qty=node('input');qty.type='number';qty.min='0.0001';qty.step='any';qty.value=r.qtd;qty.style.width='95px';qty.addEventListener('input',()=>{r.qtd=qty.value;reviewUpdate();});cell().append(qty);
+    const reused=node('input');reused.type='checkbox';reused.addEventListener('change',()=>{r.reaproveitado=reused.checked;reviewUpdate();});cell().append(reused);
+    body.append(line);
+   });table.append(body);reviewList.append(table);reviewUpdate();
+   reviewMsg('Marque os itens utilizados e confirme as quantidades antes de adicionar o resumo.');
+  }
+  reviewAdd.onclick=()=>{
+   const ss=ssAtual(),obs=id('sbObservacoes');
+   if(!reviewLoaded||reviewSS!==ss||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return reviewMsg('Consulte os materiais da SS atual antes de continuar.',true);
+   if(!reviewConfirm.checked)return reviewMsg('Confirme a conferência dos materiais.',true);
+   if(reviewRows.some(r=>r.usar&&!r.reaproveitado&&(!r.nome||!r.unidade||!Number.isFinite(Number(r.qtd))||Number(r.qtd)<=0)))return reviewMsg('Corrija a descrição, unidade ou quantidade dos itens selecionados.',true);
+   const resumo=reviewText();if(!resumo)return reviewMsg('Selecione ao menos um material utilizado, não reaproveitado.',true);
+   if(!obs)return reviewMsg('Campo de observações da baixa não encontrado.',true);
+   const marcador='[Materiais SS '+ss+']';
+   const atual=String(obs.value||'');
+   const rx=/\[Materiais SS ([^\]]+)\][\s\S]*?\[\/Materiais SS\]/g;
+   const blocos=[...atual.matchAll(rx)];
+   if(blocos.some(m=>m[1]!==ss))return reviewMsg('As observações contêm materiais de outra SS. Confira antes de continuar.',true);
+   const bloco=marcador+'\n'+resumo+'\n[/Materiais SS]';
+   const restante=atual.replace(rx,'').trim();
+   const novo=(restante?restante+'\n':'')+bloco;
+   if(novo.length>Number(obs.maxLength||500))return reviewMsg('Resumo excede o limite de '+obs.maxLength+' caracteres. Reduza o texto ou os itens antes de adicionar; nada foi alterado.',true);
+   obs.value=novo;obs.dispatchEvent(new Event('input',{bubbles:true}));
+   reviewMsg('Resumo adicionado às observações. Confira na aba Dados da baixa antes de confirmar.');
+  };
   let materials=[],loaded=false,currentSS='',draft=[],loading=false;
   const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const matMessage=(msg,err=false)=>{matStatus.textContent=msg;matStatus.classList.toggle('error',err);};
@@ -177,9 +239,9 @@
     else{action.onclick=async()=>{const idValue=r.id??r.item_id;if(idValue==null||!window.confirm('Excluir este item já lançado da SS '+currentSS+'?'))return;action.disabled=true;try{await api('/itens/'+encodeURIComponent(idValue),{method:'DELETE'});await refreshItems();matMessage('Item excluído.');}catch(e){matMessage(e.message,true);}finally{action.disabled=false;}};}
     body.append(row([r.material_nome||r.material||r.nome||'',r.unidade||'',r.quantidade??'',money(r.valor_total??r.valor??0)],action));});table.append(body);matTable.append(table);
   }
-  async function refreshItems(){const ss=ssAtual();if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))throw Error('Selecione uma SS válida antes de consultar materiais.');const r=await api('/itens?ss='+encodeURIComponent(ss));if(ss!==ssAtual())return;renderTable(r.rows||[]);matMessage('Itens gravados consultados para a SS '+ss+'.');}
+  async function refreshItems(){const ss=ssAtual();if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))throw Error('Selecione uma SS válida antes de consultar materiais.');reviewLoaded=false;reviewConfirm.checked=false;const r=await api('/itens?ss='+encodeURIComponent(ss));if(ss!==ssAtual())return;const rows=Array.isArray(r.rows)?r.rows:[];renderTable(rows);reviewSS=ss;reviewRender(rows);matMessage('Itens gravados consultados para a SS '+ss+'.');}
   async function loadMaterials(){const ss=ssAtual();if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){matMessage('Selecione uma SS para carregar os materiais.',true);return;}
-   if(currentSS!==ss){if(draft.length)matMessage('Atenção: lista não salva da SS anterior descartada ao trocar a SS.',true);draft=[];currentSS=ss;matPending.textContent='Ver lista para salvar (0)';}
+   if(currentSS!==ss){if(draft.length)matMessage('Atenção: lista não salva da SS anterior descartada ao trocar a SS.',true);draft=[];currentSS=ss;reviewReset(ss);matPending.textContent='Ver lista para salvar (0)';}
    if(loading)return;loading=true;matRefresh.disabled=true;
    try{if(!loaded){const r=await api('/materiais');materials=Array.isArray(r.rows)?r.rows:[];catalog.replaceChildren();for(const m of materials){const option=node('option');option.value=String(m.nome||'');catalog.append(option);}loaded=true;}await refreshItems();}
    finally{loading=false;matRefresh.disabled=false;}
@@ -203,7 +265,7 @@
     const r=await response.json();if(!Array.isArray(r.resultados))throw Error(r.error||'Não foi possível confirmar os itens gravados.');
     const confirmed=new Set((r.resultados||[]).filter(x=>x.ok).map(x=>x.index));draft=draft.filter((_,i)=>!confirmed.has(i));matPending.textContent='Ver lista para salvar ('+draft.length+')';
     if(draft.length){renderTable(draft,true);matMessage((r.gravados||0)+' itens confirmados. Confira os demais itens já lançados antes de reenviar.');}
-    else{await refreshItems();matMessage('Materiais gravados e conferidos na lista da SS.');}
+    else{await refreshItems();matMessage('Materiais gravados. Confira os itens na seção de conferência antes de gerar o resumo.');}
    }catch(e){matMessage('Resultado não confirmado: '+e.message+'. Consulte os itens já lançados antes de reenviar.',true);}
    finally{matSave.disabled=false;}
   };
