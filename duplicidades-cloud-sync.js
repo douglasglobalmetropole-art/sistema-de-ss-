@@ -275,29 +275,50 @@ async function gravarRelacoes(rest, items) {
   }
 }
 
-async function gravarIndice(rest, items) {
-  for(let i=0;i<items.length;i+=75)
-    await rest('ss_duplicidades_indice?on_conflict=tsk_id',{
-      method:'POST',body:items.slice(i,i+75),upsert:true
-    });
-}
+async function gravarIndiceEmLotes(rest, items) {
+  if (!Array.isArray(items) || !items.length) return;
 
-// Enriquecimento histÃ³rico: omite campos vazios para nunca apagar dados jÃ¡ gravados.
-async function gravarIndiceEnriquecido(rest, items) {
-  if (!items || !items.length) return;
-  const preservados = items.map(item => Object.fromEntries(
-    Object.entries(item).filter(([chave,valor]) =>
-      valor !== null && valor !== undefined &&
-      !(typeof valor === 'string' && valor.trim() === '')
-    )
-  ));
-  for (let i=0;i<preservados.length;i+=75) {
-    await rest('ss_duplicidades_indice?on_conflict=tsk_id',{
-      method:'POST',body:preservados.slice(i,i+75),upsert:true
-    });
+  const grupos = new Map();
+
+  for (const item of items) {
+    const entradas = Object.entries(item)
+      .sort(([a], [b]) => a.localeCompare(b));
+
+    const assinatura = entradas.map(([chave]) => chave).join('|');
+
+    if (!grupos.has(assinatura)) grupos.set(assinatura, []);
+
+    grupos.get(assinatura).push(Object.fromEntries(entradas));
+  }
+
+  for (const grupo of grupos.values()) {
+    for (let i = 0; i < grupo.length; i += 75) {
+      await rest('ss_duplicidades_indice?on_conflict=tsk_id', {
+        method: 'POST',
+        body: grupo.slice(i, i + 75),
+        upsert: true
+      });
+    }
   }
 }
 
+async function gravarIndice(rest, items) {
+  return gravarIndiceEmLotes(rest, items);
+}
+
+async function gravarIndiceEnriquecido(rest, items) {
+  if (!items || !items.length) return;
+
+  const preservados = items.map(item => Object.fromEntries(
+    Object.entries(item).filter(([chave, valor]) =>
+      valor !== null &&
+      valor !== undefined &&
+      !(typeof valor === 'string' && valor.trim() === '')
+    )
+  ));
+
+  return gravarIndiceEmLotes(rest, preservados);
+}
 async function sincronizar({pool,rest}) {
   const db=await pool.connect();
   let locked=false;
