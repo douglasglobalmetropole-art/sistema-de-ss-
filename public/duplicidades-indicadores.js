@@ -374,7 +374,7 @@
       if (dado && dado.erro) {
         classe += ' error';
         simbolo = '●';
-        rotulo = 'Revisar';
+        rotulo = 'Consulta indisponível';
         titulo = 'Falha na consulta. Clique para tentar novamente.';
       } else if (dado?.resposta) {
         const j = dado.resposta;
@@ -386,8 +386,15 @@
           titulo = n + ' correspondência(s). Clique para ver as SS.';
         } else {
           simbolo = '●';
-          rotulo = 'Única';
-          titulo = 'Sem correspondências encontradas. Clique para consultar.';
+          if (j.cobertura && j.cobertura.completa === true &&
+              j.origem_alvo === 'indice' && !j.truncado) {
+            rotulo = 'Única';
+            titulo = 'Sem correspondências no índice completo.';
+          } else {
+            classe += ' error';
+            rotulo = 'Revisar';
+            titulo = 'Índice parcial ou SS ainda não indexada.';
+          }
         }
       }
 

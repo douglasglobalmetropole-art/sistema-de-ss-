@@ -54,10 +54,10 @@ function criarRest({base,key}) {
   };
 }
 
-async function obterFaixaIndice(rest) {
+async function obterFaixaIndice(rest, fonte) {
   const [menor,maior] = await Promise.all([
-    rest('ss_duplicidades_indice?select=tsk_id&order=tsk_id.asc&limit=1'),
-    rest('ss_duplicidades_indice?select=tsk_id&order=tsk_id.desc&limit=1')
+    rest('ss_duplicidades_indice?select=tsk_id&origem=eq.'+encodeURIComponent(fonte)+'&order=tsk_id.asc&limit=1'),
+    rest('ss_duplicidades_indice?select=tsk_id&origem=eq.'+encodeURIComponent(fonte)+'&order=tsk_id.desc&limit=1')
   ]);
   return {
     menor:menor?.[0]?.tsk_id == null ? null : String(menor[0].tsk_id),
@@ -65,10 +65,10 @@ async function obterFaixaIndice(rest) {
   };
 }
 
-async function obterCampos(db) {
+async function obterCampos(db, schema) {
   const q = await db.query({
     text: `SELECT cfd_id,cfd_integrationid
-      FROM u45468.customfield
+      FROM ${schema}.customfield
       WHERE cfd_table='local'
         AND cfd_integrationid IN (
           'matricula','hidrometro','solicitante','telefone',
@@ -87,7 +87,7 @@ async function obterCampos(db) {
   );
 }
 
-async function extrairPagina(db, campos, where, arg, limiteInferior) {
+async function extrairPagina(db, campos, where, arg, limiteInferior, schema, fonte) {
   const cond = where === 'recent'
     ? 'tsk_id > $1::bigint'
     : where === 'enrich'
@@ -103,7 +103,7 @@ async function extrairPagina(db, campos, where, arg, limiteInferior) {
   const q = await db.query({
     text: `WITH pagina AS MATERIALIZED (
         SELECT tsk_id,loc_id,tty_id,tsk_situation,tsk_insertdatehour
-        FROM u45468.task
+        FROM ${schema}.task
         WHERE ${cond}
         ORDER BY tsk_id ${sort}
         LIMIT ${limite}
@@ -121,8 +121,8 @@ async function extrairPagina(db, campos, where, arg, limiteInferior) {
         l.loc_streetnumbercompl AS complemento,
         tt.tty_description AS servico
       FROM pagina p
-      LEFT JOIN u45468.local l ON l.loc_id=p.loc_id
-      LEFT JOIN u45468.tasktype tt ON tt.tty_id=p.tty_id
+      LEFT JOIN ${schema}.local l ON l.loc_id=p.loc_id
+      LEFT JOIN ${schema}.tasktype tt ON tt.tty_id=p.tty_id
       ORDER BY p.tsk_id ${sort}`,
     values:params,
     query_timeout:9000
@@ -147,7 +147,7 @@ async function extrairPagina(db, campos, where, arg, limiteInferior) {
           cfv_registerid AS loc_id,
           cfd_id,
           cfv_internalvalue AS valor
-        FROM u45468.customfieldvalue
+        FROM ${schema}.customfieldvalue
         WHERE cfv_registerid=ANY($1::bigint[])
           AND cfd_id=ANY($2::bpchar[])`,
       values:[ids,cfIds],
@@ -187,15 +187,16 @@ async function extrairPagina(db, campos, where, arg, limiteInferior) {
     .filter(x=>x.loc_id != null && SS_RE.test(String(x.ss||'')))
     .map(x=>normalizarRegistro({
       ...x,
-      ...(porLocal.get(String(x.loc_id)) || {})
+      ...(porLocal.get(String(x.loc_id)) || {}),
+      origem: fonte
     }));
 
   // Identifica reclamaÃ§Ãµes que citam SS anteriores.
-  const relacoes = await resolverRelacoes(db,indices);
+  const relacoes = await resolverRelacoes(db,indices,schema,fonte);
 
   return {rows,indices,relacoes};
 }
-async function resolverRelacoes(db, items) {
+async function resolverRelacoes(db, items, schema, fonte) {
   const candidatos = [];
 
   for (const item of items) {
@@ -225,8 +226,8 @@ async function resolverRelacoes(db, items) {
     text:`SELECT DISTINCT ON (l.loc_integrationid)
         l.loc_integrationid AS ss,
         t.tsk_id
-      FROM u45468.local l
-      JOIN u45468.task t ON t.loc_id=l.loc_id
+      FROM ${schema}.local l
+      JOIN ${schema}.task t ON t.loc_id=l.loc_id
       WHERE l.loc_integrationid::text=ANY($1::text[])
       ORDER BY l.loc_integrationid,t.tsk_id DESC`,
     values:[ssOriginais],
@@ -244,6 +245,8 @@ async function resolverRelacoes(db, items) {
     if (!tskOrigem) continue;
 
     resultado.push({
+      fonte_origem:fonte,
+      fonte_relacionada:fonte,
       ss_origem:c.ss,
       tsk_origem:tskOrigem,
       ss_relacionada:c.item.ss,
@@ -265,7 +268,7 @@ async function gravarRelacoes(rest, items) {
 
   for(let i=0;i<items.length;i+=75) {
     await rest(
-      'ss_duplicidades_relacoes?on_conflict=tsk_origem,tsk_relacionada,tipo_relacao',
+      'ss_duplicidades_relacoes?on_conflict=fonte_origem,tsk_origem,fonte_relacionada,tsk_relacionada,tipo_relacao',
       {
         method:'POST',
         body:items.slice(i,i+75),
@@ -293,7 +296,7 @@ async function gravarIndiceEmLotes(rest, items) {
 
   for (const grupo of grupos.values()) {
     for (let i = 0; i < grupo.length; i += 75) {
-      await rest('ss_duplicidades_indice?on_conflict=tsk_id', {
+      await rest('ss_duplicidades_indice?on_conflict=origem,tsk_id', {
         method: 'POST',
         body: grupo.slice(i, i + 75),
         upsert: true
@@ -319,23 +322,23 @@ async function gravarIndiceEnriquecido(rest, items) {
 
   return gravarIndiceEmLotes(rest, preservados);
 }
-async function sincronizar({pool,rest}) {
+async function sincronizar({pool,rest,fonte="umov",schema="u45468",lockB=LOCK_B}) {
   const db=await pool.connect();
   let locked=false;
   const inicio=Date.now();
   let paginas=0, tarefas=0, indexadas=0, novos=0, historicas=0, atualizadas=0;
   let paginasEnriquecimento=0, enriquecidos=0;
   try {
-    const l=await db.query({text:'SELECT pg_try_advisory_lock($1::int,$2::int) AS obtido',values:[LOCK_A,LOCK_B]});
+    const l=await db.query({text:'SELECT pg_try_advisory_lock($1::int,$2::int) AS obtido',values:[LOCK_A,lockB]});
     locked=!!l.rows[0]?.obtido;
     if (!locked) return {ok:true,em_execucao:true,mensagem:'Outra sincronizaÃ§Ã£o jÃ¡ estÃ¡ ativa.'};
-    const estado=(await rest('ss_duplicidades_controle?select=*&fonte=eq.umov&limit=1'))?.[0]||{
-      fonte:'umov',ultimo_id_processado:null,maior_id_capturado:null,
+    const estado=(await rest('ss_duplicidades_controle?select=*&fonte=eq.'+encodeURIComponent(fonte)+'&limit=1'))?.[0]||{
+      fonte,ultimo_id_processado:null,maior_id_capturado:null,
       varredura_concluida:false,total_lidos:0,
       ultimo_id_enriquecimento:null,limite_id_enriquecimento:null,
       enriquecimento_concluido:false,total_enriquecidos:0
     };
-    const campos=await obterCampos(db);
+    const campos=await obterCampos(db,schema);
     const persistir=async()=>{
       estado.atualizado_em=new Date().toISOString();
       estado.ultimo_erro=null;
@@ -347,7 +350,7 @@ async function sincronizar({pool,rest}) {
     if (!estado.enriquecimento_concluido &&
         estado.limite_id_enriquecimento == null &&
         estado.ultimo_id_enriquecimento == null) {
-      const faixa=await obterFaixaIndice(rest);
+      const faixa=await obterFaixaIndice(rest,fonte);
       if (faixa.menor != null && faixa.maior != null) {
         const maior=BigInt(faixa.maior);
         if (maior >= BigInt(MAX_BIGINT)) throw Error('ID mÃ¡ximo do Ã­ndice excede o limite seguro para iniciar enriquecimento.');
@@ -366,7 +369,7 @@ async function sincronizar({pool,rest}) {
       let cursor=bancoNumero(estado.ultimo_id_enriquecimento,MAX_BIGINT);
       const limiteInferior=bancoNumero(estado.limite_id_enriquecimento,1);
       for (let i=0;i<BACKFILL_PAGES;i++) {
-        const pag=await extrairPagina(db,campos,'enrich',cursor,limiteInferior);
+        const pag=await extrairPagina(db,campos,'enrich',cursor,limiteInferior,schema,fonte);
         if (!pag.rows.length) {
           estado.enriquecimento_concluido=true;
           await persistir();
@@ -390,7 +393,7 @@ async function sincronizar({pool,rest}) {
     // Novas tarefas: ASC, sem perder registros se houver >100 inserÃ§Ãµes entre execuÃ§Ãµes.
     // Sem indexar registros anteriores ao maior_id_capturado duas vezes aqui.
     if (estado.maior_id_capturado != null) {
-      const pag=await extrairPagina(db,campos,'recent',bancoNumero(estado.maior_id_capturado,1));
+      const pag=await extrairPagina(db,campos,'recent',bancoNumero(estado.maior_id_capturado,1),undefined,schema,fonte);
       if (pag.rows.length) {
         await gravarIndice(rest,pag.indices);
         await gravarRelacoes(rest,pag.relacoes);
@@ -403,7 +406,7 @@ async function sincronizar({pool,rest}) {
     if (!estado.varredura_concluida) {
       let cursor=bancoNumero(estado.ultimo_id_processado,MAX_BIGINT);
       for(let i=0;i<BACKFILL_PAGES;i++) {
-        const pag=await extrairPagina(db,campos,'history',cursor);
+        const pag=await extrairPagina(db,campos,'history',cursor,undefined,schema,fonte);
         if (!pag.rows.length) {
           estado.varredura_concluida=true;
           estado.ultimo_id_processado=cursor;
@@ -424,7 +427,7 @@ async function sincronizar({pool,rest}) {
       }
     } else if (novos===0) {
       // Atualiza estado das Ãºltimas 100 tarefas, sem varrer tabela inteira a cada 5min.
-      const pag=await extrairPagina(db,campos,'latest');
+      const pag=await extrairPagina(db,campos,'latest',undefined,undefined,schema,fonte);
       if (pag.indices.length) {
         await gravarIndice(rest,pag.indices);
         await gravarRelacoes(rest,pag.relacoes);
@@ -433,7 +436,7 @@ async function sincronizar({pool,rest}) {
         await persistir();
       }
     }
-    return {ok:true,modo:estado.varredura_concluida?'atualizacao':'varredura_inicial',
+    return {ok:true,fonte,modo:estado.varredura_concluida?'atualizacao':'varredura_inicial',
       varredura_concluida:!!estado.varredura_concluida,
       paginas,tarefas,indexadas,novos,historicas,atualizadas,
       total_lidos:estado.total_lidos,
@@ -450,12 +453,13 @@ async function sincronizar({pool,rest}) {
       duracao_ms:Date.now()-inicio};
   } finally {
     if (locked) {
-      try{await db.query({text:'SELECT pg_advisory_unlock($1::int,$2::int)',values:[LOCK_A,LOCK_B]});}catch(e){console.error('[dup-sync] falha ao liberar lock:',e.message);}
+      try{await db.query({text:'SELECT pg_advisory_unlock($1::int,$2::int)',values:[LOCK_A,lockB]});}catch(e){console.error('[dup-sync] falha ao liberar lock:',e.message);}
     }
     db.release();
   }
 }
-function registrar(app,{pool}) {
+function registrar(app,{pool,poolLote1,schemaLote1="u46915"}) {
+  if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schemaLote1))throw Error("Schema Lote 1 invalido");
   if (!pool || typeof pool.connect!=='function') throw Error('Pool PostgreSQL uMov nÃ£o configurado para sincronizaÃ§Ã£o.');
   const auth=(req,res,next)=>{
     let secret;
@@ -463,19 +467,26 @@ function registrar(app,{pool}) {
     if (!segredoValido(req.get('Authorization')||'',secret))return res.status(401).json({ok:false,erro:'Acesso nÃ£o autorizado.'});
     next();
   };
+  const selecionar=req=>{
+    const lote=String(req.query.lote||'2');
+    if(!['1','2'].includes(lote))throw Error('Lote invalido');
+    if(lote==='1'&&!poolLote1)throw Error('Pool Lote 1 nao configurado');
+    return lote==='1'?{pool:poolLote1,fonte:'umov_lote1',schema:schemaLote1,lockB:2027}:{pool,fonte:'umov',schema:'u45468',lockB:LOCK_B};
+  };
   app.get('/api/duplicidades/sync/status',auth,async(req,res)=>{
     res.set('Cache-Control','no-store');
     try{
       const r=criarRest(config());
-      const status=(await r('ss_duplicidades_controle?select=fonte,ultimo_id_processado,maior_id_capturado,varredura_concluida,total_lidos,ultimo_id_enriquecimento,limite_id_enriquecimento,enriquecimento_concluido,total_enriquecidos,atualizado_em,ultimo_erro&fonte=eq.umov&limit=1'))?.[0]||null;
-      res.json({ok:true,status});
+      const origem=selecionar(req);
+      const status=(await r('ss_duplicidades_controle?select=fonte,ultimo_id_processado,maior_id_capturado,varredura_concluida,total_lidos,ultimo_id_enriquecimento,limite_id_enriquecimento,enriquecimento_concluido,total_enriquecidos,atualizado_em,ultimo_erro&fonte=eq.'+encodeURIComponent(origem.fonte)+'&limit=1'))?.[0]||null;
+      res.json({ok:true,fonte:origem.fonte,lote:origem.fonte==='umov_lote1'?1:2,status});
     }catch(e){console.error('[dup-sync] status:',e.message);res.status(503).json({ok:false,erro:'Falha ao consultar controle da sincronizaÃ§Ã£o.'});}
   });
   app.get('/api/duplicidades/sync',auth,async(req,res)=>{
     res.set('Cache-Control','no-store');
     try{
       const r=criarRest(config());
-      const saida=await sincronizar({pool,rest:r});
+      const saida=await sincronizar({...selecionar(req),rest:r});
       console.log('[dup-sync]',JSON.stringify(saida));
       res.json(saida);
     }catch(e){console.error('[dup-sync] erro:',e.message);

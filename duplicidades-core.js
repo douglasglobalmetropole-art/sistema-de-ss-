@@ -100,7 +100,7 @@ function normalizarRegistro(v) {
     situacao: String(v.situacao ?? v.tsk_situation ?? '').trim(),
 
     registro_em: v.registro_em ?? v.tsk_insertdatehour ?? null,
-    origem: 'umov',
+    origem: String(v.origem || 'umov'),
     capturado_em: new Date().toISOString()
   };
 }

@@ -2,55 +2,72 @@
 const {normalizarRegistro,comparar}=require('./duplicidades-core');
 const {definirMatriz,SS_RE}=require('./duplicidades-matriz');
 const TABELA='ss_duplicidades_indice';
-const COL='tsk_id,loc_id,ss,matricula,hidrometro,cidade,bairro,logradouro,numero,complemento,chave_rua,chave_endereco,servico,situacao,registro_em,capturado_em';
+const COL='origem,tsk_id,loc_id,ss,matricula,hidrometro,cidade,bairro,logradouro,numero,complemento,chave_rua,chave_endereco,servico,situacao,registro_em,capturado_em';
 const arr=x=>Array.isArray(x)?x:[];
 const CLASSES=['matricula','hidrometro','chave_endereco','chave_rua'];
 const MAX_BUSCA=500;
 const STATUS_ABERTO=s=>String(s||'').trim().toLowerCase()==='pendente de envio para campo';
 const TEXTO_TAG=ss=>'DUPLICATA DA SS '+ss;
 
-function registrar(app,{pool,autorizado,podeEscrever,origemOk,rest,escreverTag}){
+function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscrever,origemOk,rest,escreverTag}){
+ if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schemaLote1))throw Error('Schema Lote 1 invalido');
+ const fontes=['umov','umov_lote1'];
+ const fonteReq=req=>req.divisaoSS?(req.divisaoSS.lote1?'umov_lote1':'umov'):null;
+ const cidadeOk=(cidade,req)=>!req.divisaoSS||req.divisaoSS.cidades.some(c=>String(c).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()===String(cidade||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
+ const fonteBanco=fonte=>fonte==='umov_lote1'?{db:poolLote1,schema:schemaLote1}:{db:pool,schema:'u45468'};
+
  if(typeof autorizado!=='function'||typeof podeEscrever!=='function'||typeof origemOk!=='function'||typeof escreverTag!=='function')
   throw Error('Configuracao de autorizacao da Matriz incompleta.');
  const caminho=(col,val,limit)=>`${TABELA}?select=${COL}&${col}=eq.${encodeURIComponent(val)}&order=tsk_id.desc&limit=${limit}`;
- async function buscarMatriz(ss){
-   let base=arr(await rest(`${TABELA}?select=${COL}&ss=eq.${encodeURIComponent(ss)}&order=tsk_id.desc&limit=1`))[0];
+ async function buscarMatriz(ss,req){
+   const candidatas=arr(await rest(`${TABELA}?select=${COL}&ss=eq.${encodeURIComponent(ss)}&order=tsk_id.desc&limit=100`));
+   const fontePreferida=fonteReq(req);
+   let base=candidatas.find(x=>(!fontePreferida||x.origem===fontePreferida)&&cidadeOk(x.cidade,req));
    let origem='indice';
    if(!base){
-     // Consulta um local pela SS exata. Nao amplia a busca para dbout_local.
-     const q=await pool.query({text:`SELECT l.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
-       l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
-       l.loc_streetnumbercompl AS complemento,t.tsk_id,t.tsk_situation AS situacao,
-       t.tsk_insertdatehour AS registro_em,tt.tty_description AS servico
-       FROM u45468.local l
-       JOIN LATERAL (SELECT tsk_id,tsk_situation,tsk_insertdatehour,tty_id
-         FROM u45468.task WHERE loc_id=l.loc_id ORDER BY tsk_id DESC LIMIT 1) t ON TRUE
-       LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id
-       WHERE l.loc_integrationid=$1 LIMIT 1`,values:[ss],query_timeout:7000});
-     if(!q.rows.length)return null;
-     const raw=q.rows[0];
-     const campos=await pool.query({text:`SELECT f.cfd_integrationid AS campo,v.cfv_internalvalue AS valor
-       FROM u45468.customfieldvalue v JOIN u45468.customfield f ON f.cfd_id=v.cfd_id
-       WHERE v.cfv_registerid=$1 AND f.cfd_table='local'
-         AND f.cfd_integrationid IN ('matricula','hidrometro')`,values:[raw.loc_id],query_timeout:5000});
-     for(const r of campos.rows)raw[r.campo]=r.valor;
-     base=normalizarRegistro(raw);origem='consulta_pontual';
+     // Consulta pontual na origem correta, nunca mistura IDs entre bancos.
+     for(const fonte of (fontePreferida?[fontePreferida]:fontes)){
+       const {db,schema}=fonteBanco(fonte);
+       if(!db)continue;
+       const q=await db.query({text:`SELECT l.loc_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
+         l.loc_neighborhood AS bairro,l.loc_street AS logradouro,l.loc_streetnumber AS numero,
+         l.loc_streetnumbercompl AS complemento,t.tsk_id,t.tsk_situation AS situacao,
+         t.tsk_insertdatehour AS registro_em,tt.tty_description AS servico
+         FROM ${schema}.local l
+         JOIN LATERAL (SELECT tsk_id,tsk_situation,tsk_insertdatehour,tty_id
+           FROM ${schema}.task WHERE loc_id=l.loc_id ORDER BY tsk_id DESC LIMIT 1) t ON TRUE
+         LEFT JOIN ${schema}.tasktype tt ON tt.tty_id=t.tty_id
+         WHERE l.loc_integrationid=$1 LIMIT 1`,values:[ss],query_timeout:7000});
+       if(!q.rows.length||!cidadeOk(q.rows[0].cidade,req))continue;
+       const raw=q.rows[0];raw.origem=fonte;
+       const campos=await db.query({text:`SELECT f.cfd_integrationid AS campo,v.cfv_internalvalue AS valor
+         FROM ${schema}.customfieldvalue v JOIN ${schema}.customfield f ON f.cfd_id=v.cfd_id
+         WHERE v.cfv_registerid=$1 AND f.cfd_table='local'
+           AND f.cfd_integrationid IN ('matricula','hidrometro')`,values:[raw.loc_id],query_timeout:5000});
+       for(const r of campos.rows)raw[r.campo]=r.valor;
+       base=normalizarRegistro(raw);origem='consulta_pontual';break;
+     }
+     if(!base)return null;
    }
    const consultas=CLASSES.filter(col=>base[col]&&String(base[col]).length<180)
     .map(col=>({col,url:caminho(col,base[col],col==='chave_rua'?75:MAX_BUSCA)}));
    const encontrados=await Promise.all(consultas.map(x=>rest(x.url)));
-   const truncado=encontrados.some((reg,i)=>consultas[i].col!=='chave_rua'&&arr(reg).length>=MAX_BUSCA);
+   const truncado=encontrados.some((reg,i)=>arr(reg).length >= (consultas[i].col==='chave_rua'?75:MAX_BUSCA));
    const porSS=new Map();
    for(const reg of encontrados.flatMap(arr)){
      if(reg.ss===ss||!SS_RE.test(String(reg.ss||'')))continue;
-     const antes=porSS.get(reg.ss);
-     if(!antes||Number(reg.tsk_id)>Number(antes.tsk_id))porSS.set(reg.ss,reg);
+     const chave=String(reg.origem)+'|'+String(reg.ss);
+     const antes=porSS.get(chave);
+     if(!antes||Number(reg.tsk_id)>Number(antes.tsk_id))porSS.set(chave,reg);
    }
    const todos=[...porSS.values()].map(r=>({...r,...comparar(base,r)})).filter(r=>r.pontos>=3)
     .sort((a,b)=>b.pontos-a.pontos||Number(b.tsk_id)-Number(a.tsk_id));
    const grupo=definirMatriz(base,todos);
-   const estado=arr(await rest('ss_duplicidades_controle?select=varredura_concluida,total_lidos,atualizado_em&fonte=eq.umov&limit=1'))[0]||null;
-   const cobertura={completa:!!estado?.varredura_concluida,lidos:Number(estado?.total_lidos||0),atualizado_em:estado?.atualizado_em||null};
+   const estados=arr(await rest('ss_duplicidades_controle?select=fonte,varredura_concluida,total_lidos,atualizado_em&fonte=in.(umov,umov_lote1)'));
+   const porFonte=Object.fromEntries(estados.map(x=>[x.fonte,x]));
+   const cobertura={completa:fontes.every(f=>porFonte[f]?.varredura_concluida===true),
+     lidos:fontes.reduce((n,f)=>n+Number(porFonte[f]?.total_lidos||0),0),
+     lotes:fontes.map(f=>({fonte:f,completa:!!porFonte[f]?.varredura_concluida,lidos:Number(porFonte[f]?.total_lidos||0)}))};
    // Nao marcar Matriz definitiva quando o conjunto de SS ainda e parcial.
    const grupoSeguro=!!(grupo.habilitada&&origem==='indice'&&cobertura.completa&&!truncado);
    return {alvo:base,origem,resultadoCompleto:todos,resultados:todos.slice(0,80),grupo,grupoSeguro,cobertura,truncado};
@@ -62,8 +79,8 @@ function registrar(app,{pool,autorizado,podeEscrever,origemOk,rest,escreverTag})
    if(!SS_RE.test(ss))return res.status(400).json({ok:false,erro:'Numero da SS invalido.'});
    const inicio=Date.now();
    try{
-     const dados=await buscarMatriz(ss);
-     if(!dados)return res.status(404).json({ok:false,erro:'SS nao localizada no indice ou uMov.'});
+     const dados=await buscarMatriz(ss,req);
+     if(!dados)return res.status(404).json({ok:false,codigo:'nao_indexada',erro:'SS nao localizada no indice ou uMov.'});
      const {alvo,origem,resultados,grupo,grupoSeguro,cobertura,truncado}=dados;
      res.json({ok:true,alvo,origem_alvo:origem,resultados,cobertura,
        matriz:grupo.matriz||null,duplicatas:grupo.duplicatas||[],
@@ -90,11 +107,14 @@ function registrar(app,{pool,autorizado,podeEscrever,origemOk,rest,escreverTag})
    if(ids.length!==tarefas.length||ids.some(id=>!Number.isSafeInteger(id)||id<=0))
      return res.status(400).json({ok:false,erro:'Identificadores de SS invalidos.'});
    try{
-     const dados=await buscarMatriz(ss);
+     const dados=await buscarMatriz(ss,req);
      if(!dados?.grupoSeguro||!dados.grupo.matriz)
        return res.status(409).json({ok:false,erro:'Matriz nao confirmada. Conclua a sincronizacao ou revise a consulta.'});
-     if(dados.grupo.matriz.ss!==matrizSS)
+     if(!cidadeOk(dados.alvo.cidade,req)||dados.grupo.matriz.ss!==matrizSS)
        return res.status(409).json({ok:false,erro:'A Matriz foi alterada. Reabra a analise antes de marcar.'});
+     // Escrita uMov usa uma credencial/rota unica: bloqueia lote 1 e grupos mistos.
+     if(dados.alvo.origem!=='umov'||dados.grupo.matriz.origem!=='umov'||dados.grupo.duplicatas.some(d=>d.origem!=='umov'))
+       return res.status(409).json({ok:false,erro:'TAG automatica bloqueada para grupos com Lote 1. Revise manualmente.'});
      const elegiveis=new Map(dados.grupo.duplicatas.map(d=>[Number(d.tsk_id),d]));
      if(ids.some(id=>!elegiveis.has(id)||id===Number(dados.grupo.matriz.tsk_id)))
        return res.status(409).json({ok:false,erro:'Uma SS selecionada nao e duplicata elegivel desta Matriz.'});

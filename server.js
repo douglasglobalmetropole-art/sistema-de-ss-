@@ -2233,7 +2233,7 @@ app.post('/api/tags',async(req,res)=>{try{
  res.status(sucesso?200:502).json({ok:sucesso>0,tag,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
 }catch(error){res.status(500).json({ok:false,error:`NÃ£o foi possÃ­vel gravar a tag: ${String(error?.message||'Erro interno').slice(0,300)}`})}});
 require('./duplicidades-index').registrar(app,{
- pool:poolPrincipal,
+ pool:poolPrincipal, poolLote1, schemaLote1: "u46915",
  autorizado:gatewayAuthorized,
  podeEscrever:gatewayCanWrite,
  origemOk:siscomSameOrigin,
@@ -2243,7 +2243,7 @@ require('./duplicidades-index').registrar(app,{
   cache.clear();
  }
 });
-require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal});
+require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal,poolLote1,schemaLote1:'u46915'});
 require('./busca-ss-fisica').registrar(app,{pool,hostRelatorioUmov});
 require('./gis-ss').registrar(app,{gatewayRest,gatewayAuthorized,individualJobPayload});
 // No computador local, mantenha o comportamento original: `npm start`.
