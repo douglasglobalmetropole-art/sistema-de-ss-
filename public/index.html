@@ -4108,4 +4108,32 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 <!-- FIM_GLOBAL_SS_CORRECAO_FECHAR_FOTOS_V2 -->
 
 <script src="/duplicidades-indicadores.js?v=abas-20261116-023353"></script>
+<!-- SS_DATAS_BAIXAR_V1 -->
+<script>
+(function(){
+  'use strict';
+
+  function limparDatasBaixar(){
+    if(typeof currentScreen === 'undefined' || currentScreen !== 'baixar') return;
+
+    const inicio = document.getElementById('dateIni');
+    const fim = document.getElementById('dateFim');
+
+    if(inicio) inicio.value = '';
+    if(fim) fim.value = '';
+  }
+
+  document.addEventListener('click', function(event){
+    const aba = event.target.closest('[data-screen="baixar"]');
+
+    if(aba){
+      setTimeout(limparDatasBaixar, 0);
+    }
+  });
+
+  window.addEventListener('load', function(){
+    setTimeout(limparDatasBaixar, 0);
+  });
+})();
+</script>
 </body></html>
