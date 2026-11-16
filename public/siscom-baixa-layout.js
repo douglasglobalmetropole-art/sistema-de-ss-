@@ -263,37 +263,177 @@
    }
    return out;
   }
-  function suggestUmov(){
-   const ss=ssAtual();umovList.replaceChildren();
-   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){umovMsg.textContent='Selecione uma SS válida.';return;}
-   const raw=umovSource();umovOriginal.textContent=raw?'Texto original da equipe: '+raw:'Campo Materiais lançados ainda não localizado no retorno exibido. Abra Dados da baixa e confira o carregamento do uMov.';
-   if(!raw){umovMsg.textContent='Nenhuma sugestão criada. Nenhum item será lançado automaticamente.';return;}
-   const suggestions=parseUmov(raw);
-   if(!suggestions.length){umovMsg.textContent='O retorno não contém materiais interpretáveis.';return;}
-   const table=node('table','sbV3Table');table.style.width='100%';const thead=node('thead'),head=node('tr');
-   for(const label of ['Texto informado','Qtd.','UN','Catálogo sugerido','Ação'])head.append(node('th','',label));thead.append(head);table.append(thead);
-   const body=node('tbody');
-   for(const item of suggestions){
-    const tr=node('tr');const cell=t=>{const td=node('td');td.textContent=t;tr.append(td);return td;};
-    cell(item.descricao);cell(item.quantidade==null?'Revisar':String(item.quantidade));cell(item.unidade||'Revisar');
-    const matches=materials.filter(m=>normUmov(m.nome)===normUmov(item.descricao));
-    const suggested=matches.length===1?matches[0]:null;
-    cell(suggested?String(suggested.nome):'Localizar manualmente');
-    const td=cell('');const btn=node('button','btn sbV3Small','Usar no formulário');btn.type='button';
-    btn.onclick=()=>{
-     if(ssAtual()!==ss){umovMsg.textContent='A SS mudou. Releia o retorno antes de continuar.';return;}
-     matName.value=suggested?String(suggested.nome):item.descricao;
-     matUnit.value=suggested?String(suggested.unidade||item.unidade):item.unidade;
-     matQty.value=item.quantidade!=null&&item.quantidade>0?String(item.quantidade):'';
-     matValue.value='';
-     umovMsg.textContent=suggested?'Sugestão copiada. Confira unidade, quantidade e valor antes de Adicionar à lista.':'Descrição copiada. Selecione o material cadastrado correspondente antes de Adicionar à lista.';
-     matName.focus();
-    };td.append(btn);body.append(tr);
+     // CGM_UMOV_MATERIAIS_HISTORICO_V2
+   async function suggestUmov(){
+    const ss=ssAtual();
+    umovList.replaceChildren();
+    umovOriginal.textContent='';
+
+    if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){
+     umovMsg.textContent='Selecione uma SS válida.';
+     return;
+    }
+
+    umovMsg.textContent='Consultando materiais no uMov...';
+
+    const fontes=[];
+    const textoLocal=umovSource();
+
+    if(textoLocal){
+     fontes.push({
+      ss,
+      relatorio_id:null,
+      data_execucao:null,
+      materiais:textoLocal,
+      origem:'Retorno exibido na tela'
+     });
+    }
+
+    let erroConsulta='';
+
+    try{
+     const resposta=await api('/umov/materiais?ss='+encodeURIComponent(ss));
+
+     for(const item of resposta.materiais||[]){
+      if(!item.materiais)continue;
+
+      const duplicado=fontes.some(f=>
+       f.ss===item.numero_ss &&
+       normUmov(f.materiais)===normUmov(item.materiais)
+      );
+
+      if(!duplicado){
+       fontes.push({
+        ss:item.numero_ss,
+        relatorio_id:item.relatorio_id,
+        data_execucao:item.data_execucao,
+        materiais:item.materiais,
+        origem:'Relatório uMov'
+       });
+      }
+     }
+    }catch(e){
+     erroConsulta=e.message;
+    }
+
+    if(ssAtual()!==ss){
+     umovList.replaceChildren();
+     umovMsg.textContent='A SS mudou. Consulte novamente.';
+     return;
+    }
+
+    if(!fontes.length){
+     umovOriginal.textContent='Nenhum material localizado nas fontes consultadas.';
+     umovMsg.textContent=erroConsulta?
+      'Falha na consulta PostgreSQL: '+erroConsulta:
+      'Nenhum material encontrado. Nada foi lançado automaticamente.';
+     return;
+    }
+
+    umovOriginal.textContent='Confira a sequência de origem e o texto original antes de utilizar.';
+
+    let total=0;
+
+    for(const fonte of fontes){
+     const bloco=node('div','sbV3UmovFonte');
+     bloco.style.cssText='margin:10px 0;padding:10px;border:1px solid #d5e3ef;border-radius:7px;background:#fff';
+
+     const titulo=node('strong','',
+      fonte.ss+(fonte.ss===ss?' — SS atual':' — Sequência anterior')
+     );
+     bloco.append(titulo);
+
+     const detalhes=node('p','sbV3Note');
+     detalhes.textContent=[
+      fonte.origem,
+      fonte.relatorio_id?'Relatório '+fonte.relatorio_id:'',
+      fonte.data_execucao?'Execução: '+new Date(fonte.data_execucao).toLocaleString('pt-BR'):''
+     ].filter(Boolean).join(' | ');
+     bloco.append(detalhes);
+
+     const original=node('p','sbV3Note','Texto original: '+fonte.materiais);
+     original.style.whiteSpace='pre-wrap';
+     bloco.append(original);
+
+     const sugestoes=parseUmov(fonte.materiais);
+
+     if(sugestoes.length){
+      const tabela=node('table','sbV3Table');
+      const cabecalho=node('thead'),trHead=node('tr');
+
+      for(const nome of ['Material','Quantidade','UN','Catálogo','Ação']){
+       trHead.append(node('th','',nome));
+      }
+
+      cabecalho.append(trHead);
+      tabela.append(cabecalho);
+
+      const corpo=node('tbody');
+
+      for(const item of sugestoes){
+       total++;
+
+       const tr=node('tr');
+       const cell=valor=>{
+        const td=node('td');
+        td.textContent=valor;
+        tr.append(td);
+        return td;
+       };
+
+       cell(item.descricao);
+       cell(item.quantidade==null?'Revisar':String(item.quantidade));
+       cell(item.unidade||'Revisar');
+
+       const encontrados=materials.filter(m=>
+        normUmov(m.nome)===normUmov(item.descricao)
+       );
+
+       const catalogo=encontrados.length===1?encontrados[0]:null;
+       cell(catalogo?String(catalogo.nome):'Selecionar manualmente');
+
+       const td=cell('');
+       const botao=node('button','btn sbV3Small','Usar no formulário');
+       botao.type='button';
+
+       botao.onclick=()=>{
+        if(ssAtual()!==ss){
+         umovMsg.textContent='A SS mudou. Consulte novamente.';
+         return;
+        }
+
+        matName.value=catalogo?String(catalogo.nome):item.descricao;
+        matUnit.value=catalogo?
+         String(catalogo.unidade||item.unidade):item.unidade;
+        matQty.value=item.quantidade!=null&&item.quantidade>0?
+         String(item.quantidade):'';
+        matValue.value='';
+
+        umovMsg.textContent='Sugestão da SS '+fonte.ss+
+         ' copiada. Confira material, unidade, quantidade e valor antes de adicionar.';
+
+        matName.focus();
+       };
+
+       td.append(botao);
+       corpo.append(tr);
+      }
+
+      tabela.append(corpo);
+      bloco.append(tabela);
+     }
+
+     umovList.append(bloco);
+    }
+
+    umovMsg.textContent=total+' sugestão(ões) em '+
+     fontes.length+' fonte(s). Nenhum item foi salvo automaticamente.'+
+     (erroConsulta?' Atenção: consulta PostgreSQL falhou.':'');
    }
-   table.append(body);umovList.append(table);
-   umovMsg.textContent=suggestions.length+' sugestão(ões) do uMov. Nenhum item foi salvo automaticamente.';
-  }
-  umovBtn.onclick=suggestUmov;
+
+   umovBtn.onclick=()=>suggestUmov().catch(e=>{
+    umovMsg.textContent='Falha ao consultar materiais: '+e.message;
+   });
   let materials=[],loaded=false,currentSS='',draft=[],loading=false;
   const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const matMessage=(msg,err=false)=>{matStatus.textContent=msg;matStatus.classList.toggle('error',err);};
