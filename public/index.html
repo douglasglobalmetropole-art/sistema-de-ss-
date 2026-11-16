@@ -1511,6 +1511,43 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 </style>
 <!-- FIM_GLOBAL_SS_LAYOUT_VERTICAL_FINAL_20261113 -->
 
+<style id="fixIndicadoresRecepcao">
+/* Indicadores da tabela de Recepcao */
+#rows td.dup-indicator-cell {
+  min-width: 165px !important;
+  width: 165px !important;
+  max-width: none !important;
+  padding: 5px 8px !important;
+  text-align: center !important;
+  overflow: visible !important;
+}
+
+#rows button.dup-indicator {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: auto !important;
+  min-width: 135px !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 28px !important;
+  padding: 5px 10px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  text-indent: 0 !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+}
+
+#dupIndicatorHeader,
+#dupIndicatorFilter {
+  min-width: 165px !important;
+  width: 165px !important;
+}
+</style>
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
@@ -4070,5 +4107,5 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 </script>
 <!-- FIM_GLOBAL_SS_CORRECAO_FECHAR_FOTOS_V2 -->
 
-<script src="/duplicidades-indicadores.js?v=20261116-rua-v2"></script>
+<script src="/duplicidades-indicadores.js?v=20261116-textos-v3"></script>
 </body></html>
