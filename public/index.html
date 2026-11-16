@@ -1800,6 +1800,26 @@ document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!
 
 // V10.1: apenas apresentação da aba. NÃO executa nova consulta.
 function setScreen(screen,btn){
+  // SS_DATA_FIM_FINAL_V8
+  const ini=document.getElementById('dateIni');
+  const fim=document.getElementById('dateFim');
+  const grupo=ini.closest('label')||ini.parentElement;
+
+  if(grupo && !grupo.contains(fim)){
+    grupo.hidden=screen==='baixar';
+    grupo.style.display=screen==='baixar'?'none':'';
+  }
+
+  const labelIni=document.querySelector('label[for="dateIni"]');
+  if(labelIni){
+    labelIni.hidden=screen==='baixar';
+    labelIni.style.display=screen==='baixar'?'none':'';
+  }
+
+  if(screen==='baixar'){
+    ini.value='';
+    fim.value='';
+  }
   if(screen==='preparacao') return;
   // Em Campo: sem restrição de datas por padrão. Preservar as datas que
   // o programador preencher até sair da aba.
@@ -1982,6 +2002,9 @@ function reconciliarEquipes(rows){
 }
 let consultaListaAtual=null,numeroConsultaLista=0;
 async function load(forcarAtualizacao=false){
+  if(currentScreen==='baixar'){
+    document.getElementById('dateIni').value='';
+  }
   if(window.__buscaSSAtiva)return;
   if(consultaListaAtual)consultaListaAtual.abort();
   consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
@@ -2001,7 +2024,7 @@ $('refreshBtn').onclick=async()=>{const b=$('refreshBtn');if(b.disabled)return;b
 let dateFilterTimer;
 ['dateIni','dateFim'].forEach(id=>$(id).addEventListener('change',()=>{
   clearTimeout(dateFilterTimer);
-  dateFilterTimer=setTimeout(()=>{if(currentScreen==='campo'||($('dateIni').value&&$('dateFim').value)){window.__pageOffset=0;load()}},250);
+  dateFilterTimer=setTimeout(()=>{if(currentScreen==='campo'||currentScreen==='baixar'||($('dateIni').value&&$('dateFim').value)){window.__pageOffset=0;load()}},250);
 }));
 let equipeFilterTimer;
 ['teamFilter','lastFilter'].forEach(id=>$(id).oninput=()=>{
