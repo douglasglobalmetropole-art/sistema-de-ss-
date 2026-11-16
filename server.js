@@ -1832,6 +1832,38 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
 });
 const { consultarMateriais } = require('./umov-materiais');
 
+    // CGM_UMOV_SEQUENCIAS_FOTOS_V1
+    app.get('/api/umov/sequencias-fotos', async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+
+      try {
+        const ss = String(req.query.ss || '').trim();
+
+        if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)) {
+          return res.status(400).json({
+            ok: false,
+            error: 'Numero de SS invalido.'
+          });
+        }
+
+        const { consultarSequenciasFotos } = require('./umov-materiais');
+        const sequencias = await consultarSequenciasFotos(pool, ss);
+
+        return res.json({
+          ok: true,
+          numero_ss: ss,
+          total: sequencias.length,
+          sequencias
+        });
+      } catch (error) {
+        console.error('Consulta sequencias uMov:', error.code || error.message);
+
+        return res.status(502).json({
+          ok: false,
+          error: 'Falha ao consultar sequencias anteriores no uMov.'
+        });
+      }
+    });
 app.get('/api/umov/materiais', async (req, res) => {
   res.set('Cache-Control', 'no-store');
 
