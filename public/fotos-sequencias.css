@@ -21,3 +21,73 @@
 #umovFotosModal.cgmZoomSomente .ufZoom{pointer-events:auto}
 @media(min-width:1800px){#siscomBaixaModal #cgmFotosPalco{grid-template-columns:320px minmax(1060px,1fr) 320px;width:min(98vw,1900px)}#siscomBaixaModal #cgmFotosPalco>.sbShell{width:100%!important;min-width:1060px!important}}
 @media(max-width:1690px){#siscomBaixaModal #cgmFotosPalco{margin:0}}
+
+/* CGM_FOTOS_VISIVEIS_V4 */
+#siscomBaixaModal.open {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    overflow: hidden !important;
+    padding: 8px !important;
+}
+
+#siscomBaixaModal #cgmFotosPalco {
+    display: grid !important;
+    grid-template-columns:
+        clamp(210px, 17vw, 290px)
+        minmax(0, 1fr)
+        clamp(250px, 21vw, 360px) !important;
+    gap: 10px !important;
+    width: calc(100vw - 16px) !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    margin: 0 !important;
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow: visible !important;
+    align-items: stretch !important;
+}
+
+#siscomBaixaModal #cgmFotosPalco > .sbShell {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+}
+
+#siscomBaixaModal #cgmFotosAnteriorLateral,
+#siscomBaixaModal #cgmFotosAtualLateral {
+    display: flex;
+    position: relative !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-width: 0 !important;
+    max-height: 100% !important;
+}
+
+#siscomBaixaModal #cgmFotosAnteriorLateral[hidden],
+#siscomBaixaModal #cgmFotosAtualLateral[hidden] {
+    display: none !important;
+}
+
+#siscomBaixaModal .sbColumns {
+    grid-template-columns:
+        minmax(0, 1.1fr)
+        minmax(0, 1fr) !important;
+}
+
+@media (max-width: 1100px) {
+    #siscomBaixaModal.open {
+        overflow-x: auto !important;
+        justify-content: flex-start !important;
+    }
+
+    #siscomBaixaModal #cgmFotosPalco {
+        width: 1450px !important;
+        min-width: 1450px !important;
+        grid-template-columns:
+            240px 900px 290px !important;
+    }
+}
