@@ -4136,4 +4136,97 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
   });
 })();
 </script>
+<!-- SS_INDICADORES_SO_RECEPCAO_V1 -->
+<script>
+(function(){
+  'use strict';
+
+  const SELETORES = [
+    '[data-duplicidade-indicador]',
+    '.duplicidade-indicador',
+    '.ss-duplicidade-indicador',
+    '.dup-indicador'
+  ];
+
+  function atualizarIndicadores(){
+    const recepcao =
+      typeof currentScreen !== 'undefined' &&
+      currentScreen === 'recepcao';
+
+    document.querySelectorAll(SELETORES.join(',')).forEach(function(el){
+      el.hidden = !recepcao;
+      el.style.display = recepcao ? '' : 'none';
+    });
+  }
+
+  document.addEventListener('click',function(event){
+    if(event.target.closest('[data-screen]')){
+      setTimeout(atualizarIndicadores,0);
+    }
+  });
+
+  window.addEventListener('load',atualizarIndicadores);
+})();
+</script>
+<!-- SS_COLUNA_DUP_SO_RECEPCAO_V2 -->
+<script>
+(function(){
+  'use strict';
+
+  function atualizarColunaDuplicidade(){
+    const recepcao =
+      typeof currentScreen !== 'undefined' &&
+      currentScreen === 'recepcao';
+
+    document.querySelectorAll('table').forEach(function(tabela){
+      const cabecalhos = Array.from(
+        tabela.querySelectorAll('thead th')
+      );
+
+      const indice = cabecalhos.findIndex(function(th){
+        return /duplicat|duplicidade|indicador/i.test(
+          th.textContent || ''
+        );
+      });
+
+      if(indice < 0) return;
+
+      const linhas = tabela.querySelectorAll('tr');
+
+      linhas.forEach(function(linha){
+        const celulas = Array.from(linha.children).filter(function(el){
+          return el.tagName === 'TH' || el.tagName === 'TD';
+        });
+
+        const celula = celulas[indice];
+        if(!celula) return;
+
+        celula.hidden = !recepcao;
+        celula.style.display = recepcao ? '' : 'none';
+      });
+    });
+  }
+
+  document.addEventListener('click',function(event){
+    if(event.target.closest('[data-screen]')){
+      setTimeout(atualizarColunaDuplicidade,50);
+    }
+  });
+
+  const observador = new MutationObserver(function(){
+    atualizarColunaDuplicidade();
+  });
+
+  window.addEventListener('load',function(){
+    atualizarColunaDuplicidade();
+
+    document.querySelectorAll('table').forEach(function(tabela){
+      observador.observe(tabela,{
+        childList:true,
+        subtree:true
+      });
+    });
+  });
+})();
+</script>
 </body></html>
