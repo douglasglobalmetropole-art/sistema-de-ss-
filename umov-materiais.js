@@ -86,15 +86,13 @@ async function consultarSequenciasFotos(pool, numeroSS) {
       JOIN u45468.dbout_task d
         ON d.tsk_id = t.tsk_id
       WHERE l.loc_integrationid LIKE $1
-        AND l.loc_description LIKE $2
         AND d.tss_id = 50
       ORDER BY l.loc_integrationid DESC,
                d.tsk_lastexecutiondatehour DESC NULLS LAST
       LIMIT 200
     `,
     values: [
-      prefixo + '-%',
-      'SS: ' + prefixo + '-%'
+      prefixo + '-%'
     ],
     query_timeout: 12000
   });
