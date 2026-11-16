@@ -85,15 +85,16 @@ async function rejeicaoJson(url,token){
  const txt=await r.text();if(!txt)return null;
  try{return JSON.parse(txt)}catch{throw Error('Resposta de rejeição fora do formato JSON')}
 }
-function rejeicaoLista(data){return Array.isArray(data)?data:Array.isArray(data?.content)?data.content:Array.isArray(data?.data)?data.data:[]}
+function rejeicaoLista(data){return Array.isArray(data)?data:Array.isArray(data?.dados)?data.dados:Array.isArray(data?.content)?data.content:Array.isArray(data?.data)?data.data:[]}
 function rejeicaoValida(data){
  if(data===false||data?.valido===false||data?.valida===false||data?.valid===false||data?.sucesso===false)return false;
+ if(typeof data?.mensagem==='string'&&/nao permite rejeicao|não permite rejeição|fase da ss/i.test(data.mensagem.normalize('NFD').replace(/[\u0300-\u036f]/g,'')))return false;
  return true;
 }
 async function consultarRejeicao(token,numero){
  const parts=rejeicaoPartes(numero),base=REJ_BASE+'/rejeicaoSolicitacaoServico';
  const valida=await rejeicaoJson(base+'/validaSS/'+parts.compacto,token);
- if(!rejeicaoValida(valida))throw Error('SISCOM informa que esta SS não pode ser rejeitada');
+ if(!rejeicaoValida(valida))throw Error('Rejeição não permitida pelo SISCOM: '+String(valida?.mensagem||'SS não elegível para rejeição').slice(0,250));
  const qs=new URLSearchParams({page:'0',size:'25',sort:'ssFormatada,ASC',listCodigoSS:parts.compacto});
  const registros=rejeicaoLista(await rejeicaoJson(base+'?'+qs,token));
  const row=registros.find(x=>String(x?.ssFormatada||'').trim()===numero);
