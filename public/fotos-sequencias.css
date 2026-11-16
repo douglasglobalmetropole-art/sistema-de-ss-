@@ -1,87 +1,138 @@
-/* CGM_FOTOS_FIXO_V7 - um centro original e dois paineis laterais independentes */
-#siscomBaixaModal {
-  --cgm-form-width: clamp(780px, calc(100vw - 590px), 1060px);
-}
+/* CGM_FOTOS_GRID_V8 - 3 independent columns, no overlays */
 #siscomBaixaModal.open {
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  overflow: hidden !important;
+  display: grid !important;
+  grid-template-columns: minmax(240px,300px) minmax(790px,1fr) minmax(260px,320px) !important;
+  grid-template-rows: minmax(0,1fr) !important;
+  gap: 10px !important;
   padding: 8px !important;
+  box-sizing: border-box !important;
+  align-items: stretch !important;
+  justify-items: stretch !important;
+  justify-content: stretch !important;
+  align-content: stretch !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+#siscomBaixaModal > #cgmFotosAnteriorLateral {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
 }
 #siscomBaixaModal > .sbShell {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
   box-sizing: border-box !important;
-  flex: 0 0 var(--cgm-form-width) !important;
-  width: var(--cgm-form-width) !important;
+  width: 100% !important;
   min-width: 0 !important;
   max-width: none !important;
   height: calc(100dvh - 16px) !important;
   max-height: calc(100dvh - 16px) !important;
+  min-height: 0 !important;
   margin: 0 !important;
+  padding: 0 !important;
   position: relative !important;
   inset: auto !important;
   transform: none !important;
   z-index: 2 !important;
 }
-#siscomBaixaModal .sbColumns {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) !important;
-  gap: 14px !important;
+#siscomBaixaModal > #cgmFotosAtualLateral {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
 }
-#siscomBaixaModal .sbColumns > .sbPane { min-width: 0 !important; }
 #siscomBaixaModal > .cgmFotosLateral {
-  position: absolute !important;
-  top: 8px !important;
-  bottom: 8px !important;
+  position: relative !important;
+  inset: auto !important;
+  transform: none !important;
   box-sizing: border-box !important;
-  width: calc((100vw - var(--cgm-form-width) - 44px) / 2) !important;
+  width: 100% !important;
   min-width: 0 !important;
   max-width: none !important;
-  height: auto !important;
+  height: calc(100dvh - 16px) !important;
   max-height: calc(100dvh - 16px) !important;
+  min-height: 0 !important;
   margin: 0 !important;
-  border: 1px solid #bfd5e8 !important;
-  border-radius: 10px !important;
-  background: #fff !important;
+  border: 1px solid #bfd5e8;
+  border-radius: 10px;
+  background: #fff;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
   visibility: visible !important;
   opacity: 1 !important;
-  box-shadow: 0 8px 24px #001c3b30 !important;
+  box-shadow: 0 8px 24px #001c3b30;
   z-index: 3 !important;
 }
-#siscomBaixaModal > #cgmFotosAnteriorLateral { left: 8px !important; right: auto !important; }
-#siscomBaixaModal > #cgmFotosAtualLateral { right: 8px !important; left: auto !important; }
-#siscomBaixaModal > .cgmFotosLateral[hidden] { display: none !important; }
+#siscomBaixaModal > .cgmFotosLateral[hidden] {
+  display: none !important;
+}
+#siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) {
+  grid-template-columns: minmax(790px,1fr) minmax(260px,320px) !important;
+}
+#siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) > .sbShell {
+  grid-column: 1 !important;
+}
+#siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) > #cgmFotosAtualLateral {
+  grid-column: 2 !important;
+}
+#siscomBaixaModal .sbColumns {
+  display: grid !important;
+  grid-template-columns: minmax(0,1.1fr) minmax(0,1fr) !important;
+  gap: 14px !important;
+}
+#siscomBaixaModal .sbColumns > .sbPane { min-width: 0 !important; }
 #siscomBaixaModal > .cgmFotosLateral h4 {
   flex: 0 0 auto;
   margin: 0 !important;
   padding: 13px 12px !important;
-  background: linear-gradient(95deg, #07529a, #077ac9) !important;
+  background: linear-gradient(95deg,#07529a,#077ac9);
   color: white !important;
   font-size: 14px !important;
   line-height: 1.3 !important;
 }
-#siscomBaixaModal .cgmFotosSeletores {padding: 10px 12px 4px;flex:0 0 auto;}
+#siscomBaixaModal .cgmFotosSeletores {
+  padding: 10px 12px 4px;
+  flex: 0 0 auto;
+}
 #siscomBaixaModal .cgmFotosSeletores label {
-  display:block; font-size:12px; font-weight:600; color:#174e82; margin:5px 0;
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #174e82;
+  margin: 5px 0;
 }
-#siscomBaixaModal .cgmFotosSeletores label[hidden] {display:none!important;}
+#siscomBaixaModal .cgmFotosSeletores label[hidden],
+#siscomBaixaModal .cgmFotosSeletores select[hidden] {
+  display: none !important;
+}
 #siscomBaixaModal .cgmFotosSeletores select {
-  display:block; width:100%; min-height:36px; padding:6px;
-  color:#123c65; border:1px solid #b9d0e6; border-radius:5px; background:#fff;
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px;
+  color: #123c65;
+  border: 1px solid #b9d0e6;
+  border-radius: 5px;
+  background: #fff;
 }
-#siscomBaixaModal .cgmFotosSeletores select[hidden] {display:none!important;}
 #siscomBaixaModal .cgmNumeroSS {
-  padding:8px 12px; margin:0; color:#14518b; background:#edf5fc; font-weight:700; font-size:13px;
+  padding: 8px 12px;
+  margin: 0;
+  color: #14518b;
+  background: #edf5fc;
+  font-weight: 700;
+  font-size: 13px;
 }
 #siscomBaixaModal .cgmFotosStatus {
   flex: 0 0 auto;
-  padding: 5px 12px; margin: 0 !important;
-  color: #315d83; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere;
+  padding: 5px 12px;
+  margin: 0 !important;
+  color: #315d83;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
-#siscomBaixaModal .cgmFotosStatus:empty {display:none!important;}
+#siscomBaixaModal .cgmFotosStatus:empty {
+  display: none !important;
+}
 #siscomBaixaModal .cgmFotosMiniaturas {
   flex: 1 1 auto !important;
   min-height: 0 !important;
@@ -95,41 +146,94 @@
 #siscomBaixaModal .cgmFotosMiniaturas figure {
   flex: 0 0 auto !important;
   margin: 0 !important;
-  background: #fff; border:1px solid #d1e1ef; border-radius:7px; overflow:hidden;
+  border: 1px solid #d1e1ef;
+  border-radius: 7px;
+  background: white;
+  overflow: hidden;
 }
 #siscomBaixaModal .cgmFotosMiniaturas img {
-  display:block!important; width:100%!important; height:170px!important;
-  object-fit:contain!important; background:#eef4fa!important; cursor:zoom-in!important;
+  display: block !important;
+  width: 100% !important;
+  height: 170px !important;
+  object-fit: contain !important;
+  background: #eef4fa !important;
+  cursor: zoom-in !important;
 }
 #siscomBaixaModal .cgmFotosMiniaturas figcaption {
-  padding:5px; font-size:12px; text-align:center; color:#14518b;
+  padding: 5px;
+  color: #14518b;
+  font-size: 12px;
+  text-align: center;
 }
 #siscomBaixaModal .cgmFotosLateral footer {
-  display:flex!important; justify-content:space-between!important; align-items:center!important;
-  padding:9px 11px!important; flex:0 0 auto!important; margin-top:auto!important;
-  border-top:1px solid #d3e3f0!important; background:#fff!important;
-  color:#164d80!important; font-size:12px!important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex: 0 0 auto !important;
+  padding: 9px 11px !important;
+  margin-top: auto !important;
+  border-top: 1px solid #d3e3f0 !important;
+  background: #fff !important;
+  color: #164d80 !important;
+  font-size: 12px !important;
 }
 #siscomBaixaModal .cgmFotosLateral footer button {
-  padding:7px 11px!important; border:1px solid #b9d1e5!important; border-radius:5px!important;
-  background:#f1f7fd!important; color:#095194!important; cursor:pointer!important;
+  padding: 7px 11px !important;
+  border: 1px solid #b9d1e5 !important;
+  border-radius: 5px !important;
+  background: #f1f7fd !important;
+  color: #095194 !important;
+  cursor: pointer !important;
 }
-#cgmFotosZoomV7[hidden] {display:none!important;}
+#cgmFotosZoomV7[hidden] { display: none !important; }
 #cgmFotosZoomV7 {
-  position:fixed!important; inset:0!important; z-index:300000!important;
-  background:rgba(1,12,25,.95)!important; display:flex!important;
-  justify-content:center!important; align-items:center!important; gap:16px!important;
-  padding:45px 15px!important; box-sizing:border-box!important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 300000 !important;
+  background: rgba(1,12,25,.95) !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 45px 15px !important;
+  box-sizing: border-box !important;
 }
-#cgmFotosZoomV7 figure {margin:0;display:flex;flex-direction:column;align-items:center;max-width:calc(100vw - 145px);max-height:100%;}
-#cgmFotosZoomV7 figure img {max-width:100%;max-height:calc(100dvh - 120px);object-fit:contain;}
-#cgmFotosZoomV7 figcaption {color:#fff;text-align:center;padding:10px;}
-#cgmFotosZoomV7 button {border:0;background:transparent;color:#fff;cursor:pointer;font-size:50px;}
-#cgmFotosZoomV7 .cgmZoomFechar {position:absolute;right:18px;top:7px;font-size:36px;}
-@media(max-width:1230px){
-  #siscomBaixaModal {--cgm-form-width:780px;}
-  #siscomBaixaModal.open {justify-content:flex-start!important;overflow-x:auto!important;overflow-y:hidden!important;}
-  #siscomBaixaModal > .sbShell {margin-left:235px!important;flex:0 0 780px!important;}
-  #siscomBaixaModal > #cgmFotosAnteriorLateral {width:220px!important;left:8px!important;}
-  #siscomBaixaModal > #cgmFotosAtualLateral {width:260px!important;left:1031px!important;right:auto!important;}
+#cgmFotosZoomV7 figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: calc(100vw - 145px);
+  max-height: 100%;
+}
+#cgmFotosZoomV7 figure img {
+  max-width: 100%;
+  max-height: calc(100dvh - 120px);
+  object-fit: contain;
+}
+#cgmFotosZoomV7 figcaption {
+  color: white;
+  text-align: center;
+  padding: 10px;
+}
+#cgmFotosZoomV7 button {
+  border: 0;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  font-size: 50px;
+}
+#cgmFotosZoomV7 .cgmZoomFechar {
+  position: absolute;
+  right: 18px;
+  top: 7px;
+  font-size: 36px;
+}
+@media(max-width:1365px) {
+  #siscomBaixaModal.open {
+    justify-content: start !important;
+  }
+  #siscomBaixaModal.open:has(> #cgmFotosAnteriorLateral[hidden]) {
+    grid-template-columns: minmax(790px,1fr) minmax(260px,320px) !important;
+  }
 }

@@ -1870,11 +1870,19 @@ const { consultarMateriais } = require('./umov-materiais');
           sequencias
         });
       } catch (error) {
-        console.error('Consulta sequencias uMov:', error.code || error.message);
+        const codigoBanco = String(error.code || '');
+        console.error('Consulta sequencias uMov:', codigoBanco || error.message);
+        const mensagemBanco = codigoBanco === '57014'
+          ? 'Consulta de sequencias uMov excedeu o tempo limite.'
+          : codigoBanco === '42P01'
+          ? 'Tabela de sequencias uMov indisponivel.'
+          : codigoBanco === '42501'
+          ? 'Sem permissao de leitura no PostgreSQL uMov.'
+          : 'Falha ao consultar sequencias anteriores no uMov.';
 
         return res.status(502).json({
           ok: false,
-          error: 'Falha ao consultar sequencias anteriores no uMov.'
+          code: codigoBanco || 'FALHA_CONSULTA', error: mensagemBanco
         });
       }
     });
