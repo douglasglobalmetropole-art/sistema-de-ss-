@@ -46,9 +46,12 @@ function statement(params, ids){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
  const base=[];
- if(!filters.ss&&isoDate(inicio)&&isoDate(fim)){
-  const col='t.tsk_insertdatehour';
-  base.push(`${col} >= ${add(inicio)}::date`,`${col} < (${add(fim)}::date + INTERVAL '1 day')`);
+ if(tela==='baixar'?(isoDate(inicio)||isoDate(fim)):(!filters.ss&&isoDate(inicio)&&isoDate(fim))){
+  const col=tela==='baixar'?'t.tsk_lastexecutiondatehour':'t.tsk_insertdatehour';
+  const dataInicial=tela==='baixar'?(inicio||fim):inicio;
+   const dataFinal=tela==='baixar'?(fim||inicio):fim;
+   if(tela==='baixar'&&dataInicial>dataFinal)throw Object.assign(new Error('Data Inicio maior que Data Fim.'),{status:400});
+   base.push(`${col} >= ${add(dataInicial)}::date`,`${col} < (${add(dataFinal)}::date + INTERVAL '1 day')`);
  }
  const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'"};
  if(conditions[tela])base.push(conditions[tela]);

@@ -1806,14 +1806,14 @@ function setScreen(screen,btn){
   const grupo=ini.closest('label')||ini.parentElement;
 
   if(grupo && !grupo.contains(fim)){
-    grupo.hidden=screen==='baixar';
-    grupo.style.display=screen==='baixar'?'none':'';
+    grupo.hidden=false;
+    grupo.style.display='';
   }
 
   const labelIni=document.querySelector('label[for="dateIni"]');
   if(labelIni){
-    labelIni.hidden=screen==='baixar';
-    labelIni.style.display=screen==='baixar'?'none':'';
+    labelIni.hidden=false;
+    labelIni.style.display='';
   }
 
   if(screen==='baixar'){
@@ -2002,9 +2002,7 @@ function reconciliarEquipes(rows){
 }
 let consultaListaAtual=null,numeroConsultaLista=0;
 async function load(forcarAtualizacao=false){
-  if(currentScreen==='baixar'){
-    document.getElementById('dateIni').value='';
-  }
+
   if(window.__buscaSSAtiva)return;
   if(consultaListaAtual)consultaListaAtual.abort();
   consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
@@ -2014,7 +2012,18 @@ async function load(forcarAtualizacao=false){
     const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),municipios:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!(somenteEquipe&&currentScreen!=='recepcao');if(forcarAtualizacao)p.set('_refresh',String(Date.now()));if(ssBusca&&ssBusca.length<4){$('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return;}const direta=ssBusca.length>=4&&filtros.length===1;const caminho=direta?'/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page}):(global?'/api/pesquisa-global?':'/api/recepcao?')+p;let r=await fetch(caminho,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
     if(direta&&filtros.length>1){j.rows=(j.rows||[]).filter(item=>filtros.every(f=>f.dataset.col==='ss'||String(f.dataset.col==='data_finalizacao'?(item.periodo_execucao||item.data_finalizacao||''):(item[f.dataset.col]??'')).toLocaleLowerCase('pt-BR').includes(f.value.trim().toLocaleLowerCase('pt-BR'))));j.total=j.rows.length;}
-    raw=reconciliarEquipes(j.rows||[]);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();if(direta&&!raw.length&&j.encontrados_fora_da_aba)$('countInfo').textContent='SS localizada no uMov, mas não pertence à aba '+currentScreen+'.';else if(direta&&j.aviso)$('countInfo').textContent=j.aviso;
+    raw=reconciliarEquipes(
+  (j.rows||[]).filter(item=>{
+    if(currentScreen!=='baixar')return true;
+
+    const situacao=norm(item.situacao_campo);
+    const status=norm(item.status_integracao);
+
+    return situacao==='retornada de campo'
+      && status===''
+      && !!item.ultima_atividade;
+  })
+);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();if(direta&&!raw.length&&j.encontrados_fora_da_aba)$('countInfo').textContent='SS localizada no uMov, mas não pertence à aba '+currentScreen+'.';else if(direta&&j.aviso)$('countInfo').textContent=j.aviso;
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
 }
 let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},500)}));
