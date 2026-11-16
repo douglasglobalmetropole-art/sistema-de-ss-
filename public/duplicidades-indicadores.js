@@ -194,6 +194,12 @@
       return `
         <tr>
           <td><strong>${safe(r.ss)}</strong></td>
+<td class="dgm-rua">${safe(
+  [
+    r.logradouro || r.rua || r.endereco,
+    r.numero
+  ].filter(v => v !== null && v !== undefined && String(v).trim() !== '').join(', ') || 'Não informado'
+)}</td>
           <td><span class="dgm-tag ${classe}">
             ${isDuplicata ? 'DUPLICATA' : categoria.toUpperCase()}
           </span></td>
@@ -229,6 +235,7 @@
             <thead>
               <tr>
                 <th>SS relacionada</th>
+                <th>RUA</th>
                 <th>Classificação</th>
                 <th>Matrícula</th>
                 <th>Hidrômetro</th>
@@ -437,6 +444,22 @@
     }
   `;
   document.head.appendChild(estiloTextoIndicadores);
+  const estiloRuaDuplicidades = document.createElement('style');
+  estiloRuaDuplicidades.textContent = `
+    .dgm-table .dgm-rua {
+      min-width: 220px;
+      max-width: 340px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      text-align: left;
+      line-height: 1.4;
+      font-size: 11px;
+    }
+    .dgm-scroll {
+      overflow-x: auto;
+    }
+  `;
+  document.head.appendChild(estiloRuaDuplicidades);
   window.__globalDupIndicatorInstalled = true;
   window.__atualizarIndicadoresDuplicidade = atualizar;
 
