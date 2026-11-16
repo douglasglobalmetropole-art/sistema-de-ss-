@@ -2019,9 +2019,7 @@ async function load(forcarAtualizacao=false){
     const situacao=norm(item.situacao_campo);
     const status=norm(item.status_integracao);
 
-    return situacao==='retornada de campo'
-      && status===''
-      && !!item.ultima_atividade;
+    return status==='';
   })
 );window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();if(direta&&!raw.length&&j.encontrados_fora_da_aba)$('countInfo').textContent='SS localizada no uMov, mas não pertence à aba '+currentScreen+'.';else if(direta&&j.aviso)$('countInfo').textContent=j.aviso;
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
