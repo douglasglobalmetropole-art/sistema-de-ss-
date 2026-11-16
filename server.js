@@ -247,7 +247,7 @@ if(criarComplementarDivisao){
 }
 const materiaisDivisao =
   (req.method==='GET' &&
-   (rota==='/api/materiais' || rota==='/api/itens')) ||
+   (rota==='/api/materiais' || rota==='/api/itens' || rota==='/api/umov/sequencias-fotos')) ||
   (req.method==='POST' &&
    (rota==='/api/itens' || rota==='/api/itens/lote'));
 
@@ -1834,6 +1834,7 @@ const { consultarMateriais } = require('./umov-materiais');
 
     // CGM_UMOV_SEQUENCIAS_FOTOS_V1
     app.get('/api/umov/sequencias-fotos', async (req, res) => {
+      if (!siscomIndividual(req)) return res.status(401).json({ok:false,error:'Login SISCOM necessario.'});
       res.set('Cache-Control', 'no-store');
 
       try {
