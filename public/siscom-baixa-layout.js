@@ -226,6 +226,74 @@
    obs.value=novo;obs.dispatchEvent(new Event('input',{bubbles:true}));
    reviewMsg('Resumo adicionado às observações. Confira na aba Dados da baixa antes de confirmar.');
   };
+  // Sugestoes do texto uMov ja exibido na tela. Nao grava nem converte unidades.
+  const umovBox=node('section','sbV3Umov');umovBox.style.cssText='margin:12px 0;padding:12px;border:1px solid #b6d2ed;border-radius:8px;background:#f5faff';
+  const umovTitle=node('h4','sbV3Subheading','Materiais informados pela equipe (uMov)');
+  const umovHelp=node('p','sbV3Note','Leitura do campo Materiais lançados do retorno da equipe. Sugestões não são itens gravados. Confira código, unidade e quantidade no catálogo antes de adicionar.');
+  const umovOriginal=node('div','sbV3Note');umovOriginal.style.cssText='white-space:pre-wrap;margin:8px 0';
+  const umovList=node('div');const umovBtn=node('button','btn','↻ Ler materiais do retorno uMov');umovBtn.type='button';
+  const umovMsg=node('p','sbV3MatStatus');umovMsg.setAttribute('role','status');
+  umovBox.append(umovTitle,umovHelp,umovBtn,umovOriginal,umovList,umovMsg);
+  material.insertBefore(umovBox,materialHead);
+  const normUmov=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+  const umovSource=()=>{
+   const area=id('sbResumoSS')?.closest('.sbShell')||root;
+   const title=[...area.querySelectorAll('dt,th,td,div,span,strong,b')].find(e=>e.children.length===0&&/^materiais lancados\s*:?$/i.test(normUmov(e.textContent)));
+   if(!title)return '';
+   const parent=title.closest('tr,dl,.sbSummaryRow,.sbReturnRow')||title.parentElement;
+   if(!parent)return '';
+   let value='';
+   if(title.tagName==='DT')value=title.nextElementSibling?.textContent||'';
+   else if(title.tagName==='TH'||title.tagName==='TD')value=title.nextElementSibling?.textContent||'';
+   else {
+    const siblings=[...parent.children].filter(e=>e!==title);
+    value=siblings.map(e=>e.textContent||'').join(' ').trim();
+    if(!value&&parent.nextElementSibling)value=parent.nextElementSibling.textContent||'';
+   }
+   return value.trim();
+  };
+  function parseUmov(raw){
+   // Nao inferir quantidade sem numero; manter textos nao reconhecidos para revisao.
+   const segments=String(raw||'').replace(/\s+([,;])\s*/g,'$1 ').split(/\s*[;,\n]+\s*|\s+\+\s+/).map(x=>x.trim()).filter(Boolean);
+   const out=[];
+   for(const seg of segments){
+    const match=seg.match(/^(\d+(?:[.,]\d+)?)\s*(cm|mm|m|metros?|un(?:idades?)?|p[cç]s?|pe[cç]as?|kg|l|litros?)?\s+(?:de\s+)?(.+)$/i);
+    if(match){let unit=match[2]||'UN';unit=/^(?:un|p[cç]s?|pe[cç]as?)/i.test(unit)?'UN':unit.toLowerCase();out.push({texto:seg,quantidade:Number(match[1].replace(',','.')),unidade:unit,descricao:match[3].trim(),valido:true});}
+    else out.push({texto:seg,quantidade:null,unidade:'',descricao:seg,valido:false});
+   }
+   return out;
+  }
+  function suggestUmov(){
+   const ss=ssAtual();umovList.replaceChildren();
+   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){umovMsg.textContent='Selecione uma SS válida.';return;}
+   const raw=umovSource();umovOriginal.textContent=raw?'Texto original da equipe: '+raw:'Campo Materiais lançados ainda não localizado no retorno exibido. Abra Dados da baixa e confira o carregamento do uMov.';
+   if(!raw){umovMsg.textContent='Nenhuma sugestão criada. Nenhum item será lançado automaticamente.';return;}
+   const suggestions=parseUmov(raw);
+   if(!suggestions.length){umovMsg.textContent='O retorno não contém materiais interpretáveis.';return;}
+   const table=node('table','sbV3Table');table.style.width='100%';const thead=node('thead'),head=node('tr');
+   for(const label of ['Texto informado','Qtd.','UN','Catálogo sugerido','Ação'])head.append(node('th','',label));thead.append(head);table.append(thead);
+   const body=node('tbody');
+   for(const item of suggestions){
+    const tr=node('tr');const cell=t=>{const td=node('td');td.textContent=t;tr.append(td);return td;};
+    cell(item.descricao);cell(item.quantidade==null?'Revisar':String(item.quantidade));cell(item.unidade||'Revisar');
+    const matches=materials.filter(m=>normUmov(m.nome)===normUmov(item.descricao));
+    const suggested=matches.length===1?matches[0]:null;
+    cell(suggested?String(suggested.nome):'Localizar manualmente');
+    const td=cell('');const btn=node('button','btn sbV3Small','Usar no formulário');btn.type='button';
+    btn.onclick=()=>{
+     if(ssAtual()!==ss){umovMsg.textContent='A SS mudou. Releia o retorno antes de continuar.';return;}
+     matName.value=suggested?String(suggested.nome):item.descricao;
+     matUnit.value=suggested?String(suggested.unidade||item.unidade):item.unidade;
+     matQty.value=item.quantidade!=null&&item.quantidade>0?String(item.quantidade):'';
+     matValue.value='';
+     umovMsg.textContent=suggested?'Sugestão copiada. Confira unidade, quantidade e valor antes de Adicionar à lista.':'Descrição copiada. Selecione o material cadastrado correspondente antes de Adicionar à lista.';
+     matName.focus();
+    };td.append(btn);body.append(tr);
+   }
+   table.append(body);umovList.append(table);
+   umovMsg.textContent=suggestions.length+' sugestão(ões) do uMov. Nenhum item foi salvo automaticamente.';
+  }
+  umovBtn.onclick=suggestUmov;
   let materials=[],loaded=false,currentSS='',draft=[],loading=false;
   const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
   const matMessage=(msg,err=false)=>{matStatus.textContent=msg;matStatus.classList.toggle('error',err);};
