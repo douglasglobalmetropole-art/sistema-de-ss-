@@ -417,6 +417,19 @@ if(materiaisDivisao && rota!=='/api/materiais'){
     });
    });
   }
+  // CGM_FOTOS_SEPARADAS_V3: escopo de divisao na consulta de sequencias.
+  if(req.method==='GET' && rota==='/api/umov/sequencias-fotos'){
+    if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'FaÃ§a login individual no SISCOM.'});
+    const numero=String(req.query?.ss||'').trim();
+    if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({ok:false,error:'SS invalida.'});
+    const schema=config.lote1?'u46915':'u45468';
+    return pool.query({text:`SELECT l.loc_city AS cidade FROM ${schema}.local l WHERE l.loc_integrationid=$1 LIMIT 1`,values:[numero],query_timeout:7000})
+      .then(q=>{
+        const cidade=normalizarCidade(q.rows[0]?.cidade||'');
+        if(!cidade||!config.cidades.map(normalizarCidade).includes(cidade))return res.status(403).json({ok:false,error:'SS nao pertence a divisao.'});
+        return next();
+      }).catch(e=>{console.error('Sequencias fotos divisao:',e.message);return res.status(503).json({ok:false,error:'Falha ao validar divisao.'});});
+  }
   // FOTOS_DIVISAO_CACHE_2026
   // Consulta somente leitura, restrita a tarefa, SS e cidade da divisao.
   if(req.method==='POST' && rota==='/api/relatorio-fotos'){
@@ -540,7 +553,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !(req.method==='GET' && rota==='/api/umov/sequencias-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
