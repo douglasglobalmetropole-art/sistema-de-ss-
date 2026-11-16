@@ -1548,6 +1548,15 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
   width: 165px !important;
 }
 </style>
+
+<style>
+/* GLOBAL_SS_TABELA_HIDDEN_FIX_V5 */
+.tableScroll table th[hidden],
+.tableScroll table td[hidden] {
+  display: none !important;
+}
+</style>
+
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
@@ -4275,43 +4284,9 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 
 
 
-<script>
-/* GLOBAL_SS_COLUNAS_CORRIGIDAS_V2 */
-(function(){
-  function ajustar(){
-    const tela=typeof currentScreen!=='undefined'?currentScreen:'recepcao';
 
-    const configuracao={
-      dupIndicatorHeader: tela==='recepcao',
-      dupIndicatorFilter: tela==='recepcao',
-      receptionTeamHeader: tela==='recepcao',
-      receptionTeamFilterCell: tela==='recepcao',
-      teamHeader: ['baixar','encerradas','tramitacao'].includes(tela),
-      teamFilterCell: ['baixar','encerradas','tramitacao'].includes(tela),
-      integrationHeader: ['encerradas','tramitacao'].includes(tela),
-      integrationFilterCell: ['encerradas','tramitacao'].includes(tela)
-    };
 
-    Object.entries(configuracao).forEach(([id,visivel])=>{
-      const el=document.getElementById(id);
-      if(el)el.hidden=!visivel;
-    });
-  }
 
-  function iniciar(){
-    ajustar();
 
-    document.querySelectorAll('.tab[data-screen]').forEach(tab=>{
-      tab.addEventListener('click',()=>setTimeout(ajustar,0));
-    });
-  }
-
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',iniciar);
-  }else{
-    iniciar();
-  }
-})();
-</script>
 
 </body></html>
