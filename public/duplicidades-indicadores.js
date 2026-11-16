@@ -52,7 +52,7 @@
     }
     #dupGlobalModal.open {display:flex}
     #dupGlobalModal .dgm-box {
-      width:min(900px,96vw);max-height:88vh;overflow:auto;
+      width:94vw;max-width:1800px;max-height:90vh;overflow:auto;
       background:#fff;border-radius:12px;
       box-shadow:0 15px 55px #0005;color:#163c61;
     }
@@ -76,7 +76,7 @@
       margin:19px 0 9px;font-weight:bold;color:#07599a;
     }
     #dupGlobalModal .dgm-table {
-      width:100%;border-collapse:collapse;min-width:620px;
+      width:100%;border-collapse:collapse;min-width:1350px;
     }
     #dupGlobalModal .dgm-table th {
       background:#eaf2fa;color:#174a78;text-align:left;
@@ -185,6 +185,36 @@
       }
     });
 
+
+  // CGM_DUPLICIDADES_NATIVO_V2
+  function dgmStatusIntegracao(r) {
+    const valor = r.status_integracao ??
+      r.statusIntegracao ??
+      r.status_dashboard ??
+      r.statusDashboard ??
+      r.status_siscom ??
+      r.statusSiscom;
+
+    if (valor == null || String(valor).trim() === '') {
+      return 'Não informado';
+    }
+
+    return String(valor);
+  }
+
+  function dgmSituacaoCampo(r) {
+    const valor = r.situacao_campo ??
+      r.situacaoCampo ??
+      r.status_campo ??
+      r.statusCampo;
+
+    if (valor == null || String(valor).trim() === '') {
+      return 'Não informado';
+    }
+
+    return String(valor);
+  }
+
     const lista = relacionados.map(r => {
       const isDuplicata = duplicataSet.has(ssVal(r));
       const categoria = r.categoria || 'proximidade';
@@ -207,6 +237,8 @@
           <td>${safe(r.hidrometro || '—')}</td>
           <td>${safe(r.pontos ?? '—')}</td>
           <td>${safe((r.motivos || []).join(' · ') || 'Conferir dados')}</td>
+          <td class="dgm-status-integracao">${safe(dgmStatusIntegracao(r))}</td>
+          <td class="dgm-status-campo">${safe(dgmSituacaoCampo(r))}</td>
         </tr>`;
     }).join('');
 
@@ -241,6 +273,8 @@
                 <th>Hidrômetro</th>
                 <th>Pontos</th>
                 <th>Critérios encontrados</th>
+                <th>Status da Integração</th>
+                <th>Situação de Campo</th>
               </tr>
             </thead>
             <tbody>${lista}</tbody>
@@ -268,14 +302,14 @@
     content.innerHTML = '<p>Consultando índice global de duplicidades...</p>';
 
     const dado = cache.get(ss);
-    if (dado && Date.now() - dado.tempo < CACHE_MS) {
+    if (dado && dado.detalhes === true && Date.now() - dado.tempo < CACHE_MS) {
       mostrar(dado.resposta);
       return;
     }
 
     try {
       const r = await fetch(
-        '/api/duplicidades/consulta?ss=' + encodeURIComponent(ss),
+        '/api/duplicidades/consulta?detalhes=1&ss=' + encodeURIComponent(ss),
         {credentials:'same-origin',cache:'no-store'}
       );
       const j = await r.json();
@@ -284,7 +318,7 @@
         throw new Error(j.erro || 'Falha na consulta');
       }
 
-      cache.set(ss,{resposta:j,tempo:Date.now()});
+      cache.set(ss,{resposta:j,detalhes:true,tempo:Date.now()});
       mostrar(j);
     } catch (e) {
       content.innerHTML = `
@@ -314,7 +348,7 @@
         );
         const j = await r.json();
         if (r.ok && j.ok) {
-          cache.set(ss,{resposta:j,tempo:Date.now()});
+          if (!cache.get(ss)?.detalhes) cache.set(ss,{resposta:j,detalhes:false,tempo:Date.now()});
         } else {
           cache.set(ss,{resposta:null,erro:true,tempo:Date.now()});
         }

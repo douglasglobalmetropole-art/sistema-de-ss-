@@ -19,7 +19,7 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
  if(typeof autorizado!=='function'||typeof podeEscrever!=='function'||typeof origemOk!=='function'||typeof escreverTag!=='function')
   throw Error('Configuracao de autorizacao da Matriz incompleta.');
  const caminho=(col,val,limit)=>`${TABELA}?select=${COL}&${col}=eq.${encodeURIComponent(val)}&order=tsk_id.desc&limit=${limit}`;
- async function buscarMatriz(ss,req){
+ async function buscarMatriz(ss,req,comDetalhes=false){
    const candidatas=arr(await rest(`${TABELA}?select=${COL}&ss=eq.${encodeURIComponent(ss)}&order=tsk_id.desc&limit=100`));
    const fontePreferida=fonteReq(req);
    let base=candidatas.find(x=>(!fontePreferida||x.origem===fontePreferida)&&cidadeOk(x.cidade,req));
@@ -62,6 +62,67 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
    }
    const todos=[...porSS.values()].map(r=>({...r,...comparar(base,r)})).filter(r=>r.pontos>=3)
     .sort((a,b)=>b.pontos-a.pontos||Number(b.tsk_id)-Number(a.tsk_id));
+
+    // CGM_DUPLICIDADES_STATUS_REAIS_V3
+    // Enriquecimento somente de leitura, separado por origem.
+    const enriquecerStatus = async registros => {
+      const porFonte = new Map();
+
+      for (const registro of registros) {
+        if (!['umov', 'umov_lote1'].includes(registro.origem)) continue;
+        const id = Number(registro.tsk_id);
+        if (!Number.isSafeInteger(id) || id <= 0) continue;
+
+        if (!porFonte.has(registro.origem)) {
+          porFonte.set(registro.origem, []);
+        }
+        porFonte.get(registro.origem).push(registro);
+      }
+
+      await Promise.all([...porFonte.entries()].map(async ([fonte, lista]) => {
+        const {db, schema} = fonteBanco(fonte);
+        if (!db) return;
+
+        const ids = [...new Set(lista.map(r => Number(r.tsk_id)))];
+
+        try {
+          const consulta = await db.query({
+            text: `
+              SELECT t.tsk_id,
+                     t.tsk_situation AS situacao_campo,
+                     d.e_situacao AS status_integracao
+              FROM ${schema}.task t
+              LEFT JOIN ${schema}.dbout_task d
+                ON d.tsk_id = t.tsk_id
+              WHERE t.tsk_id = ANY($1::bigint[])
+            `,
+            values: [ids],
+            query_timeout: 7000
+          });
+
+          const dados = new Map(
+            consulta.rows.map(r => [String(r.tsk_id), r])
+          );
+
+          for (const registro of lista) {
+            const atual = dados.get(String(registro.tsk_id));
+            if (!atual) continue;
+
+            registro.situacao_campo = atual.situacao_campo || '';
+            registro.status_integracao = atual.status_integracao || '';
+          }
+        } catch (erro) {
+          console.warn(
+            '[duplicidades] status indisponivel para',
+            fonte,
+            erro.code || erro.message
+          );
+        }
+      }));
+    };
+
+    if (comDetalhes) await enriquecerStatus([base, ...todos]);
+
    const grupo=definirMatriz(base,todos);
    const estados=arr(await rest('ss_duplicidades_controle?select=fonte,varredura_concluida,total_lidos,atualizado_em&fonte=in.(umov,umov_lote1)'));
    const porFonte=Object.fromEntries(estados.map(x=>[x.fonte,x]));
@@ -79,7 +140,7 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
    if(!SS_RE.test(ss))return res.status(400).json({ok:false,erro:'Numero da SS invalido.'});
    const inicio=Date.now();
    try{
-     const dados=await buscarMatriz(ss,req);
+     const dados=await buscarMatriz(ss,req,req.query.detalhes==='1');
      if(!dados)return res.status(404).json({ok:false,codigo:'nao_indexada',erro:'SS nao localizada no indice ou uMov.'});
      const {alvo,origem,resultados,grupo,grupoSeguro,cobertura,truncado}=dados;
      res.json({ok:true,alvo,origem_alvo:origem,resultados,cobertura,
