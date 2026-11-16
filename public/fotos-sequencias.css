@@ -190,3 +190,8 @@
   object-fit: cover !important;
   object-position: center !important;
 }
+
+/* CGM_FOTOS_ALTURA_V13: 780px x 1.20 = 936px; respeita altura da janela */
+#siscomBaixaModal {
+  --cgm-altura-modal: min(936px, calc(100dvh - 16px));
+}
