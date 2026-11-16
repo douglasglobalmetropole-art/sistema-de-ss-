@@ -387,7 +387,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = classe;
-      btn.textContent = rotulo;
+      btn.textContent = '● ' + rotulo;
       btn.title = titulo;
       btn.setAttribute('aria-label',titulo);
 
@@ -408,6 +408,35 @@
     });
   }
 
+  const estiloTextoIndicadores = document.createElement('style');
+  estiloTextoIndicadores.textContent = `
+    #rows .dup-indicator-cell {
+      min-width: 155px !important;
+      width: 155px !important;
+      text-align: center !important;
+      padding: 4px 6px !important;
+    }
+
+    #rows .dup-indicator {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: auto !important;
+      min-width: 125px !important;
+      max-width: none !important;
+      height: 27px !important;
+      padding: 4px 10px !important;
+      border-radius: 5px !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      line-height: 1.2 !important;
+      white-space: nowrap !important;
+      overflow: visible !important;
+      text-indent: 0 !important;
+      letter-spacing: normal !important;
+    }
+  `;
+  document.head.appendChild(estiloTextoIndicadores);
   window.__globalDupIndicatorInstalled = true;
   window.__atualizarIndicadoresDuplicidade = atualizar;
 
