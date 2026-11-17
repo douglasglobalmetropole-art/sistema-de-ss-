@@ -1594,7 +1594,19 @@ document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!
 ['macroBtn','cityBtn'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>{const box=id==='macroBtn'?'macroMenu':'cityMenu';$(box).querySelector('.menuFind')?.focus()},0)));
 
 // V10.1: apenas apresentação da aba. NÃO executa nova consulta.
+// CGM_NOTAS_FILTROS_COMPARTILHADOS_V1
+let cgmFiltrosNotas = null;
 function setScreen(screen,btn){
+  const cgmNotasOrigem = currentScreen === 'baixar' || currentScreen === 'encerradas';
+  const cgmNotasDestino = screen === 'baixar' || screen === 'encerradas';
+  if (cgmNotasOrigem) {
+    cgmFiltrosNotas = {
+      equipe: document.getElementById('teamFilter').value,
+      quando: document.getElementById('lastFilter').value,
+      inicio: document.getElementById('dateIni').value,
+      fim: document.getElementById('dateFim').value
+    };
+  }
   // SS_DATA_FIM_FINAL_V8
   const ini=document.getElementById('dateIni');
   const fim=document.getElementById('dateFim');
@@ -1679,9 +1691,17 @@ function setScreen(screen,btn){
   f.value='';
   teamFilter.value='';
   integrationFilter.value='';
+  // Filtros compartilhados: restaurar apenas nas duas abas de notas.
+  if (cgmNotasDestino && cgmFiltrosNotas) {
+    f.value = cgmFiltrosNotas.quando;
+    teamFilter.value = cgmFiltrosNotas.equipe;
+    document.getElementById('dateIni').value = cgmFiltrosNotas.inicio;
+    document.getElementById('dateFim').value = cgmFiltrosNotas.fim;
+  }
   sort='';
   load();
 }
+document.getElementById('clearBtn').addEventListener('click', () => { cgmFiltrosNotas = null; }, true);
 document.querySelectorAll('.tab[data-screen]').forEach(btn=>{
   btn.addEventListener('click',()=>{if(!btn.disabled)setScreen(btn.dataset.screen,btn)});
 });
