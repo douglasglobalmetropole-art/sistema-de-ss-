@@ -143,6 +143,9 @@ req.divisaoSS={
 
   const removerEquipeDivisao =
    req.method==='POST' && rota==='/api/remover-equipe';
+  // CGM_RETORNAR_RECEPCAO_DIVISAO_V1
+  const retornarRecepcaoDivisao =
+    req.method==='POST' && rota==='/api/retornar-recepcao';
   const pdfDivisao =
    req.method==='POST' &&
    (
@@ -553,13 +556,52 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !(req.method==='GET' && rota==='/api/umov/sequencias-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !(req.method==='GET' && rota==='/api/umov/sequencias-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !retornarRecepcaoDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
    });
   }
 
+  if(retornarRecepcaoDivisao){
+    const recebidas=req.body?.tarefas;
+    const tarefas=Array.isArray(recebidas)?recebidas.map(Number):[];
+    if(!tarefas.length||tarefas.length>25||
+       tarefas.some(id=>!Number.isSafeInteger(id)||id<=0)||
+       new Set(tarefas).size!==tarefas.length){
+      return res.status(400).json({
+        ok:false,error:'Selecione de 1 a 25 tarefas validas, sem repeticoes.'
+      });
+    }
+    const schema=config.lote1?'u46915':'u45468';
+    const permitidas=new Set(config.cidades.map(normalizarCidade));
+    return pool.query({
+      text:`SELECT DISTINCT t.tsk_id,l.loc_city AS cidade
+            FROM ${schema}.task t
+            JOIN ${schema}.local l ON l.loc_id=t.loc_id
+            WHERE t.tsk_id=ANY($1::bigint[])`,
+      values:[tarefas],
+      query_timeout:7000
+    }).then(resultado=>{
+      const idsValidos=new Set(resultado.rows
+        .filter(row=>permitidas.has(normalizarCidade(row.cidade||'')))
+        .map(row=>String(row.tsk_id)));
+      if(idsValidos.size!==tarefas.length||
+         tarefas.some(id=>!idsValidos.has(String(id)))){
+        return res.status(403).json({
+          ok:false,
+          error:'Uma ou mais SS nao pertencem a esta divisao. Nenhuma tarefa foi retornada.'
+        });
+      }
+      return next();
+    }).catch(erro=>{
+      console.error('Validacao retorno recepcao por divisao:',erro.code||erro.message);
+      return res.status(503).json({
+        ok:false,
+        error:'Nao foi possivel validar todas as SS da divisao. Nenhuma alteracao enviada ao uMov.'
+      });
+    });
+  }
   if(baixaSiscomDivisao){
    const numero=String(req.body?.numero_ss||'').trim();
 
