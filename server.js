@@ -2354,22 +2354,70 @@ app.post('/api/retornar-recepcao',async(req,res)=>{
   res.status(sucesso?200:502).json({ok:sucesso>0,sucesso,falhas:resultados.length-sucesso,resultados,error:primeiraFalha?.error});
  }catch(error){res.status(500).json({ok:false,error:error.message})}
 });
-app.post('/api/tags',async(req,res)=>{try{
- const acao=String(req.body?.acao||'adicionar');
- if(!['adicionar','limpar'].includes(acao))return res.status(400).json({ok:false,error:'AÃ§Ã£o de tag invÃ¡lida.'});
- const tag=acao==='limpar'?'':String(req.body?.tag||'').trim().replace(/\s+/g,' ').slice(0,120);
- const tarefas=[...new Set((Array.isArray(req.body?.tarefas)?req.body.tarefas:[]).map(Number).filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,25);
- if(acao==='adicionar'&&!tag)return res.status(400).json({ok:false,error:'Informe uma tag.'});
- if(!tarefas.length)return res.status(400).json({ok:false,error:'Selecione ao menos uma SS.'});
- const resultados=[];
- for(const tarefa of tarefas){
-  try{await postUmovXml('schedule',tarefa,`<schedule><customFields><tag>${xmlEscape(tag)}</tag></customFields></schedule>`);resultados.push({tarefa,ok:true})}
-  catch(error){resultados.push({tarefa,ok:false,error:error.message})}
+// CGM_TAG_EQUIPE_OBSERVACAO_V1
+app.post('/api/tags',async(req,res)=>{
+ res.set('Cache-Control','no-store');
+ try {
+  const destino=String(req.body?.destino||'interna');
+  const acao=String(req.body?.acao||'adicionar');
+  const tarefasOriginais=req.body?.tarefas;
+  if(!['interna','campo'].includes(destino) || !['adicionar','limpar'].includes(acao))
+   return res.status(400).json({ok:false,error:'Tipo de tag ou acao invalida.'});
+  if(!Array.isArray(tarefasOriginais) || tarefasOriginais.length<1 || tarefasOriginais.length>25)
+   return res.status(400).json({ok:false,error:'Selecione entre 1 e 25 tarefas.'});
+  const tarefas=[...new Set(tarefasOriginais.map(Number))];
+  if(tarefas.length!==tarefasOriginais.length || tarefas.some(n=>!Number.isSafeInteger(n)||n<=0))
+   return res.status(400).json({ok:false,error:'Identificadores de tarefas invalidos.'});
+  if(destino==='campo'){
+   if(acao!=='adicionar')return res.status(400).json({ok:false,error:'A orientacao de campo nao pode ser apagada por esta acao.'});
+   if(!gatewayAuthorized(req)||!gatewayCanWrite(req)||!siscomSameOrigin(req))
+    return res.status(403).json({ok:false,error:'Login com permissao de escrita necessario para orientar a equipe.'});
+   const mensagem=String(req.body?.tag||'').trim();
+   if(!mensagem||mensagem.length>400 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(mensagem))
+    return res.status(400).json({ok:false,error:'Informe uma orientacao de ate 400 caracteres.'});
+   const inicio='[ORIENTACAO EQUIPE CAMPO]';
+   const fim='[/ORIENTACAO EQUIPE CAMPO]';
+   const resultados=[];
+   for(const tarefa of tarefas){
+    try{
+     const xml=await getUmovXml('schedule',tarefa);
+     if(!/<schedule(?:\s|>)/i.test(xml))throw Error('Retorno inesperado da tarefa no uMov.');
+     const match=xml.match(/<observation(?:\s[^>]*)?>([\s\S]*?)<\/observation>/i);
+     const existente=match?textoXml(match[1]):'';
+     let mantido=existente;
+     const p=mantido.indexOf(inicio),q=p>=0?mantido.indexOf(fim,p+inicio.length):-1;
+     if(p>=0 && q>=0) mantido=(mantido.slice(0,p)+' '+mantido.slice(q+fim.length)).trim();
+     const bloco=inicio+' '+mensagem+' '+fim;
+     const novo=[mantido,bloco].filter(Boolean).join('\n');
+     if(novo.length>500)
+      throw Error('A observacao existente mais a orientacao ultrapassa 500 caracteres. Nenhum texto anterior foi apagado.');
+     await postUmovXml('schedule',tarefa,'<schedule><observation>'+xmlEscape(novo)+'</observation></schedule>');
+     resultados.push({tarefa,ok:true});
+    }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,220)})}
+   }
+   const sucesso=resultados.filter(r=>r.ok).length;
+   if(sucesso)cache.clear();
+   const falha=resultados.find(r=>!r.ok);
+   return res.status(sucesso?200:502).json({ok:sucesso>0,destino,tag:mensagem,resultados,sucesso,falhas:resultados.length-sucesso,error:falha?.error});
+  }
+  const tag=acao==='limpar'?'':String(req.body?.tag||'').trim().replace(/\s+/g,' ');
+  if(tag.length>120||acao==='adicionar'&&!tag)
+   return res.status(400).json({ok:false,error:'Informe uma tag interna de ate 120 caracteres.'});
+  const resultados=[];
+  for(const tarefa of tarefas){
+   try{
+    await postUmovXml('schedule',tarefa,'<schedule><customFields><tag>'+xmlEscape(tag)+'</tag></customFields></schedule>');
+    resultados.push({tarefa,ok:true});
+   }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,220)})}
+  }
+  const sucesso=resultados.filter(item=>item.ok).length;
+  if(sucesso)cache.clear();
+  return res.status(sucesso?200:502).json({ok:sucesso>0,destino,tag,resultados,sucesso,falhas:resultados.length-sucesso,error:resultados.find(x=>!x.ok)?.error});
+ }catch(error){
+  console.error('Atualizacao de tags uMov:',error.code||error.message);
+  return res.status(500).json({ok:false,error:'Nao foi possivel atualizar a tag/orientacao no uMov.'});
  }
- const sucesso=resultados.filter(item=>item.ok).length,primeiraFalha=resultados.find(item=>!item.ok);
- if(sucesso)cache.clear();
- res.status(sucesso?200:502).json({ok:sucesso>0,tag,resultados,sucesso,falhas:resultados.length-sucesso,error:primeiraFalha?.error});
-}catch(error){res.status(500).json({ok:false,error:`NÃ£o foi possÃ­vel gravar a tag: ${String(error?.message||'Erro interno').slice(0,300)}`})}});
+});
 require('./duplicidades-index').registrar(app,{
  pool:poolPrincipal, poolLote1, schemaLote1: "u46915",
  autorizado:gatewayAuthorized,
