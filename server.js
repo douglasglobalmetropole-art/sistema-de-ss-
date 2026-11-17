@@ -458,6 +458,33 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       return res.status(503).json({ok:false,error:'Nao foi possivel validar as sequencias desta divisao.'});
     });
   }
+
+  // CGM_REJEICAO_UMOV_LOTE_V1 — separacao entre escrita uMov e rejeicao oficial SISCOM.
+  if(req.method==='POST' && rota==='/api/status-umov-rejeitar'){
+    if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'Login individual SISCOM obrigatorio.'});
+    const recebidas=req.body?.tarefas;
+    if(!Array.isArray(recebidas)||recebidas.length<1||recebidas.length>25||
+      recebidas.some(x=>!Number.isSafeInteger(Number(x))||Number(x)<=0))
+      return res.status(400).json({ok:false,error:'Informe de 1 a 25 tarefas validas.'});
+    const ids=[...new Set(recebidas.map(Number))];
+    const schema=config.lote1?'u46915':'u45468';
+    return pool.query({
+      text:`SELECT t.tsk_id,l.loc_city AS cidade
+                    FROM ${schema}.task t
+                    JOIN ${schema}.local l ON l.loc_id=t.loc_id
+                    WHERE t.tsk_id=ANY($1::bigint[])`,
+      values:[ids],query_timeout:12000
+    }).then(q=>{
+      const permitidas=new Set(config.cidades.map(normalizarCidade));
+      const porId=new Map(q.rows.map(x=>[String(x.tsk_id),normalizarCidade(x.cidade||'')]));
+      if(ids.some(id=>!permitidas.has(porId.get(String(id)))))
+        return res.status(403).json({ok:false,error:'Uma ou mais SS nao pertencem a divisao. Nenhuma mudanca efetuada.'});
+      return next();
+    }).catch(e=>{
+      console.error('Validacao rejeitar uMov:',e.message);
+      return res.status(503).json({ok:false,error:'Nao foi possivel validar as tarefas da divisao.'});
+    });
+  }
   // FOTOS_DIVISAO_CACHE_2026
   // Consulta somente leitura, restrita a tarefa, SS e cidade da divisao.
   if(req.method==='POST' && rota==='/api/relatorio-fotos'){
@@ -786,7 +813,7 @@ app.use((req,res,next)=>{
 });
 
 const invalidatingRoutes=new Set([
- '/api/auth/logout','/api/enviar-equipe','/api/status-integracao','/api/remover-equipe',
+ '/api/auth/logout','/api/enviar-equipe','/api/status-integracao','/api/status-umov-rejeitar','/api/remover-equipe',
  '/api/retornar-recepcao','/api/tags','/api/duplicidades/aplicar-tag',
  '/api/siscom-gateway/sincronizar-baixa','/api/siscom-gateway/sincronizar-baixa-existente',
  '/api/siscom-gateway/sincronizar-rejeicao'
@@ -2283,6 +2310,53 @@ app.post('/api/relatorio-fotos',async(req,res)=>{
  finally{if(browser)await browser.close().catch(()=>{})}
 });
 
+
+
+// CGM_REJEICAO_UMOV_LOTE_V1
+// Acao manual exclusiva de status uMov; NAO aciona a rejeicao oficial SISCOM.
+app.post('/api/status-umov-rejeitar',async(req,res)=>{
+  if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'Entre no SISCOM com sua sessao individual.'});
+  if(!siscomSameOrigin(req))return res.status(403).json({ok:false,error:'Origem nao autorizada.'});
+  if(req.body?.confirmacao!=='REJEITAR UMOV')
+    return res.status(400).json({ok:false,error:'Confirmacao explicita REJEITAR UMOV obrigatoria.'});
+  const recebidas=req.body?.tarefas;
+  if(!Array.isArray(recebidas)||recebidas.length<1||recebidas.length>25||
+     recebidas.some(x=>!Number.isSafeInteger(Number(x))||Number(x)<=0))
+    return res.status(400).json({ok:false,error:'Informe de 1 a 25 tarefas uMov validas.'});
+  const tarefas=[...new Set(recebidas.map(Number))];
+  try{
+    // Identifica cada tarefa antes da escrita, inclusive fora das telas de divisao.
+    const conferidos=await pool.query({
+      text:`SELECT t.tsk_id,l.loc_integrationid AS ss,l.loc_city AS cidade
+                    FROM u45468.task t
+                    JOIN u45468.local l ON l.loc_id=t.loc_id
+                    WHERE t.tsk_id=ANY($1::bigint[])`,
+      values:[tarefas],query_timeout:12000
+    });
+    const porId=new Map(conferidos.rows.map(x=>[String(x.tsk_id),x]));
+    const permitidas=req.divisaoSS?new Set(req.divisaoSS.cidades.map(normalizarCidade)):null;
+    if(tarefas.some(t=>!porId.has(String(t)) ||
+       (permitidas&&!permitidas.has(normalizarCidade(porId.get(String(t)).cidade||'')))))
+      return res.status(403).json({ok:false,error:'Uma ou mais tarefas nao foram encontradas ou estao fora da divisao. Nenhuma alteracao efetuada.'});
+    const valor=xmlEscape(identificadorSituacao('Rejeitada'));
+    const resultados=[];
+    for(const tarefa of tarefas){
+      try{
+        await postUmovXml('schedule',tarefa,
+          `<schedule><customFields><situacao><alternativeIdentifier>${valor}</alternativeIdentifier></situacao></customFields></schedule>`);
+        resultados.push({tarefa,ss:porId.get(String(tarefa)).ss,ok:true,estado:'Solicitado ao uMov'});
+      }catch(e){resultados.push({tarefa,ss:porId.get(String(tarefa)).ss,ok:false,error:String(e.message||e).slice(0,500)});}
+    }
+    const sucesso=resultados.filter(x=>x.ok).length;
+    if(sucesso)cache.clear();
+    console.info('Status uMov Rejeitada solicitado',JSON.stringify({sucesso,total:tarefas.length,divisao:req.divisaoSS?.codigo||'geral'}));
+    return res.status(sucesso?200:502).json({ok:sucesso===tarefas.length,sucesso,falhas:tarefas.length-sucesso,resultados,
+      aviso:'Status uMov solicitado. Nao representa rejeicao oficial no SISCOM.'});
+  }catch(e){
+    console.error('Falha rejeitar uMov:',e.message);
+    return res.status(503).json({ok:false,error:'Falha antes da escrita no uMov: '+String(e.message||e).slice(0,250)});
+  }
+});
 
 app.post('/api/status-integracao',async(req,res)=>{try{
  const status=String(req.body?.status||'').trim();
