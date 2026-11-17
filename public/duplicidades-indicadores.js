@@ -376,9 +376,7 @@
   }
 
   function atualizar() {
-    const ativo = typeof currentScreen !== 'undefined' &&
-      ['recepcao','campo','baixar','encerradas','tramitacao']
-        .includes(currentScreen);
+    const ativo = typeof currentScreen !== 'undefined' && currentScreen === 'recepcao';
 
     let header = document.getElementById('dupIndicatorHeader');
     let filtro = document.getElementById('dupIndicatorFilter');
@@ -392,7 +390,10 @@
 
     if (header) header.hidden = !ativo;
     if (filtro) filtro.hidden = !ativo;
-    if (!ativo) return;
+    if (!ativo) {
+      document.querySelectorAll('#rows td.dup-indicator-cell').forEach(td => td.remove());
+      return;
+    }
 
     const linhas = document.querySelectorAll('#rows tr');
     const registros = typeof view !== 'undefined' && Array.isArray(view)

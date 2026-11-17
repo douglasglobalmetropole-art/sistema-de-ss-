@@ -2375,23 +2375,11 @@ app.post('/api/tags',async(req,res)=>{
    const mensagem=String(req.body?.tag||'').trim();
    if(!mensagem||mensagem.length>400 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(mensagem))
     return res.status(400).json({ok:false,error:'Informe uma orientacao de ate 400 caracteres.'});
-   const inicio='[ORIENTACAO EQUIPE CAMPO]';
-   const fim='[/ORIENTACAO EQUIPE CAMPO]';
+   // CGM_OBSERVACAO_SOMENTE_TEXTO_V2: substitui pelo texto informado, sem prefixo ou historico.
    const resultados=[];
    for(const tarefa of tarefas){
     try{
-     const xml=await getUmovXml('schedule',tarefa);
-     if(!/<schedule(?:\s|>)/i.test(xml))throw Error('Retorno inesperado da tarefa no uMov.');
-     const match=xml.match(/<observation(?:\s[^>]*)?>([\s\S]*?)<\/observation>/i);
-     const existente=match?textoXml(match[1]):'';
-     let mantido=existente;
-     const p=mantido.indexOf(inicio),q=p>=0?mantido.indexOf(fim,p+inicio.length):-1;
-     if(p>=0 && q>=0) mantido=(mantido.slice(0,p)+' '+mantido.slice(q+fim.length)).trim();
-     const bloco=inicio+' '+mensagem+' '+fim;
-     const novo=[mantido,bloco].filter(Boolean).join('\n');
-     if(novo.length>500)
-      throw Error('A observacao existente mais a orientacao ultrapassa 500 caracteres. Nenhum texto anterior foi apagado.');
-     await postUmovXml('schedule',tarefa,'<schedule><observation>'+xmlEscape(novo)+'</observation></schedule>');
+     await postUmovXml('schedule',tarefa,'<schedule><observation>'+xmlEscape(mensagem)+'</observation></schedule>');
      resultados.push({tarefa,ok:true});
     }catch(error){resultados.push({tarefa,ok:false,error:String(error.message||error).slice(0,220)})}
    }
