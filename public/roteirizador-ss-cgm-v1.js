@@ -3,6 +3,97 @@ if(window.__CGM_ROTEIRO_V3)return;window.__CGM_ROTEIRO_V3=true;
 const BASE={ss:'BASE O-DVV / O-DCV',lat:-20.345323098656547,lon:-40.354502305689984,rua:'Rua Lacedópolis, 153',bairro:'Cobilândia'};
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const css=document.createElement('style');css.textContent=`#cgmRotaAcao{display:flex!important;visibility:visible!important;background:#e9f4ff!important;color:#07599a!important;border:1px solid #7aa9d3!important}#cgmRotaModal{position:fixed;inset:2%;z-index:999999;background:white;border:1px solid #b7cee2;border-radius:10px;display:flex;flex-direction:column;box-shadow:0 12px 50px #0005;color:#14395e;font:13px Arial;overflow:hidden}#cgmRotaModal .head{background:#07599a;color:white;padding:11px 14px;display:flex;justify-content:space-between;align-items:center}#cgmRotaModal button,#cgmRotaModal select{padding:7px;cursor:pointer;border:1px solid #b7cee2;border-radius:5px;background:white;color:#07599a}#cgmRotaModal .controls,#cgmRotaModal footer{display:flex;gap:9px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:#eff6fd}#cgmRotaModal .body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 360px}#cgmRotaMapa{min-height:200px}#cgmRotaPlano{overflow:auto;padding:10px;background:#f9fbff;border-left:1px solid #dce8f2}#cgmRotaPlano table{width:100%;border-collapse:collapse}#cgmRotaPlano td,#cgmRotaPlano th{border-bottom:1px solid #dce8f2;padding:6px;text-align:left}#cgmRotaPlano select{max-width:110px}#cgmRotaPlano .move{padding:3px 6px}#cgmRotaPlano .note{font-size:11px;color:#61778e;margin:8px 0}.cgm-rota-pin span{display:grid;place-items:center;background:#07599a;color:white;border:2px solid white;border-radius:50%;height:28px;width:28px;box-shadow:0 1px 5px #0007;font-weight:bold}.cgm-rota-pin.base span{background:#159447}#cgmRotaModal .pdf-title{display:none}@media(max-width:850px){#cgmRotaModal .body{grid-template-columns:1fr;grid-template-rows:50% 50%}}@media print{@page{size:A4 landscape;margin:10mm}body>*:not(#cgmRotaModal){display:none!important}#cgmRotaModal{position:static!important;inset:auto!important;height:auto!important;overflow:visible!important;border:0!important;box-shadow:none!important}#cgmRotaModal .pdf-title{display:block!important;font-size:18px;font-weight:bold;margin:12px}#cgmRotaModal .body{display:block!important}#cgmRotaMapa{height:380px!important}#cgmRotaPlano{overflow:visible!important;border:0!important}#cgmRotaModal .controls,#cgmRotaModal footer,#cgmRotaModal .close,#cgmRotaModal .move,#cgmRotaModal select{display:none!important}}`;document.head.appendChild(css);
+const cgmEditorV4 = document.createElement('style');
+cgmEditorV4.textContent = `/* CGM_ROTA_EDITOR_LAYOUT_V4 */
+#cgmRotaModal .body {
+  grid-template-columns: minmax(0, 55fr) minmax(420px, 45fr) !important;
+  gap: 0 !important;
+}
+
+#cgmRotaPlano {
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 16px !important;
+  box-sizing: border-box !important;
+  background: #f7faff !important;
+}
+
+#cgmRotaPlano table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  font-size: 12px !important;
+}
+
+#cgmRotaPlano th,
+#cgmRotaPlano td {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  vertical-align: middle !important;
+  padding: 10px 7px !important;
+}
+
+#cgmRotaPlano th:nth-child(1),
+#cgmRotaPlano td:nth-child(1) {
+  width: 32px !important;
+}
+
+#cgmRotaPlano th:nth-child(2),
+#cgmRotaPlano td:nth-child(2) {
+  width: auto !important;
+}
+
+#cgmRotaPlano th:nth-child(3),
+#cgmRotaPlano td:nth-child(3) {
+  width: 110px !important;
+}
+
+#cgmRotaPlano th:nth-child(4),
+#cgmRotaPlano td:nth-child(4) {
+  width: 80px !important;
+}
+
+#cgmRotaPlano select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  padding: 6px 3px !important;
+}
+
+#cgmRotaPlano .move {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  margin: 1px !important;
+  font-size: 15px !important;
+}
+
+#cgmRotaPlano .note {
+  line-height: 1.5 !important;
+  margin: 12px 0 !important;
+}
+
+#cgmRotaPlano tr:hover td {
+  background: #edf5ff !important;
+}
+
+@media (max-width: 1050px) {
+  #cgmRotaModal .body {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: minmax(280px, 55%) minmax(260px, 45%) !important;
+  }
+}
+
+@media print {
+  #cgmRotaModal .body {
+    display: block !important;
+  }
+}`;
+document.head.appendChild(cgmEditorV4);
 function selectedRows(){return [...document.querySelectorAll('#rows tr')].filter(tr=>tr.querySelector('input.pick:checked')).map(tr=>{const c=[...tr.querySelectorAll('td')];return {ss:(tr.querySelector('td.ss')?.textContent||c[1]?.textContent||'').trim(),rua:(c[2]?.textContent||'').trim(),bairro:(c[3]?.textContent||'').trim(),equipe:(c[8]?.textContent||'').trim()}}).filter(x=>x.ss)}
 function detailRow(){const x=window.__detailSS;if(!x)return null;const ss=String(x.ss||x.numero||$('dss')?.textContent||'').trim();return ss?{ss,rua:x.logradouro||x.rua||'',bairro:x.bairro||'',equipe:x.equipe||x.equipe_executou||'Equipe da SS'}:null}
 async function leaflet(){if(window.L)return;const link=document.createElement('link');link.rel='stylesheet';link.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(link);await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';s.onload=ok;s.onerror=()=>no(Error('Falha ao carregar mapa'));document.head.appendChild(s)})}
