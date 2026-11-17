@@ -82,16 +82,48 @@
       const d = await r.json().catch(() => ({}));
       const ok = (d.resultados || []).filter(x => x.ok);
       const fail = (d.resultados || []).filter(x => !x.ok);
-      const texto = ok.length + ' tarefa(s) atualizada(s) no uMov.\n' +
-        (fail.length ? 'Falhas:\n'+fail.map(x=>'Tarefa '+x.tarefa+': '+erroOficial(x)).join('\n') : '') +
-        (!r.ok ? '\n'+erroOficial(d) : '') +
-        '\n\nIsso nao representa rejeicao SISCOM. Atualize a lista para conferir o status.';
-      alert(texto);
-      if (ok.length) {
-        try { apply(); } catch { /* apenas atualizar manualmente */ }
+      let confirmadas=[],pendentes=[],erroConsulta='';
+      if(ok.length){
+        const aceitas=ok.map(x=>Number(x.tarefa));
+        btn.textContent='Conferindo situacao no uMov...';
+        try {
+          for(let tentativa=0;tentativa<9;tentativa++){
+            if(tentativa)await delay(1500);
+            const resp=await fetch('/api/status-umov-rejeitar/conferir',{
+              method:'POST',credentials:'same-origin',cache:'no-store',
+              headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefas:aceitas})
+            });
+            const ver=await resp.json().catch(()=>({}));
+            if(!resp.ok||!ver.ok)throw Error(erroOficial(ver)+' [HTTP '+resp.status+']');
+            confirmadas=(ver.resultados||[]).filter(x=>x.confirmado);
+            const ids=new Set(confirmadas.map(x=>String(x.tarefa)));
+            pendentes=aceitas.filter(id=>!ids.has(String(id)));
+            if(!pendentes.length)break;
+          }
+        }catch(e){erroConsulta=e.message;pendentes=aceitas.filter(id=>!confirmadas.some(x=>String(x.tarefa)===String(id)));}
+        if(confirmadas.length){
+          const porId=new Map(confirmadas.map(x=>[String(x.tarefa),x]));
+          try{
+            raw.forEach(x=>{const c=porId.get(String(x.tarefa));if(c)x.status_integracao=c.status_integracao||'Rejeitada';});
+            for(const id of porId.keys())delete selected[id];
+            if(window.__detailSS&&porId.has(String(window.__detailSS.tarefa)))
+              window.__detailSS.status_integracao=porId.get(String(window.__detailSS.tarefa)).status_integracao;
+            apply();
+            if(typeof load==='function'&&!window.__buscaSSAtiva)await load(true);
+          }catch(e){console.warn('Recarregar lista:',e.message)}
+        }
       }
+      alert('Solicitacoes aceitas pelo uMov: '+ok.length+'.\n'+
+        'Status REJEITADA confirmado no banco: '+confirmadas.length+'.\n'+
+        'Ainda pendentes de confirmacao: '+pendentes.length+'.'+
+        (fail.length?'\nFalhas:\n'+fail.map(x=>'Tarefa '+x.tarefa+': '+erroOficial(x)).join('\n'):'')+
+        (erroConsulta?'\nErro na consulta: '+erroConsulta:'')+
+        (!r.ok?'\n'+erroOficial(d):'')+
+        '\n\nAs SS confirmadas saem de Notas para Baixar e entram em Notas Baixadas.'+
+        '\nNao reenvie as pendentes sem conferir o status real no uMov.'+
+        '\nIsto nao equivale a rejeicao oficial no SISCOM.');
     } catch (e) { alert('Nao foi possivel confirmar o status do uMov: '+e.message+'\nVerifique antes de reenviar.'); }
-    finally { btn.disabled = false; }
+    finally { btn.disabled = false; btn.innerHTML='<b>Ã—</b>Rejeitar uMov'; }
   }
 
   async function pedidoJson(url, options) {

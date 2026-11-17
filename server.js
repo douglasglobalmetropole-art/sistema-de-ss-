@@ -460,7 +460,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
   }
 
   // CGM_REJEICAO_UMOV_LOTE_V1 — separacao entre escrita uMov e rejeicao oficial SISCOM.
-  if(req.method==='POST' && rota==='/api/status-umov-rejeitar'){
+  if(req.method==='POST' && (rota==='/api/status-umov-rejeitar'||rota==='/api/status-umov-rejeitar/conferir')){
     if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'Login individual SISCOM obrigatorio.'});
     const recebidas=req.body?.tarefas;
     if(!Array.isArray(recebidas)||recebidas.length<1||recebidas.length>25||
@@ -2311,6 +2311,43 @@ app.post('/api/relatorio-fotos',async(req,res)=>{
 });
 
 
+
+// CGM_STATUS_UMOV_CONFERIR_V2 - somente leitura, sem escrita uMov ou SISCOM.
+app.post('/api/status-umov-rejeitar/conferir',async(req,res)=>{
+ if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'Login individual SISCOM obrigatorio.'});
+ if(!siscomSameOrigin(req))return res.status(403).json({ok:false,error:'Origem nao autorizada.'});
+ const entrada=req.body?.tarefas;
+ if(!Array.isArray(entrada)||!entrada.length||entrada.length>25||entrada.some(n=>!Number.isSafeInteger(Number(n))||Number(n)<=0))
+  return res.status(400).json({ok:false,error:'Informe de 1 a 25 tarefas validas.'});
+ const ids=[...new Set(entrada.map(Number))];
+ try {
+  const sql=[
+   "SELECT t.tsk_id,l.loc_city AS cidade,l.loc_integrationid AS ss,",
+   "COALESCE((SELECT COALESCE(NULLIF(TRIM(ce.cev_description::text),''),",
+   "NULLIF(TRIM(v.cfv_externalvalue::text),''),NULLIF(TRIM(v.cfv_internalvalue::text),''),'')",
+   "FROM u45468.customfieldvalue v JOIN u45468.customfield cf ON cf.cfd_id=v.cfd_id",
+   "LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$'",
+   "THEN v.cfv_internalvalue::bigint ELSE NULL END",
+   "WHERE v.cfv_registerid=t.tsk_id AND LOWER(TRIM(cf.cfd_integrationid))='situacao'",
+   "AND LOWER(TRIM(cf.cfd_table))='task' LIMIT 1),'') AS status_integracao",
+   "FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id",
+   "WHERE t.tsk_id=ANY($1::bigint[])"
+  ].join(' ');
+  const q=await pool.query({text:sql,values:[ids],query_timeout:9000});
+  const found=new Map(q.rows.map(r=>[String(r.tsk_id),r]));
+  const permitidas=req.divisaoSS?new Set(req.divisaoSS.cidades.map(normalizarCidade)):null;
+  if(ids.some(id=>!found.has(String(id))||(permitidas&&!permitidas.has(normalizarCidade(found.get(String(id)).cidade||'')))))
+   return res.status(403).json({ok:false,error:'Uma ou mais tarefas fora da divisao ou nao encontradas.'});
+  const resultados=ids.map(id=>{
+   const r=found.get(String(id)),status=String(r.status_integracao||'').trim();
+   return {tarefa:id,ss:r.ss,status_integracao:status,confirmado:/^rejeitad/i.test(status.normalize('NFD').replace(/[\u0300-\u036f]/g,''))};
+  });
+  return res.set('Cache-Control','no-store').json({ok:true,resultados,confirmadas:resultados.filter(r=>r.confirmado).length});
+ }catch(e){
+  console.error('Conferir situacao uMov:',e.message);
+  return res.status(503).json({ok:false,error:'Falha ao conferir status no uMov: '+String(e.message||e).slice(0,200)});
+ }
+});
 
 // CGM_REJEICAO_UMOV_LOTE_V1
 // Acao manual exclusiva de status uMov; NAO aciona a rejeicao oficial SISCOM.
