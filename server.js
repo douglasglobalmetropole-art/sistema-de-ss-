@@ -433,6 +433,31 @@ if(materiaisDivisao && rota!=='/api/materiais'){
         return next();
       }).catch(e=>{console.error('Sequencias fotos divisao:',e.message);return res.status(503).json({ok:false,error:'Falha ao validar divisao.'});});
   }
+  // CGM_AGRUPADO_ORIGINAIS_UNICO_V12: leitura, validacao por divisao.
+  if(req.method==='GET' && rota==='/api/relatorios-agrupados'){
+    const ss=String(req.query?.ss||'').trim();
+    const m=/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/.exec(ss);
+    if(!m)return res.status(400).json({ok:false,error:'Numero de SS invalido.'});
+    const schema=config.lote1?'u46915':'u45468';
+    return pool.query({
+      text:`SELECT DISTINCT l.loc_city AS cidade
+        FROM ${schema}.local l
+        WHERE l.loc_integrationid LIKE $1
+          AND l.loc_integrationid <= $2
+        LIMIT 201`,
+      values:[m[1]+'-%',ss],query_timeout:12000
+    }).then(q=>{
+      const cidades=q.rows.map(x=>normalizarCidade(x.cidade||''));
+      const permitidas=new Set(config.cidades.map(normalizarCidade));
+      if(!cidades.length)return res.status(404).json({ok:false,error:'SS nao localizada no uMov desta divisao.'});
+      if(cidades.length>=201||cidades.some(x=>!x||!permitidas.has(x)))
+        return res.status(403).json({ok:false,error:'Uma ou mais sequencias nao pertencem a esta divisao.'});
+      return next();
+    }).catch(e=>{
+      console.error('Relatorio agrupado/divisao:',e.code||e.message);
+      return res.status(503).json({ok:false,error:'Nao foi possivel validar as sequencias desta divisao.'});
+    });
+  }
   // FOTOS_DIVISAO_CACHE_2026
   // Consulta somente leitura, restrita a tarefa, SS e cidade da divisao.
   if(req.method==='POST' && rota==='/api/relatorio-fotos'){
@@ -1837,6 +1862,7 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
    text:`WITH locais AS MATERIALIZED (
      SELECT loc_id,loc_integrationid FROM u45468.local
      WHERE loc_integrationid LIKE $1
+       AND loc_integrationid <= $2
      ORDER BY loc_integrationid,loc_id DESC LIMIT 201
     )
     SELECT l.loc_integrationid AS ss,t.tsk_id AS tarefa,
@@ -1848,26 +1874,34 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
     ) t ON TRUE
     LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id AND d.tss_id=50
     ORDER BY l.loc_integrationid,t.tsk_id DESC LIMIT 8040`,
-   values:[base+'-%'],query_timeout:9000
+   values:[base+'-%',ss],query_timeout:18000
   });
+  // Preserva todos os relatorios concluÃ­dos de cada sequencia (nao so um por SS).
   const porSS=new Map();
+  const tarefasIncluidas=new Set();
   const prefix=base+'-';
   const host=hostRelatorioUmov();
   for(const row of r.rows){
    const numero=String(row.ss||'').trim();
    if(!numero.startsWith(prefix)||!/^[0-9]{2}$/.test(numero.slice(prefix.length))||numero.length!==prefix.length+2)continue;
-   if(!porSS.has(numero))porSS.set(numero,{ss:numero,disponivel:false,tarefa:null,link:null});
-   const atual=porSS.get(numero);
-   const token=String(row.tsk_accesstoken||'');
-   if(!atual.disponivel&&Number(row.tss_id)===50&&Number.isSafeInteger(Number(row.tarefa))&&Number(row.tarefa)>0&&/^[a-zA-Z0-9._~-]+$/.test(token)&&host){
-    atual.disponivel=true;atual.tarefa=Number(row.tarefa);
-    atual.link='https://'+host+'/CenterWeb/report/schedule/'+atual.tarefa+'/'+token;
-   }
+   if(!porSS.has(numero))porSS.set(numero,[]);
+   const tarefa=Number(row.tarefa);
+   const token=String(row.tsk_accesstoken||'').trim();
+   const chave=numero+':'+tarefa;
+   if(Number(row.tss_id)!==50||!Number.isSafeInteger(tarefa)||tarefa<=0||
+      !/^[a-zA-Z0-9._~-]+$/.test(token)||!host||tarefasIncluidas.has(chave))continue;
+   tarefasIncluidas.add(chave);
+   porSS.get(numero).push({ss:numero,disponivel:true,tarefa,
+    link:'https://'+host+'/CenterWeb/report/schedule/'+tarefa+'/'+token});
   }
-  const sequencias=[...porSS.values()].sort((a,b)=>Number(a.ss.slice(-2))-Number(b.ss.slice(-2)));
-  if(sequencias.length>100||r.rows.length>=8040)return res.status(413).json({ok:false,code:'LIMITE_CONSULTA',error:'Consulta excedeu o limite de seguranca. Entre em contato para ajustar o agrupamento desta SS.'});
+  const sequencias=[...porSS.entries()]
+    .sort((a,b)=>Number(a[0].slice(-2))-Number(b[0].slice(-2)))
+    .flatMap(([numero,relatorios])=>relatorios.length?
+      relatorios.sort((a,b)=>a.tarefa-b.tarefa):
+      [{ss:numero,disponivel:false,tarefa:null,link:null}]);
+  if(sequencias.length>200||r.rows.length>=8040)return res.status(413).json({ok:false,code:'LIMITE_CONSULTA',error:'Consulta excedeu o limite de seguranca. Entre em contato para ajustar o agrupamento desta SS.'});
   res.json({ok:true,base,consultada:ss,sequencias,total:sequencias.length,disponiveis:sequencias.filter(x=>x.disponivel).length,
-   aviso:!sequencias.length?'Nenhuma sequencia encontrada neste banco uMov. Confira se esta na pagina do lote correto.':!host?'Host dos relatorios uMov nao configurado para este lote.':null});
+   aviso:!sequencias.length?'Nenhum relatorio localizado para esta SS e suas sequencias anteriores. Confira se esta no lote correto.':!host?'Host dos relatorios uMov nao configurado para este lote.':null});
  }catch(e){
   const code=String(e.code||'');
   console.error('Consulta agrupada uMov (codigo/etapa):',code||'SEM_CODIGO','consulta sequencias');

@@ -3,6 +3,7 @@
  */
 (()=>{
  'use strict';
+ // CGM_AGRUPADO_ORIGINAIS_UNICO_V12: todas as tarefas por sequencia em PDF unico.
  if(window.__globalSsAgrupadoV10)return;
  window.__globalSsAgrupadoV10=true;
  const ID='globalSsAgrupadoV10';
@@ -36,12 +37,20 @@
  const msg=(s,error=false)=>{status.textContent=s;status.classList.toggle('ga-error',error)};
  const busy=v=>{gerando=v;close.disabled=v;reload.disabled=v;view.disabled=v||!data||!data.disponiveis;download.disabled=v||!data||!data.disponiveis;list.querySelectorAll('input').forEach(x=>x.disabled=v||x.dataset.available!=='1')};
  const chosen=()=>[...list.querySelectorAll('input[data-available="1"]:checked')].map(x=>data.sequencias[Number(x.dataset.idx)]);
+ let ssAtual='';
  const getSS=()=>{
+  const marcadas=[...document.querySelectorAll('#rows tr')]
+    .filter(tr=>!!tr.querySelector('input.pick:checked'))
+    .map(tr=>String(tr.querySelector('td.ss')?.textContent||tr.children[1]?.textContent||'').trim())
+    .filter(x=>SS.test(x));
+  if(marcadas.length){
+   if(new Set(marcadas.map(x=>x.slice(0,-3))).size!==1)return '';
+   // A maior sequencia selecionada inclui os relatorios anteriores.
+   return marcadas.sort((a,b)=>Number(a.slice(-2))-Number(b.slice(-2))).at(-1);
+  }
   const detail=String(window.__detailSS?.ss||'').trim();
-  const selected=Object.values(window.selected||{});
-  const selectedSS=selected.length===1?String(selected[0]?.ss||'').trim():'';
   const field=String(document.getElementById('dss')?.textContent||'').trim();
-  return [detail,selectedSS,field].find(x=>SS.test(x))||'';
+  return [detail,field].find(x=>SS.test(x))||'';
  };
  async function load(ss){
   data=null;list.replaceChildren();stats.textContent='Consultando sequências da SS '+ss+' no banco uMov...';msg('');progress.hidden=true;
@@ -53,7 +62,7 @@
   if(j.aviso)msg(j.aviso,true);
   j.sequencias.forEach((x,i)=>{
    const row=el('label','ga-row'),check=el('input');check.type='checkbox';check.dataset.idx=String(i);check.dataset.available=x.disponivel?'1':'0';check.checked=!!x.disponivel;check.disabled=!x.disponivel;
-   const num=el('strong','',x.ss),state=el('small','',x.disponivel?'PDF original disponível':'Sem relatório original disponível');state.style.color=x.disponivel?'#147c4a':'#b45309';row.append(check,num,state);list.append(row);
+   const num=el('strong','',x.ss+(x.tarefa?' / tarefa '+x.tarefa:'')),state=el('small','',x.disponivel?'PDF original disponível':'Sem relatório original disponível');state.style.color=x.disponivel?'#147c4a':'#b45309';row.append(check,num,state);list.append(row);
   });
   if(!j.aviso)msg('Marque as sequências desejadas. O sistema não incluirá relatórios ausentes nem duplicará a mesma sequência.');
  }
@@ -61,13 +70,13 @@
  root.addEventListener('click',e=>{if(e.target===root)closeModal()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!root.hidden)closeModal()});
  async function open(){const ss=getSS();if(!ss){alert('Selecione uma SS para agrupar seus relatórios.');return;}
-  root.hidden=false;busy(true);try{await load(ss)}catch(e){stats.textContent='Consulta indisponível';msg(e.message,true)}finally{busy(false)}
+  ssAtual=ss;root.hidden=false;busy(true);try{await load(ss)}catch(e){stats.textContent='Consulta indisponível';msg(e.message,true)}finally{busy(false)}
  }
- reload.onclick=async()=>{const ss=getSS();if(!ss)return msg('SS inválida',true);busy(true);try{await load(ss)}catch(e){msg(e.message,true)}finally{busy(false)}};
+ reload.onclick=async()=>{const ss=ssAtual;if(!ss)return msg('SS inválida',true);busy(true);try{await load(ss)}catch(e){msg(e.message,true)}finally{busy(false)}};
  async function generate(mode){
   if(gerando||!data)return;
   const seqs=chosen();if(!seqs.length)return msg('Selecione pelo menos um relatório disponível.',true);
-  if(seqs.length>30)return msg('Limite de 30 relatórios por arquivo. Desmarque algumas sequências.',true);
+  if(seqs.length>50)return msg('Limite de 50 relatorios por PDF. Desmarque algumas tarefas.',true);
   if(!window.PDFLib?.PDFDocument)return msg('Biblioteca local de união de PDF indisponível. Reinstale o pacote V10.',true);
   // Abre aba no clique do usuário, antes de qualquer await, para evitar bloqueio de pop-up.
   const preview=mode==='view'?window.open('about:blank','_blank'):null;
@@ -78,10 +87,10 @@
    const merged=await PDFLib.PDFDocument.create();let totalBytes=0;
    for(let i=0;i<seqs.length;i++){
     const x=seqs[i];msg(`Convertendo e incorporando ${x.ss} (${i+1}/${seqs.length})...`);
-    const response=await fetch(api()+'/relatorio-original-pdf',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:x.link,ss:x.ss})});
+    const response=await fetch(api()+'/relatorio-original-pdf',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:x.link,ss:x.ss,tarefa:x.tarefa})});
     if(!response.ok){const j=await response.json().catch(()=>({}));throw Error('SS '+x.ss+': '+(j.error||'falha HTTP '+response.status));}
     const bytes=await response.arrayBuffer();totalBytes+=bytes.byteLength;
-    if(totalBytes>90*1024*1024)throw Error('Os PDFs excedem 90 MB. Divida o relatório em grupos menores.');
+    if(totalBytes>120*1024*1024)throw Error('Os PDFs excedem 120 MB. Divida o relatório em grupos menores.');
     if(new Uint8Array(bytes).slice(0,5).some((b,k)=>b!==[37,80,68,70,45][k]))throw Error('SS '+x.ss+': resposta não é PDF.');
     const source=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:false});
     const pages=await merged.copyPages(source,source.getPageIndices());pages.forEach(p=>merged.addPage(p));
