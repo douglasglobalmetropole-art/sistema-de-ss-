@@ -1534,7 +1534,7 @@ function setDefaultDateRange(){
   }const fim=new Date(),inicio=new Date(fim);inicio.setDate(inicio.getDate()-6);$('dateIni').value=isoDate(inicio);$('dateFim').value=isoDate(fim)}
 setDefaultDateRange();
 const val=(x,k)=>{const valor=String(x[k]??'').trim();return k==='status_integracao'&&valor.toLocaleLowerCase('pt-BR')==='baixada no siscom'?'Baixada':valor};
-const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','receptionVerifySiscomBtn','duplicateBtn','tagBtn','rejectBtn','rejeitarUmovBtn'],campo:['returnReceptionBtn','sendTeamBtn','tagBtn'],baixar:['viewSSBtn','generatePdfBtn','tagBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','rejeitarUmovBtn','launchItemsBtn'],encerradas:['viewReportBtn','viewPhotosBtn','syncUmovBaixaBtn','groupedBtn'],tramitacao:['viewReportBtn','viewPhotosBtn','syncUmovBaixaBtn','groupedBtn']};
+const actionSets={recepcao:['sendTeamBtn','removeTeamBtn','receptionVerifySiscomBtn','tagBtn','rejectBtn','rejeitarUmovBtn'],campo:['returnReceptionBtn','sendTeamBtn','tagBtn'],baixar:['viewSSBtn','generatePdfBtn','tagBtn','groupedBtn','downloadBtn','duplicateBtn','rejectBtn','rejeitarUmovBtn','launchItemsBtn'],encerradas:['viewReportBtn','viewPhotosBtn','syncUmovBaixaBtn','groupedBtn'],tramitacao:['viewReportBtn','viewPhotosBtn','syncUmovBaixaBtn','groupedBtn']};
 function configureActions(screen){const allowed=actionSets[screen]||[];document.querySelectorAll('.actions .action').forEach(button=>button.hidden=!allowed.includes(button.id))}
 function norm(v){return String(v??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
 function screenMatch(x){
@@ -4031,4 +4031,6 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 <link rel="stylesheet" href="/fotos-sequencias.css?v=20261116v13">
 <script defer src="/fotos-sequencias.js?v=20261116v11"></script>
 <script src="/rejeicao-opcoes-cgm-v1.js?v=rejeicao-v1-20261117" defer></script>
+<!-- CGM_DUPLICAR_SS_UMOV_V1 -->
+<script defer src="/duplicar-ss-cgm-v1.js?v=20261118v1"></script>
 </body></html>

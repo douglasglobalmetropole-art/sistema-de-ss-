@@ -143,6 +143,8 @@ req.divisaoSS={
 
   const removerEquipeDivisao =
    req.method==='POST' && rota==='/api/remover-equipe';
+  // CGM_DUPLICAR_SS_UMOV_V1: liberacao limitada, com validacao no endpoint.
+  const duplicarSSDivisao = req.method==='POST' && rota==='/api/duplicar-ss';
   // CGM_RETORNAR_RECEPCAO_DIVISAO_V1
   const retornarRecepcaoDivisao =
     req.method==='POST' && rota==='/api/retornar-recepcao';
@@ -608,7 +610,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !(req.method==='GET' && rota==='/api/umov/sequencias-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !retornarRecepcaoDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !(req.method==='GET' && rota==='/api/umov/sequencias-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !duplicarSSDivisao && !retornarRecepcaoDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -813,7 +815,7 @@ app.use((req,res,next)=>{
 });
 
 const invalidatingRoutes=new Set([
- '/api/auth/logout','/api/enviar-equipe','/api/status-integracao','/api/status-umov-rejeitar','/api/remover-equipe',
+ '/api/auth/logout','/api/duplicar-ss','/api/enviar-equipe','/api/status-integracao','/api/status-umov-rejeitar','/api/remover-equipe',
  '/api/retornar-recepcao','/api/tags','/api/duplicidades/aplicar-tag',
  '/api/siscom-gateway/sincronizar-baixa','/api/siscom-gateway/sincronizar-baixa-existente',
  '/api/siscom-gateway/sincronizar-rejeicao'
@@ -1785,6 +1787,8 @@ async function getUmovXml(resource,id){
  if(!response.ok)throw new Error(`uMov respondeu ${response.status}: ${xml.replace(/\s+/g,' ').trim().slice(0,240)}`);
  return xml;
 }
+// CGM_DUPLICAR_SS_UMOV_V1: cria nova programacao via API, sem modificar original.
+require('./umov-duplicar-ss-cgm-v1').register({app,pool,emLote1,normalizarCidade,getUmovXml,postUmovXml,cache,gatewayAuthorized,gatewayCanWrite,siscomSameOrigin});
 // Consulta o historico real do formulario de execucao; identifica a chave da tarefa
 // pelo catalogo para nao assumir nomes de colunas entre versoes do uMov.
 const historicosExecucao=[
