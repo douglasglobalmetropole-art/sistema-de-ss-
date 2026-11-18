@@ -63,12 +63,22 @@ async function postNewSchedule(xml,emLote1){
   return {id:m?Number(m[1]):null};
 }
 function register({app,pool,emLote1,normalizarCidade,getUmovXml,postUmovXml,cache,gatewayAuthorized,gatewayCanWrite,siscomSameOrigin}){
+  app.get('/api/duplicar-ss/origem/:id',async(req,res)=>{
+    res.set('Cache-Control','no-store');
+    if(!gatewayAuthorized(req)||!gatewayCanWrite(req)||!siscomSameOrigin(req))return res.status(403).json({error:'Acesso nao autorizado'});
+    const id=Number(req.params.id);if(!validId(id))return res.status(400).json({error:'Tarefa invalida'});
+    try {
+      const xml=await getUmovXml('schedule',id);
+      const agent=plain(section(xml,'agent'),'id');
+      return res.json({agente:validId(agent)?Number(agent):null,nome:null});
+    }catch(e){return res.status(502).json({error:'Falha na consulta ao uMov'});}
+  });
   app.post('/api/duplicar-ss',async(req,res)=>{
     res.set('Cache-Control','no-store');
     if(!gatewayAuthorized(req)||!gatewayCanWrite(req)||!siscomSameOrigin(req))return res.status(403).json({ok:false,error:'Entre com uma conta autorizada antes de duplicar SS.'});
     const tarefa=Number(req.body?.tarefa);
     const agent=req.body?.agente===null||req.body?.agente===''||req.body?.agente===undefined?null:Number(req.body.agente);
-    const date=String(req.body?.data||'');const hour=String(req.body?.hora||'');
+
     if(!validId(tarefa)||(agent!==null&&!validId(agent)))return res.status(400).json({ok:false,error:'Tarefa ou bombeiro invalido.'});
     try{
       const db=await pool.query({text:`SELECT t.tsk_id,t.loc_id,l.loc_city,l.loc_integrationid AS ss,d.tsk_situation,d.e_situacao
@@ -81,6 +91,8 @@ function register({app,pool,emLote1,normalizarCidade,getUmovXml,postUmovXml,cach
       if(req.divisaoSS){const allowed=new Set(req.divisaoSS.cidades.map(normalizarCidade));if(!allowed.has(normalizarCidade(original.loc_city)))return res.status(403).json({ok:false,error:'SS fora da divisao autorizada.'});}
       if(agent){const q=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_id=$1 LIMIT 1',values:[agent],query_timeout:6000});if(!q.rows.length)return res.status(400).json({ok:false,error:'Bombeiro nao encontrado no cadastro uMov deste lote.'});}
       const xml=await getUmovXml('schedule',tarefa);
+      const date=todaySaoPaulo();
+      const hour='09:00';
       const origin=plain(xml,'activitiesOrigin');
       let activities=[];
       if(origin==='4'){

@@ -1,11 +1,11 @@
-/* CGM_DUPLICAR_SS_UMOV_V1 - Duplicar SS em Notas para Baixar. */
+/* CGM_DUPLICAR_SS_UMOV_V1 - Copiar SS em Notas para Baixar. */
 (function(){
   'use strict';
   const actions=document.querySelector('.actions');
   if(!actions||document.getElementById('duplicateBtn'))return;
   const button=document.createElement('button');
   button.id='duplicateBtn';button.type='button';button.className='action';button.hidden=true;
-  button.innerHTML='<b>▣</b>Duplicar SS';
+  button.innerHTML='<b>▣</b>Copiar SS';
   const anchor=document.getElementById('rejectBtn');
   if(anchor)actions.insertBefore(button,anchor);else actions.appendChild(button);
   if(typeof currentScreen!=='undefined'&&currentScreen==='baixar')button.hidden=false;
@@ -31,15 +31,15 @@
   #cgmDupModal .cgm-dup-muted{font-size:11px;color:#607a92;line-height:1.4}
   `;
   document.head.appendChild(style);
-  const modal=document.createElement('div');modal.id='cgmDupModal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Duplicar SS no uMov');
-  modal.innerHTML=`<div class="cgm-dup-card"><div class="cgm-dup-head"><span>Duplicar SS no uMov</span><button type="button" class="cgm-dup-btn" id="cgmDupX">Fechar ×</button></div>
+  const modal=document.createElement('div');modal.id='cgmDupModal';modal.setAttribute('role','dialog');modal.setAttribute('aria-modal','true');modal.setAttribute('aria-label','Copiar SS');
+  modal.innerHTML=`<div class="cgm-dup-card"><div class="cgm-dup-head"><span>Copiar SS</span><button type="button" class="cgm-dup-btn" id="cgmDupX">Fechar ×</button></div>
   <div class="cgm-dup-body">
     <div class="cgm-dup-source" id="cgmDupSource"></div>
     <div><label for="cgmDupAgent">Bombeiro de destino (opcional)</label><input id="cgmDupAgent" autocomplete="off" placeholder="Digite o código ou nome para pesquisar"/><div id="cgmDupAgentSelected" class="cgm-dup-muted">Em branco: nova tarefa sem equipe, para a Recepção.</div><div class="cgm-dup-results" id="cgmDupResults" hidden></div></div>
-    <div class="cgm-dup-dates"><div><label for="cgmDupDate">Data prevista</label><input type="date" id="cgmDupDate"/></div><div><label for="cgmDupHour">Horário previsto</label><input type="time" id="cgmDupHour"/></div></div>
+
     <div class="cgm-dup-muted">A cópia mantém a mesma SS e o local de atendimento, mas recebe um novo ID de tarefa. O histórico de execução e as fotos não são duplicados. A SS original permanece intacta.</div>
     <div class="cgm-dup-status" id="cgmDupStatus" role="status"></div>
-  </div><div class="cgm-dup-footer"><button type="button" class="cgm-dup-btn" id="cgmDupCancel">Cancelar</button><button type="button" class="cgm-dup-btn primary" id="cgmDupConfirm">Criar cópia</button></div></div>`;
+  </div><div class="cgm-dup-footer"><button type="button" class="cgm-dup-btn" id="cgmDupCancel">Cancelar</button><button type="button" class="cgm-dup-btn primary" id="cgmDupConfirm">Copiar SS</button></div></div>`;
   document.body.appendChild(modal);
   const $=id=>document.getElementById(id);
   const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -48,20 +48,23 @@
   $('cgmDupX').onclick=close;$('cgmDupCancel').onclick=close;
   modal.addEventListener('click',e=>{if(e.target===modal)close()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&modal.classList.contains('open'))close()});
-  function dateDefault(){const d=new Date(Date.now()+60*60*1000);return {date:[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-'),hour:String(d.getHours()).padStart(2,'0')+':00'}}
   button.onclick=()=>{
-    if(typeof currentScreen==='undefined'||currentScreen!=='baixar')return alert('Duplicar SS esta disponivel somente em Notas para Baixar.');
+    if(typeof currentScreen==='undefined'||currentScreen!=='baixar')return alert('Copiar SS esta disponivel somente em Notas para Baixar.');
     const picked=Object.values(typeof selected==='object'?selected:{});
-    if(picked.length>1)return alert('Para duplicar, selecione somente uma SS por vez.');
+    if(picked.length>1)return alert('Para gerar uma cÃ³pia, selecione somente uma SS por vez.');
     const x=picked[0]||(window.__detailSS?.tarefa?window.__detailSS:null);
-    if(!x?.tarefa)return alert('Selecione a SS que deseja duplicar.');
+    if(!x?.tarefa)return alert('Selecione a SS que deseja copiar.');
     source=x;chosen=null;done=false;busy=false;
     $('cgmDupSource').innerHTML='<b>SS '+safe(x.ss)+'</b> — tarefa uMov '+safe(x.tarefa)+'<div>'+safe([x.logradouro,x.numero,x.bairro].filter(Boolean).join(', '))+'</div>';
     $('cgmDupAgent').value='';$('cgmDupAgentSelected').textContent='Em branco: nova tarefa sem equipe, para a Recepção.';
     $('cgmDupResults').hidden=true;$('cgmDupResults').innerHTML='';$('cgmDupStatus').textContent='';
-    const date=dateDefault();$('cgmDupDate').value=date.date;$('cgmDupHour').value=date.hour;
-    $('cgmDupConfirm').disabled=false;$('cgmDupConfirm').textContent='Criar cópia';$('cgmDupCancel').textContent='Cancelar';
+
+    $('cgmDupConfirm').disabled=false;$('cgmDupConfirm').textContent='Copiar SS';$('cgmDupCancel').textContent='Cancelar';
     modal.classList.add('open');$('cgmDupAgent').focus();
+    fetch('/api/duplicar-ss/origem/'+encodeURIComponent(x.tarefa),{credentials:'same-origin'})
+      .then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||'Consulta indisponivel');return j})
+      .then(j=>{if(source!==x||!modal.classList.contains('open'))return;if(j.agente){chosen={id:Number(j.agente),nome:j.nome||String(j.agente)};$('cgmDupAgent').value=chosen.id+' - '+chosen.nome;$('cgmDupAgentSelected').textContent='Bombeiro da nota original: '+chosen.nome;}})
+      .catch(()=>{$('cgmDupAgentSelected').textContent='Nao foi possivel identificar o bombeiro original. Selecione um bombeiro ou deixe em branco para Recepcao.';});
   };
   $('cgmDupAgent').addEventListener('input',()=>{
     chosen=null;$('cgmDupAgentSelected').textContent=$('cgmDupAgent').value.trim()?'Selecione um bombeiro na lista abaixo.':'Em branco: nova tarefa sem equipe, para a Recepção.';
@@ -79,13 +82,11 @@
   $('cgmDupConfirm').onclick=async()=>{
     if(busy||done||!source)return;
     if($('cgmDupAgent').value.trim()&&!chosen)return alert('Selecione o bombeiro na lista ou deixe o campo completamente em branco.');
-    const date=$('cgmDupDate').value,hour=$('cgmDupHour').value;
-    if(!date||!hour)return alert('Informe data e horario da nova tarefa.');
     const destino=chosen?chosen.nome:'Recepcao (sem bombeiro)';
-    if(!confirm('Criar nova tarefa uMov para SS '+source.ss+'?\nDestino: '+destino+'\nPrevisto: '+date+' '+hour+'\nA tarefa original nao sera alterada.'))return;
+    if(!confirm('Criar nova tarefa uMov para SS '+source.ss+'?\nDestino: '+destino+'\nA tarefa original nao sera alterada.'))return;
     busy=true;$('cgmDupConfirm').disabled=true;$('cgmDupConfirm').textContent='Criando...';$('cgmDupStatus').textContent='Enviando criacao ao uMov. Nao repita a operacao.';
     try{
-      const r=await fetch('/api/duplicar-ss',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefa:Number(source.tarefa),agente:chosen?.id??null,data:date,hora:hour})});
+      const r=await fetch('/api/duplicar-ss',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tarefa:Number(source.tarefa),agente:chosen?.id??null})});
       const j=await r.json();if(!r.ok&&!j.criada)throw Error(j.error||'Falha ao criar copia');
       done=true;
       $('cgmDupStatus').textContent='Copia criada no uMov!\nSS: '+(j.ss||source.ss)+'\nNova tarefa: '+(j.novaTarefa||'ID nao retornado')+'\nDestino: '+destino+'\nSituacao: '+(j.situacao||'Aguardando confirmacao')+'\n'+(j.confirmada?'Destino confirmado no uMov.':'Destino ainda nao confirmado no uMov.')+(j.avisos?.length?'\n'+j.avisos.join('\n'):'')+(j.alerta?'\n'+j.alerta:'');
@@ -94,4 +95,12 @@
     }catch(e){$('cgmDupStatus').textContent='Nao foi possivel confirmar a criacao: '+e.message+'\nSe houve falha de rede, confira o uMov antes de tentar novamente.';$('cgmDupConfirm').textContent='Verificar antes de repetir';}
     finally{busy=false;$('cgmDupCancel').disabled=false;}
   };
+})();
+
+/* CGM_ACOES_SS_PADRAO_V4: padronizacao restrita aos dois botoes */
+(function(){
+  if(document.getElementById('cgm-acoes-ss-padrao-v4'))return;
+  const s=document.createElement('style');s.id='cgm-acoes-ss-padrao-v4';
+  s.textContent=`#duplicateBtn,#cgmRotaAcao{box-sizing:border-box!important;position:static!important;float:none!important;transform:none!important;inset:auto!important;margin:0!important;min-width:0!important;max-width:100%!important;width:100%!important;min-height:34px!important;height:auto!important;padding:6px 8px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:5px!important;text-align:center!important;white-space:normal!important;line-height:1.2!important;font:inherit!important;font-size:11px!important;font-weight:600!important;border-radius:6px!important;vertical-align:middle!important}#duplicateBtn b,#cgmRotaAcao b{display:inline-block!important;position:static!important;flex:none!important;font-size:13px!important;line-height:1!important;margin:0!important}#duplicateBtn[hidden],#cgmRotaAcao[hidden]{display:none!important}`;
+  document.head.appendChild(s);
 })();
