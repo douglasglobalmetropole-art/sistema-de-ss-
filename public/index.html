@@ -3503,135 +3503,58 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  const el=id=>document.getElementById(id);
  const fotoModal=el('umovFotosModal'),status=el('umovFotosStatus'),grid=el('umovFotosGrid');
  const current=()=>{const m=el('siscomBaixaModal');if(m?.classList.contains('open')&&window.__siscomBaixaSelecionada)return window.__siscomBaixaSelecionada;const s=Object.values(window.selected||{});return s.length===1?s[0]:(window.__detailSS||null)};
- function fecharFotos(){fotoModal.classList.remove('open');el('umovFotosZoom').classList.remove('open')}
+ let consultaFotos;
+ function fecharFotos(){
+  consultaFotos?.abort();
+  fotoModal.classList.remove('open');
+  el('umovFotosZoom').classList.remove('open');
+  el('umovFotosZoomImg').removeAttribute('src');
+  grid.replaceChildren();
+ }
  el('umovFotosClose').onclick=el('umovFotosCloseFooter').onclick=fecharFotos;
  el('umovFotosZoomClose').onclick=()=>el('umovFotosZoom').classList.remove('open');
  fotoModal.addEventListener('click',e=>{if(e.target===fotoModal)fecharFotos()});
  fotoModal.addEventListener('keydown',e=>{if(e.key==='Escape'){if(el('umovFotosZoom').classList.contains('open'))el('umovFotosZoom').classList.remove('open');else fecharFotos()}});
  el('sbVerFotos').onclick=()=>el('viewPhotosBtn').click();
  el('sbBaixarUmov').onclick=()=>el('syncUmovBaixaBtn').click();
- // Cache temporario por SS e tarefa, com limite de memoria.
- const cacheFotos = new Map();
- const consultasFotos = new Map();
- let geracaoFotos = 0;
- const CHAVE_FOTOS = x => String(x.ss)+'|'+String(x.tarefa);
-
- async function obterFotos(x){
-   const chave = CHAVE_FOTOS(x);
-   const existente = cacheFotos.get(chave);
-
-   if(existente && Date.now()-existente.hora < 300000){
-     return existente.dados;
-   }
-
-   if(consultasFotos.has(chave)){
-     return consultasFotos.get(chave);
-   }
-
-   const consulta = (async()=>{
-     const r = await fetch('/api/relatorio-fotos',{
-       method:'POST',
-       headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({tarefa:x.tarefa,ss:x.ss}),
-       cache:'no-store'
-     });
-
-     const j = await r.json();
-
-     if(!r.ok || !j.ok){
-       throw Error(j.error||'Nao foi possivel carregar as fotos.');
-     }
-
-     cacheFotos.set(chave,{hora:Date.now(),dados:j});
-
-     while(cacheFotos.size>8){
-       cacheFotos.delete(cacheFotos.keys().next().value);
-     }
-
-     return j;
-   })();
-
-   consultasFotos.set(chave,consulta);
-
-   try{
-     return await consulta;
-   }finally{
-     consultasFotos.delete(chave);
-   }
- }
-
-
-
  el('viewPhotosBtn').onclick=async()=>{
-   const x=current();
+  const x=current();
+  if(!x?.tarefa || !x?.ss){
+   return window.notify?.('Selecione uma SS para ver as fotos.','error');
+  }
 
-   if(!x?.tarefa || !x?.ss){
-     return window.notify?.('Selecione uma SS para ver as fotos.','error');
-   }
+  consultaFotos?.abort();
+  consultaFotos=new AbortController();
+  const {signal}=consultaFotos;
+  fotoModal.classList.add('open');
+  el('umovFotosTitle').textContent='▧ Fotos da SS '+x.ss;
+  grid.replaceChildren();
+  status.textContent='Consultando fotos do relatório uMov...';
+  const count=el('umovFotosCount');
+  count.textContent='Carregando...';
 
-   const minhaGeracao=++geracaoFotos;
-   const chave=CHAVE_FOTOS(x);
-
-   fotoModal.classList.add('open');
-   el('umovFotosTitle').textContent='▧ Fotos da SS '+x.ss;
-
-   grid.replaceChildren();
-   status.textContent=cacheFotos.has(chave)
-     ? 'Exibindo fotos armazenadas...'
-     : 'Consultando fotos do relatorio original uMov...';
-
-   el('umovFotosCount').textContent='Carregando...';
-
-   try{
-     const j=await obterFotos(x);
-
-     // Impede que a resposta de outra SS sobrescreva o painel.
-     if(minhaGeracao!==geracaoFotos)return;
-
-     const fotos=Array.isArray(j.fotos)?j.fotos:[];
-
-     status.textContent=fotos.length
-       ? ''
-       : 'Nenhuma foto encontrada no relatorio original desta SS.';
-
-     el('umovFotosCount').textContent=
-       fotos.length+' foto(s) encontrada(s)'+
-       (j.truncado?' - Exibindo as primeiras 40':'');
-
-     const fragmento=document.createDocumentFragment();
-
-     fotos.forEach((src,i)=>{
-       const figure=document.createElement('figure');
-       const img=document.createElement('img');
-       const caption=document.createElement('figcaption');
-
-       img.alt='Foto '+(i+1)+' da SS '+x.ss;
-       img.loading=i===0?'eager':'lazy';
-       img.decoding='async';
-
-       if(i===0){
-         img.fetchPriority='high';
-       }
-
-       img.src=src;
-
-       img.onclick=()=>{
-         el('umovFotosZoomImg').src=src;
-         el('umovFotosZoom').classList.add('open');
-       };
-
-       caption.textContent='Foto '+(i+1);
-       figure.append(img,caption);
-       fragmento.append(figure);
-     });
-
-     grid.append(fragmento);
-
-   }catch(e){
-     if(minhaGeracao!==geracaoFotos)return;
-     status.textContent='Erro ao consultar fotos: '+e.message;
-     el('umovFotosCount').textContent='Consulta nao concluida';
-   }
+  try{
+   await window.__ssCarregarGaleriaFotos({
+    grade:grid, ss:x.ss, tarefa:x.tarefa, signal,
+    aoAtualizar({prontas,pendentes,falhas,recuperando,truncado}){
+     count.textContent=prontas+' foto(s)'+(truncado?' · limite de 40 no relatório':'');
+     if(recuperando)status.textContent='Buscando fotos pelo relatório uMov...';
+     else if(falhas && (prontas || !pendentes))status.textContent='Algumas fotos não carregaram.';
+     else if(prontas)status.textContent='';
+     else status.textContent=pendentes?'Carregando imagens...':'Nenhuma foto encontrada no relatório desta SS.';
+    },
+    aoAmpliar(fotos,i){
+     const imagem=el('umovFotosZoomImg');
+     imagem.referrerPolicy='no-referrer';
+     imagem.src=fotos[i];
+     el('umovFotosZoom').classList.add('open');
+    }
+   });
+  }catch(e){
+   if(signal.aborted)return;
+   status.textContent='Erro ao consultar fotos: '+e.message;
+   count.textContent='Consulta não concluída';
+  }
  };
  // Operação não envia baixa ao SISCOM; somente sincroniza o uMov após verificação oficial do evento 9.
  el('syncUmovBaixaBtn').onclick=async()=>{
@@ -3758,7 +3681,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 <link rel="stylesheet" href="/siscom-baixa-layout.css?v=20261116-umov-layout-v1">
 <script src="/siscom-baixa-layout.js?v=20261116-umov-v3" defer></script>
 <!-- GLOBAL_SS_RELATORIO_AGRUPADO_V10_SCRIPT -->
-<script src="/relatorio-agrupado-v10.js?v=20261118-paralelo"></script>
+<script src="/relatorio-agrupado-v10.js?v=20261118-consulta"></script>
 <!-- CGM_ROTEIRIZADOR_ACOES_SS_V1 -->
 <script src="/roteirizador-ss-cgm-v1.js?v=20261118-fluid" defer></script>
 <script src="/duplicidades-recepcao.js"></script>
@@ -4028,8 +3951,8 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 
 
 <!-- CGM_FOTOS_FIXO_V7 -->
-<link rel="stylesheet" href="/fotos-sequencias.css?v=20261118-fluid">
-<script defer src="/fotos-sequencias.js?v=20261118-fluid"></script>
+<link rel="stylesheet" href="/fotos-sequencias.css?v=20261118-imagens-diretas">
+<script defer src="/fotos-sequencias.js?v=20261118-imagens-diretas"></script>
 <script src="/rejeicao-opcoes-cgm-v1.js?v=rejeicao-v1-20261117" defer></script>
 <!-- CGM_DUPLICAR_SS_UMOV_V1 -->
 <script defer src="/duplicar-ss-cgm-v1.js?v=20261118copiassv6"></script>

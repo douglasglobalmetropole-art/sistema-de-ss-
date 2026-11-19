@@ -4,6 +4,7 @@ const express=require('express'),{Pool}=require('pg'),path=require('path');
 const fs=require('node:fs');
 const performance=require('./lib/performance');
 const {withReportPage,openReport}=require('./lib/umov-browser');
+const {consultarRelatorioFotos,consultarTokenLegado,consultarFontesFotos,fotoPermitida,MAX_FOTOS,TOKEN}=require('./lib/umov-fotos');
 const pageTemplates=new performance.BoundedMap(8);
 function readPage(name){if(!pageTemplates.has(name))pageTemplates.set(name,fs.readFileSync(path.join(__dirname,'public',name),'utf8'));return pageTemplates.get(name);}
 const {AsyncLocalStorage}=require('node:async_hooks');
@@ -423,44 +424,8 @@ if(materiaisDivisao && rota!=='/api/materiais'){
     });
    });
   }
-  // CGM_FOTOS_SEPARADAS_V3: escopo de divisao na consulta de sequencias.
-  if(req.method==='GET' && rota==='/api/umov/sequencias-fotos'){
-    if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'FaÃ§a login individual no SISCOM.'});
-    const numero=String(req.query?.ss||'').trim();
-    if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({ok:false,error:'SS invalida.'});
-    const schema=config.lote1?'u46915':'u45468';
-    return pool.query({text:`SELECT l.loc_city AS cidade FROM ${schema}.local l WHERE l.loc_integrationid=$1 LIMIT 1`,values:[numero],query_timeout:7000})
-      .then(q=>{
-        const cidade=normalizarCidade(q.rows[0]?.cidade||'');
-        if(!cidade||!config.cidades.map(normalizarCidade).includes(cidade))return res.status(403).json({ok:false,error:'SS nao pertence a divisao.'});
-        return next();
-      }).catch(e=>{console.error('Sequencias fotos divisao:',e.message);return res.status(503).json({ok:false,error:'Falha ao validar divisao.'});});
-  }
-  // CGM_AGRUPADO_ORIGINAIS_UNICO_V12: leitura, validacao por divisao.
-  if(req.method==='GET' && rota==='/api/relatorios-agrupados'){
-    const ss=String(req.query?.ss||'').trim();
-    const m=/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/.exec(ss);
-    if(!m)return res.status(400).json({ok:false,error:'Numero de SS invalido.'});
-    const schema=config.lote1?'u46915':'u45468';
-    return pool.query({
-      text:`SELECT DISTINCT l.loc_city AS cidade
-        FROM ${schema}.local l
-        WHERE l.loc_integrationid LIKE $1
-          AND l.loc_integrationid <= $2
-        LIMIT 201`,
-      values:[m[1]+'-%',ss],query_timeout:12000
-    }).then(q=>{
-      const cidades=q.rows.map(x=>normalizarCidade(x.cidade||''));
-      const permitidas=new Set(config.cidades.map(normalizarCidade));
-      if(!cidades.length)return res.status(404).json({ok:false,error:'SS nao localizada no uMov desta divisao.'});
-      if(cidades.length>=201||cidades.some(x=>!x||!permitidas.has(x)))
-        return res.status(403).json({ok:false,error:'Uma ou mais sequencias nao pertencem a esta divisao.'});
-      return next();
-    }).catch(e=>{
-      console.error('Relatorio agrupado/divisao:',e.code||e.message);
-      return res.status(503).json({ok:false,error:'Nao foi possivel validar as sequencias desta divisao.'});
-    });
-  }
+  // A rota agrupada valida cada sequência no banco da divisão, na própria consulta.
+  if(req.method==='GET' && rota==='/api/relatorios-agrupados')return next();
 
   // CGM_REJEICAO_UMOV_LOTE_V1 — separacao entre escrita uMov e rejeicao oficial SISCOM.
   if(req.method==='POST' && (rota==='/api/status-umov-rejeitar'||rota==='/api/status-umov-rejeitar/conferir')){
@@ -488,30 +453,8 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       return res.status(503).json({ok:false,error:'Nao foi possivel validar as tarefas da divisao.'});
     });
   }
-  // FOTOS_DIVISAO_CACHE_2026
-  // Consulta somente leitura, restrita a tarefa, SS e cidade da divisao.
-  if(req.method==='POST' && rota==='/api/relatorio-fotos'){
-    const tarefa=Number(req.body?.tarefa);
-    const numero=String(req.body?.ss||'').trim();
-
-    if(!Number.isSafeInteger(tarefa) || tarefa<=0 ||
-       !/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)){
-      return res.status(400).json({
-        ok:false,error:'Tarefa ou SS invalida.'
-      });
-    }
-
-    // A rota de fotos atual utiliza exclusivamente u45468.
-    // Nao encaminhar tarefas do Lote 1 para o banco de outro lote.
-    if(config.lote1){
-      return res.status(403).json({
-        ok:false,error:'Fotos do Lote 1 ainda nao configuradas.'
-      });
-    }
-
-    // A rota consulta tarefa, cidade e token juntos, antes de acessar o cache.
-    return next();
-  }
+  // A rota verifica a tarefa e a cidade no banco da divisão, inclusive no Lote 1.
+  if(req.method==='POST' && rota==='/api/relatorio-fotos')return next();
   // ANEXAR_RELATORIO_DIVISAO_20261113
   const anexarRelatorioDivisao =
     req.method === 'POST' &&
@@ -1853,67 +1796,25 @@ async function gerarPdfOriginalUmov(link){
  }));
 }
 
-// GLOBAL_SS_RELATORIO_AGRUPADO_V10_BEGIN
-// V11: consulta localizada por SS; evita ordenar todas as tarefas do banco.
-// Operacao exclusivamente de leitura. Nenhum dado e gravado no SISCOM ou uMov.
+const {consultarRelatoriosAgrupados,PADRAO_SS}=require('./lib/relatorios-agrupados');
 const consultaAgrupadosEmAndamento=performance.singleFlight();
 app.get('/api/relatorios-agrupados',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const ss=String(req.query.ss||'').trim();
- const m=/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/.exec(ss);
- if(!m)return res.status(400).json({ok:false,code:'SS_INVALIDA',error:'Selecione uma SS valida, incluindo a sequencia.'});
- const base=m[1];
+ if(!PADRAO_SS.test(ss))return res.status(400).json({ok:false,code:'SS_INVALIDA',error:'Selecione uma SS válida, incluindo a sequência.'});
  try{
-  // Materializar primeiro os locais evita varrer e ordenar tarefas de outras SS.
-  // LATERAL limita as tarefas pesquisadas por local, preservando a mais recente
-  // com relatorio valido; o limite protege a API contra consultas sem fim.
-  const chaveConsulta=cacheScope()+'|'+performance.getGeneration()+'|'+ss;
-  const r=await consultaAgrupadosEmAndamento(chaveConsulta,()=>pool.query({
-   text:`WITH locais AS MATERIALIZED (
-     SELECT loc_id,loc_integrationid FROM u45468.local
-     WHERE loc_integrationid LIKE $1
-       AND loc_integrationid <= $2
-     ORDER BY loc_integrationid,loc_id DESC LIMIT 201
-    )
-    SELECT l.loc_integrationid AS ss,t.tsk_id AS tarefa,
-           d.tss_id,d.tsk_accesstoken
-    FROM locais l
-    LEFT JOIN LATERAL (
-      SELECT tsk_id FROM u45468.task
-      WHERE loc_id=l.loc_id ORDER BY tsk_id DESC LIMIT 40
-    ) t ON TRUE
-    LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id AND d.tss_id=50
-    ORDER BY l.loc_integrationid,t.tsk_id DESC LIMIT 8040`,
-   values:[base+'-%',ss],query_timeout:18000
-  }));
-  // Preserva todos os relatorios concluÃ­dos de cada sequencia (nao so um por SS).
-  const porSS=new Map();
-  const tarefasIncluidas=new Set();
-  const prefix=base+'-';
+  const cidades=req.divisaoSS?.cidades ?? (emLote1()?LOTE1_CIDADES:null);
   const host=hostRelatorioUmov();
-  for(const row of r.rows){
-   const numero=String(row.ss||'').trim();
-   if(!numero.startsWith(prefix)||!/^[0-9]{2}$/.test(numero.slice(prefix.length))||numero.length!==prefix.length+2)continue;
-   if(!porSS.has(numero))porSS.set(numero,[]);
-   const tarefa=Number(row.tarefa);
-   const token=String(row.tsk_accesstoken||'').trim();
-   const chave=numero+':'+tarefa;
-   if(Number(row.tss_id)!==50||!Number.isSafeInteger(tarefa)||tarefa<=0||
-      !/^[a-zA-Z0-9._~-]+$/.test(token)||!host||tarefasIncluidas.has(chave))continue;
-   tarefasIncluidas.add(chave);
-   porSS.get(numero).push({ss:numero,disponivel:true,tarefa,
-    link:'https://'+host+'/CenterWeb/report/schedule/'+tarefa+'/'+token});
-  }
-  const sequencias=[...porSS.entries()]
-    .sort((a,b)=>Number(a[0].slice(-2))-Number(b[0].slice(-2)))
-    .flatMap(([numero,relatorios])=>relatorios.length?
-      relatorios.sort((a,b)=>a.tarefa-b.tarefa):
-      [{ss:numero,disponivel:false,tarefa:null,link:null}]);
-  if(sequencias.length>200||r.rows.length>=8040)return res.status(413).json({ok:false,code:'LIMITE_CONSULTA',error:'Consulta excedeu o limite de seguranca. Entre em contato para ajustar o agrupamento desta SS.'});
+  const chave=JSON.stringify([cacheScope(),performance.getGeneration(),ss,cidades,host]);
+  const resultado=await consultaAgrupadosEmAndamento(chave,()=>consultarRelatoriosAgrupados(pool,ss,{cidades,normalizarCidade,host}));
+  if(resultado.status===413)return res.status(413).json({ok:false,code:'LIMITE_CONSULTA',error:'Consulta excedeu o limite de segurança. Entre em contato para ajustar o agrupamento desta SS.'});
+  if(resultado.status!==200)return res.status(resultado.status).json({ok:false,error:resultado.error});
+  const {base,sequencias}=resultado;
   res.json({ok:true,base,consultada:ss,sequencias,total:sequencias.length,disponiveis:sequencias.filter(x=>x.disponivel).length,
-   aviso:!sequencias.length?'Nenhum relatorio localizado para esta SS e suas sequencias anteriores. Confira se esta no lote correto.':!host?'Host dos relatorios uMov nao configurado para este lote.':null});
+   aviso:!sequencias.length?'Nenhum relatório localizado para esta SS e suas sequências anteriores. Confira se está no lote correto.':!host?'Host dos relatórios uMov não configurado para este lote.':null});
  }catch(e){
-  const code=String(e.code||'');
+  const timeout=e.code==='57014'||e.message==='Query read timeout';
+  const code=timeout?'57014':String(e.code||'');
   console.error('Consulta agrupada uMov (codigo/etapa):',code||'SEM_CODIGO','consulta sequencias');
   const erros={
    '42501':['PERMISSAO_BANCO','Usuario do PostgreSQL sem permissao para consultar as tabelas uMov deste lote.'],
@@ -1926,52 +1827,42 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
    '3D000':['BANCO_AUSENTE','Banco uMov configurado nao existe.']
   };
   const [tipo,mensagem]=erros[code]||['CONSULTA_FALHOU','Falha ao consultar as sequencias no banco uMov. Verifique os logs do servidor.'];
-  res.status(502).json({ok:false,code:tipo,etapa:'consulta_sequencias',error:mensagem});
+  res.status(timeout?504:502).json({ok:false,code:tipo,etapa:'consulta_sequencias',error:mensagem});
  }
 });
-const { consultarMateriais } = require('./umov-materiais');
+const { consultarMateriais, consultarSequenciasFotos } = require('./umov-materiais');
+const sequenciasFotosEmAndamento = performance.singleFlight();
 
-    // CGM_UMOV_SEQUENCIAS_FOTOS_V1
-    app.get('/api/umov/sequencias-fotos', async (req, res) => {
-      if (!siscomIndividual(req)) return res.status(401).json({ok:false,error:'Login SISCOM necessario.'});
-      res.set('Cache-Control', 'no-store');
+app.get('/api/umov/sequencias-fotos', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!siscomIndividual(req)) return res.status(401).json({ok:false,error:'Faça login individual no SISCOM.'});
+  const ss = String(req.query.ss || '').trim();
+  if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)) {
+    return res.status(400).json({ok:false,error:'Número de SS inválido.'});
+  }
 
-      try {
-        const ss = String(req.query.ss || '').trim();
-
-        if (!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)) {
-          return res.status(400).json({
-            ok: false,
-            error: 'Numero de SS invalido.'
-          });
-        }
-
-        const { consultarSequenciasFotos } = require('./umov-materiais');
-        const sequencias = await consultarSequenciasFotos(pool, ss);
-
-        return res.json({
-          ok: true,
-          numero_ss: ss,
-          total: sequencias.length,
-          sequencias
-        });
-      } catch (error) {
-        const codigoBanco = String(error.code || '');
-        console.error('Consulta sequencias uMov:', codigoBanco || error.message);
-        const mensagemBanco = codigoBanco === '57014'
-          ? 'Consulta de sequencias uMov excedeu o tempo limite.'
-          : codigoBanco === '42P01'
-          ? 'Tabela de sequencias uMov indisponivel.'
-          : codigoBanco === '42501'
-          ? 'Sem permissao de leitura no PostgreSQL uMov.'
-          : 'Falha ao consultar sequencias anteriores no uMov.';
-
-        return res.status(502).json({
-          ok: false,
-          code: codigoBanco || 'FALHA_CONSULTA', error: mensagemBanco
-        });
-      }
+  try {
+    const cidades = req.divisaoSS?.cidades ?? (emLote1() ? LOTE1_CIDADES : null);
+    const chave = JSON.stringify([cacheScope(), performance.getGeneration(), ss, cidades]);
+    const sequencias = await sequenciasFotosEmAndamento(chave, () => consultarSequenciasFotos(pool, ss, cidades));
+    if (!sequencias) return res.status(403).json({ok:false,error:'SS não pertence a esta divisão.'});
+    return res.json({ok:true,numero_ss:ss,total:sequencias.length,sequencias});
+  } catch (error) {
+    const codigo = String(error.code || '');
+    console.error('Consulta sequências uMov:', codigo || error.message);
+    const mensagens = {
+      '57014': 'A consulta de sequências uMov excedeu o tempo limite.',
+      '42P01': 'Tabela de sequências uMov indisponível.',
+      '42501': 'Sem permissão de leitura no PostgreSQL uMov.'
+    };
+    const timeout = codigo === '57014' || error.message === 'Query read timeout';
+    return res.status(timeout ? 504 : 502).json({
+      ok:false,
+      code: timeout ? 'TEMPO_ESGOTADO' : codigo || 'FALHA_CONSULTA',
+      error: timeout ? mensagens['57014'] : mensagens[codigo] || 'Falha ao consultar sequências anteriores no uMov.'
     });
+  }
+});
 app.get('/api/umov/materiais', async (req, res) => {
   res.set('Cache-Control', 'no-store');
 
@@ -2232,65 +2123,83 @@ function guardarFotos(chave,dados){
  }
  fotosUmovCache.set(chave,{expira:agora+FOTOS_UMOV_TTL,bytes,dados});
 }
-async function extrairFotosUmov(page,link){
+function resultadoFotos(fotos,origem,total=fotos.length){
+ return {ok:true,fotos:fotos.slice(0,MAX_FOTOS),origem,truncado:total>MAX_FOTOS,total};
+}
+async function extrairFotosUmov(page,link,modoDireto){
  await openReport(page,link,13000);
- const indices=await page.$$eval('img',images=>images.flatMap((img,index)=>{
+ const imagens=await page.$$eval('img',images=>images.flatMap((img,index)=>{
   const r=img.getBoundingClientRect();
   const style=getComputedStyle(img);
   const src=img.currentSrc||img.src||'';
   return img.naturalWidth>=180&&img.naturalHeight>=120&&r.width>=90&&r.height>=70&&
     style.display!=='none'&&style.visibility!=='hidden'&&
-    !/logo|icone|icon|brasao|banner|assinatura/i.test(src)?[index]:[];
+    !/logo|icone|icon|brasao|banner|assinatura/i.test(src)?[{index,src}]:[];
  }));
- const images=await page.$$('img');
+ if(modoDireto&&imagens.length){
+  const relatorio=new URL(link);
+  const fontes=imagens.map(({src})=>fotoPermitida(src,relatorio,relatorio));
+  if(fontes.every(Boolean))return resultadoFotos(fontes,'direta');
+ }
+ const elements=await page.$$('img');
  const fotos=[];
  // Capturas na mesma página são sequenciais para manter o enquadramento.
- for(const index of indices){
-  if(fotos.length===40)break;
+ for(const {index} of imagens){
+  if(fotos.length===MAX_FOTOS)break;
   try{
-   const image=await images[index].screenshot({type:'jpeg',quality:74,encoding:'base64',timeout:6000});
+   const image=await elements[index].screenshot({type:'jpeg',quality:74,encoding:'base64',timeout:6000});
    if(image.length>3336&&image.length<2400000)fotos.push('data:image/jpeg;base64,'+image);
-  }catch(e){console.warn('Foto uMov ignorada:',String(e.message).slice(0,100));}
+  }catch(e){console.warn('Foto uMov ignorada:',e.name);}
  }
- return {ok:true,fotos,truncado:indices.length>40,total:indices.length};
+ return resultadoFotos(fotos,'captura',imagens.length);
 }
 app.post('/api/relatorio-fotos',async(req,res)=>{
  res.set('Cache-Control','no-store');
  if(!siscomIndividual(req)||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'Faça login individual no SISCOM para visualizar fotos.'});
  const tarefa=Number(req.body?.tarefa),ss=String(req.body?.ss||'').trim();
  if(!Number.isSafeInteger(tarefa)||tarefa<=0||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'Informe uma SS válida.'});
+ let etapa='banco';
  try{
-  const q=await pool.query({
-   text:`SELECT d.tsk_accesstoken,l.loc_city AS cidade
-      FROM u45468.dbout_task d
-      JOIN u45468.task t ON t.tsk_id=d.tsk_id
-      JOIN u45468.local l ON l.loc_id=t.loc_id
-      WHERE d.tsk_id=$1 AND l.loc_integrationid=$2 AND d.tss_id=50 LIMIT 1`,
-   values:[tarefa,ss],query_timeout:7000
-  });
-  const row=q.rows[0];
-  if(req.divisaoSS&&(!row||!req.divisaoSS.cidades.map(normalizarCidade).includes(normalizarCidade(row.cidade||'')))){
+  const row=await consultarRelatorioFotos(pool,tarefa,ss);
+  const cidades=req.divisaoSS?.cidades||(emLote1()?LOTE1_CIDADES:null);
+  if(cidades&&(!row||!cidades.map(normalizarCidade).includes(normalizarCidade(row.cidade||'')))){
    return res.status(403).json({ok:false,error:'Fotos não autorizadas para esta divisão.'});
   }
-  const token=String(row?.tsk_accesstoken||'');
+  if(!row)return res.status(404).json({ok:false,error:'Relatório original uMov não encontrado para esta SS.'});
   const host=hostRelatorioUmov();
-  if(!host||!/^[a-zA-Z0-9._~-]+$/.test(token))return res.status(404).json({ok:false,error:'Relatório original uMov não encontrado para esta SS.'});
+  if(!host)return res.status(503).json({ok:false,code:'HOST_RELATORIO_LOTE1',error:'Configure UMOV_REPORT_HOST_LOTE1 com o domínio do relatório original deste lote.'});
+  let token=String(row.token||'').trim();
+  if(!TOKEN.test(token)){
+   token=String(await consultarTokenLegado(pool,tarefa)||'').trim();
+  }
+  if(!TOKEN.test(token))return res.status(404).json({ok:false,error:'Relatório original uMov não encontrado para esta SS.'});
   const link='https://'+host+'/CenterWeb/report/schedule/'+tarefa+'/'+token;
+  etapa='relatorio';
+  validarUrlRelatorio(link);
   const chave=cacheScope()+'|'+ss+'|'+link;
-  const guardadas=fotosUmovCache.get(chave);
+  const modoDireto=req.body?.modo==='direto';
+  const consulta=modoDireto?chave+'|direta':chave+'|captura';
+  const captura=fotosUmovCache.get(chave+'|captura');
+  const guardadas=captura?.expira>Date.now()?captura:fotosUmovCache.get(consulta);
   if(guardadas?.expira>Date.now())return res.json(guardadas.dados);
-  const dados=await fotosEmAndamento(chave,async()=>{
-   const fotos=await withReportPage(page=>extrairFotosUmov(page,link));
-   guardarFotos(chave,fotos);
+  const dados=await fotosEmAndamento(consulta,async()=>{
+   let fontes=[];
+   if(modoDireto){
+    // Alguns relatórios só inserem as imagens depois de executar JavaScript.
+    fontes=await consultarFontesFotos(link).catch(()=>[]);
+   }
+   const fotos=fontes.length?resultadoFotos(fontes,'direta'):
+    await withReportPage(page=>extrairFotosUmov(page,link,modoDireto));
+   guardarFotos(chave+'|'+fotos.origem,fotos);
    return fotos;
   });
   return res.json(dados);
  }catch(e){
-  console.error('Fotos uMov:',e.message);
-  return res.status(502).json({ok:false,error:'Não foi possível extrair as fotos do relatório original. Verifique se o relatório está acessível.'});
+  console.error('Fotos uMov:',etapa,e.code||e.name);
+  const error=etapa==='banco'?'Falha ao consultar a tarefa no banco uMov.':'Não foi possível carregar as fotos do relatório original uMov.';
+  return res.status(502).json({ok:false,error});
  }
 });
-
 
 
 // CGM_STATUS_UMOV_CONFERIR_V2 - somente leitura, sem escrita uMov ou SISCOM.

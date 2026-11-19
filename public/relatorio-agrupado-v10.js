@@ -10,7 +10,8 @@
  const SS=/^\d{2}\/\d{2}-\d{6}-\d{2}$/;
  const api=()=>location.pathname.startsWith('/lote1')?'/lote1/api':'/api';
  const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n;};
- let data=null,gerando=false;
+ const TEMPO_CONSULTA_MS=14000;
+ let data=null,geracao=null,consulta=null;
  let pdfLibrary;
  function carregarBiblioteca(){
   if(window.PDFLib?.PDFDocument)return Promise.resolve(window.PDFLib);
@@ -41,13 +42,20 @@
  `;
  document.head.append(style);
  const root=el('div');root.id=ID;root.hidden=true;root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','Relatorios completos agrupados');
- const card=el('div','ga-card'),header=el('div','ga-header'),h=el('h2','', 'Relatório agrupado por SS'),close=el('button','ga-close','×');close.type='button';close.title='Fechar';header.append(h,close);
+ const card=el('div','ga-card'),header=el('div','ga-header'),h=el('h2','', 'Relatório agrupado por SS'),close=el('button','ga-close','×');close.type='button';close.title='Fechar';close.setAttribute('aria-label','Fechar');header.append(h,close);
  const content=el('div','ga-content'),hint=el('div','ga-muted','Os relatórios originais do uMov serão unidos em ordem de sequência, preservando todas as páginas e fotos. Nenhuma operação será realizada no SISCOM.'),stats=el('div','ga-stats','Consultando sequências...'),list=el('div','ga-list'),status=el('div','ga-status'),progress=el('progress');progress.max=1;progress.value=0;progress.hidden=true;
+ status.setAttribute('role','status');
  content.append(hint,stats,list,progress,status);
  const footer=el('div','ga-footer'),reload=el('button','ga-btn','Atualizar sequências'),view=el('button','ga-btn ga-primary','Gerar e visualizar PDF'),download=el('button','ga-btn ga-primary','Gerar e baixar PDF');
  for(const b of [reload,view,download])b.type='button';footer.append(reload,view,download);card.append(header,content,footer);root.append(card);document.body.append(root);
  const msg=(s,error=false)=>{status.textContent=s;status.classList.toggle('ga-error',error)};
- const busy=v=>{gerando=v;close.disabled=v;reload.disabled=v;view.disabled=v||!data||!data.disponiveis;download.disabled=v||!data||!data.disponiveis;list.querySelectorAll('input').forEach(x=>x.disabled=v||x.dataset.available!=='1')};
+ function atualizarControles(){
+  reload.disabled=!!geracao||!!consulta;
+  view.disabled=download.disabled=!!geracao||!!consulta||!data?.disponiveis;
+  list.setAttribute('aria-busy',String(!!consulta));
+  list.querySelectorAll('input').forEach(x=>x.disabled=!!geracao||x.dataset.available!=='1');
+ }
+ atualizarControles();
  const chosen=()=>[...list.querySelectorAll('input[data-available="1"]:checked')].map(x=>data.sequencias[Number(x.dataset.idx)]);
  let ssAtual='';
  const getSS=()=>{
@@ -64,10 +72,7 @@
   const field=String(document.getElementById('dss')?.textContent||'').trim();
   return [detail,field].find(x=>SS.test(x))||'';
  };
- async function load(ss){
-  data=null;list.replaceChildren();stats.textContent='Consultando sequências da SS '+ss+' no banco uMov...';msg('');progress.hidden=true;
-  const r=await fetch(api()+'/relatorios-agrupados?ss='+encodeURIComponent(ss),{credentials:'same-origin',cache:'no-store'});
-  const j=await r.json().catch(()=>({}));if(!r.ok||!j.ok)throw Error((j.code?'['+j.code+'] ':'')+(j.error||'Falha ao localizar as sequências'));
+ function exibirSequencias(j){
   data=j;h.textContent='Relatórios agrupados — '+j.base;
   stats.textContent=`${j.total} sequência(s) encontrada(s) • ${j.disponiveis} com relatório original disponível`;
   if(!j.sequencias.length){msg(j.aviso||'Nenhuma sequência encontrada no banco.');return;}
@@ -78,23 +83,85 @@
   });
   if(!j.aviso)msg('Marque as sequências desejadas. O sistema não incluirá relatórios ausentes nem duplicará a mesma sequência.');
  }
- const closeModal=()=>{if(!gerando)root.hidden=true;};close.onclick=closeModal;
+ async function load(ss){
+  if(geracao||consulta?.ss===ss)return;
+  consulta?.controller.abort();
+  const controller=new AbortController();
+  const requisicao={ss,controller};
+  consulta=requisicao;
+  data=null;
+  list.replaceChildren();
+  h.textContent='Relatórios agrupados — '+ss.slice(0,-3);
+  stats.textContent='Consultando sequências da SS '+ss+' no banco uMov...';
+  msg('');
+  progress.removeAttribute('value');
+  progress.setAttribute('aria-label','Consulta de sequências');
+  progress.hidden=false;
+  atualizarControles();
+  const timer=setTimeout(()=>{
+   controller.abort(new DOMException('A consulta excedeu o tempo limite.','TimeoutError'));
+  },TEMPO_CONSULTA_MS);
+  try{
+   const r=await fetch(api()+'/relatorios-agrupados?ss='+encodeURIComponent(ss),{
+    credentials:'same-origin',cache:'no-store',signal:controller.signal
+   });
+   const j=await r.json().catch(()=>null);
+   if(controller.signal.aborted)throw controller.signal.reason;
+   if(consulta!==requisicao)return;
+   if(!r.ok||!j?.ok||!Array.isArray(j.sequencias)){
+    throw Error(j?.error||'Falha ao localizar as sequências (HTTP '+r.status+').');
+   }
+   exibirSequencias(j);
+   if(j.disponiveis)void carregarBiblioteca().catch(()=>{});
+  }catch(e){
+   if(consulta!==requisicao)return;
+   stats.textContent='Consulta indisponível';
+   msg((e.message||'Falha ao localizar as sequências.')+' Use Atualizar sequências para tentar novamente.',true);
+  }finally{
+   clearTimeout(timer);
+   if(consulta===requisicao){
+    consulta=null;
+    progress.hidden=true;
+    atualizarControles();
+   }
+  }
+ }
+ function closeModal(){
+  const encerrada=consulta, interrompida=geracao;
+  consulta=null;
+  geracao=null;
+  encerrada?.controller.abort();
+  interrompida?.controller.abort();
+  if(interrompida?.preview&&!interrompida.preview.closed)interrompida.preview.close();
+  root.hidden=true;
+  progress.hidden=true;
+  atualizarControles();
+ }
+ close.onclick=closeModal;
  root.addEventListener('click',e=>{if(e.target===root)closeModal()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!root.hidden)closeModal()});
- async function open(){const ss=getSS();if(!ss){alert('Selecione uma SS para agrupar seus relatórios.');return;}
-  void carregarBiblioteca().catch(()=>{});
-  ssAtual=ss;root.hidden=false;busy(true);try{await load(ss)}catch(e){stats.textContent='Consulta indisponível';msg(e.message,true)}finally{busy(false)}
+ function open(){
+  if(geracao)return;
+  const ss=getSS();
+  if(!ss){alert('Selecione uma SS para agrupar seus relatórios.');return;}
+  ssAtual=ss;
+  root.hidden=false;
+  void load(ss);
  }
- reload.onclick=async()=>{const ss=ssAtual;if(!ss)return msg('SS inválida',true);busy(true);try{await load(ss)}catch(e){msg(e.message,true)}finally{busy(false)}};
+ reload.onclick=()=>{if(ssAtual)void load(ssAtual)};
  async function generate(mode){
-  if(gerando||!data)return;
+  if(geracao||consulta||!data)return;
   const seqs=chosen();if(!seqs.length)return msg('Selecione pelo menos um relatório disponível.',true);
   if(seqs.length>50)return msg('Limite de 50 relatorios por PDF. Desmarque algumas tarefas.',true);
   // Abre aba no clique do usuário, antes de qualquer await, para evitar bloqueio de pop-up.
   const preview=mode==='view'?window.open('about:blank','_blank'):null;
   if(mode==='view'&&!preview)return msg('O navegador bloqueou a aba. Permita pop-ups ou use Gerar e baixar PDF.',true);
-  busy(true);progress.hidden=false;progress.max=seqs.length;progress.value=0;
   const controller=new AbortController();
+  const trabalho={controller,preview};
+  geracao=trabalho;
+  atualizarControles();
+  progress.hidden=false;progress.max=seqs.length;progress.value=0;
+  progress.setAttribute('aria-label','Geração do relatório agrupado');
   // Uma conversão à frente da incorporação, preservando a ordem e o limite de memória.
   async function fetchPdf(x){
     const response=await fetch(api()+'/relatorio-original-pdf',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:x.link,ss:x.ss,tarefa:x.tarefa}),signal:controller.signal});
@@ -106,32 +173,47 @@
   try{
    const PDFLib=await carregarBiblioteca();
    const merged=await PDFLib.PDFDocument.create();
+   if(controller.signal.aborted)return;
    let totalBytes=0;
    const pending=seqs.slice(0,2).map((_,i)=>prefetch(i));
    for(let i=0;i<seqs.length;i++){
     const x=seqs[i];msg(`Convertendo e incorporando ${x.ss} (${i+1}/${seqs.length})...`);
     const result=await pending.shift();
+    if(controller.signal.aborted)return;
     if(result.error)throw result.error;
     const bytes=result.bytes;
     totalBytes+=bytes.byteLength;
     if(totalBytes>120*1024*1024)throw Error('Os PDFs excedem 120 MB. Divida o relatório em grupos menores.');
     if(bytes.byteLength<5||new Uint8Array(bytes,0,5).some((b,k)=>b!==[37,80,68,70,45][k]))throw Error('SS '+x.ss+': resposta não é PDF.');
     const source=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:false});
-    const pages=await merged.copyPages(source,source.getPageIndices());pages.forEach(p=>merged.addPage(p));
+    const pages=await merged.copyPages(source,source.getPageIndices());
+    if(controller.signal.aborted)return;
+    pages.forEach(p=>merged.addPage(p));
     progress.value=i+1;
     if(i+2<seqs.length)pending.push(prefetch(i+2));
    }
    if(!merged.getPageCount())throw Error('Nenhuma página disponível.');
    msg('Finalizando '+merged.getPageCount()+' páginas...');
    const output=await merged.save({useObjectStreams:true});
+   if(controller.signal.aborted)return;
    const blob=new Blob([output],{type:'application/pdf'});objectUrl=URL.createObjectURL(blob);
    const filename='RELATORIO_AGRUPADO_'+data.base.replace(/[^a-zA-Z0-9-]/g,'-')+'.pdf';
    if(mode==='view')preview.location.href=objectUrl;
    else{const a=el('a');a.href=objectUrl;a.download=filename;document.body.append(a);a.click();a.remove();}
    msg('PDF concluído: '+seqs.length+' relatórios completos, '+merged.getPageCount()+' páginas.');
    setTimeout(()=>URL.revokeObjectURL(objectUrl),180000);
-  }catch(e){if(preview&&!preview.closed)preview.close();if(objectUrl)URL.revokeObjectURL(objectUrl);msg('Não foi gerado arquivo parcial. '+(e.message||'Erro ao agrupar PDFs.'),true)}
-  finally{controller.abort();busy(false);progress.hidden=true}
+  }catch(e){
+   if(preview&&!preview.closed)preview.close();
+   if(objectUrl)URL.revokeObjectURL(objectUrl);
+   if(!controller.signal.aborted)msg('Não foi gerado arquivo parcial. '+(e.message||'Erro ao agrupar PDFs.'),true);
+  }finally{
+   controller.abort();
+   if(geracao===trabalho){
+    geracao=null;
+    progress.hidden=true;
+    atualizarControles();
+   }
+  }
  }
  view.onclick=()=>generate('view');download.onclick=()=>generate('download');
  // O botão já existe no sistema; captura para evitar handlers antigos de agrupamento.

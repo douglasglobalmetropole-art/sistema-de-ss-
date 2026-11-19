@@ -3,6 +3,118 @@
   'use strict';
   const api = location.pathname.startsWith('/lote1') ? '/lote1/api' : '/api';
   const el = id => document.getElementById(id);
+  async function obterJson(caminho, opcoes) {
+    const resposta = await fetch(caminho, {credentials: 'same-origin', cache: 'no-store', ...opcoes});
+    const dado = await resposta.json().catch(() => null);
+    if (!resposta.ok || !dado?.ok) {
+      const motivo = dado?.error || 'Resposta inválida da consulta';
+      throw new Error(motivo + ' (HTTP ' + resposta.status + ')');
+    }
+    return dado;
+  }
+
+  function fonteValida(fonte) {
+    if (typeof fonte !== 'string' || !fonte) return false;
+    if (/^data:image\/(?:jpe?g|png|gif|webp|avif|bmp);base64,/i.test(fonte)) return true;
+    try {
+      const url = new URL(fonte, location.href);
+      return !url.username && !url.password &&
+        (url.protocol === 'https:' || (url.origin === location.origin && url.protocol === 'http:'));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function montarFotos(grade, dados, {signal, aoAtualizar, aoAmpliar}) {
+    const direta = dados.origem === 'direta';
+    const fontes = Array.isArray(dados.fotos) ? dados.fotos.filter(fonteValida) : [];
+    const cards = fontes.map((src, i) => {
+      const figura = document.createElement('figure');
+      const img = document.createElement('img');
+      const legenda = document.createElement('figcaption');
+      img.alt = 'Foto ' + (i + 1);
+      img.title = 'Clique para ampliar';
+      img.loading = i < 2 ? 'eager' : 'lazy';
+      if (i === 0) img.fetchPriority = 'high';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      legenda.textContent = img.alt;
+      figura.append(img, legenda);
+      return {src, img, figura, estado: 'pendente'};
+    });
+    let pendentes = cards.length;
+    let prontas = 0;
+    let falhas = 0;
+
+    function ampliar(card) {
+      if (card?.estado !== 'pronta') return;
+      const disponiveis = cards.filter(item => item.estado === 'pronta' || item.estado === 'pendente');
+      aoAmpliar(disponiveis.map(item => item.src), disponiveis.indexOf(card));
+    }
+    const ampliarPrimeira = () => ampliar(cards.find(item => item.estado === 'pronta'));
+
+    return new Promise(resolve => {
+      const atualizar = () => {
+        aoAtualizar({prontas, pendentes, falhas, truncado: dados.truncado, ampliarPrimeira});
+        if (prontas || !pendentes) resolve(prontas > 0);
+      };
+      const cancelar = () => {
+        for (const {img} of cards) img.removeAttribute('src');
+        grade.replaceChildren();
+        resolve(false);
+      };
+      signal.addEventListener('abort', cancelar, {once: true});
+
+      let iniciadas = Math.min(2, cards.length);
+      function concluir(card, estado) {
+        if (signal.aborted || card.estado !== 'pendente') return;
+        card.estado = estado;
+        pendentes--;
+        if (estado === 'pronta') prontas++;
+        else {
+          if (estado === 'falha') falhas++;
+          card.figura.remove();
+          // Native lazy loading may never reach the remaining candidates after
+          // early images fail. Advance until a photo succeeds or all fail.
+          if (!prontas && cards[iniciadas]) cards[iniciadas++].img.loading = 'eager';
+        }
+        if (!pendentes) signal.removeEventListener('abort', cancelar);
+        atualizar();
+      }
+
+      for (const card of cards) {
+        card.img.onload = () => concluir(card,
+          direta && (card.img.naturalWidth < 180 || card.img.naturalHeight < 120) ? 'pequena' : 'pronta');
+        card.img.onerror = () => concluir(card, 'falha');
+        card.img.onclick = () => ampliar(card);
+      }
+      grade.replaceChildren(...cards.map(card => card.figura));
+      for (const card of cards) card.img.src = card.src;
+      atualizar();
+    });
+  }
+
+  async function carregarGaleria({grade, ss, tarefa, signal, aoAtualizar, aoAmpliar, iniciarPorCaptura = false}) {
+    const modos = iniciarPorCaptura ? ['captura'] : ['direto', 'captura'];
+    for (const modo of modos) {
+      const dados = await obterJson(api + '/relatorio-fotos', {
+        method: 'POST', signal, headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ss, tarefa, modo})
+      });
+      if (signal.aborted) return;
+      const exibida = await montarFotos(grade, dados, {
+        signal, aoAmpliar,
+        aoAtualizar: estado => {
+          const recuperando = modo === 'direto' && dados.origem === 'direta' && !estado.prontas && !estado.pendentes;
+          aoAtualizar({...estado, recuperando, direta: dados.origem === 'direta'});
+        }
+      });
+      if (exibida || dados.origem !== 'direta' || signal.aborted) break;
+    }
+  }
+
+  window.__ssCarregarGaleriaFotos = carregarGaleria;
+
   const modal = el('siscomBaixaModal');
   const shell = modal && modal.querySelector('.sbShell');
   if (!modal || !shell || el('cgmFotosAnteriorLateral')) return;
@@ -50,22 +162,25 @@
 
   let atualSS = '';
   let tarefaAtual = 0;
-  let versao = 0;
-  let versaoAnterior = 0;
   let registros = [];
-  let fotosAtuais = [];
-  let fotosAnteriores = [];
+  let ampliarAtual, ampliarAnterior;
   let fotosZoom = [];
   let indiceZoom = 0;
-  let abertaAntes = false;
-  let jaCarregando = false;
-  let carga, cargaAnterior;
+  let estadoAtual = '', estadoAnterior = '', estadoSequencias = '';
+  let carga, cargaAnterior, cargaSequencias;
   const seq = el('cgmSeqAnterior');
   const rel = el('cgmRelAnterior');
 
+  const imagemZoom = zoom.querySelector('img');
+  imagemZoom.referrerPolicy = 'no-referrer';
+  imagemZoom.onerror = () => {
+    if (zoom.hidden) return;
+    zoom.querySelector('figcaption').textContent = 'Não foi possível ampliar a foto ' + (indiceZoom + 1) + '.';
+  };
+
   function zoomDesenhar() {
     if (!fotosZoom.length) return;
-    zoom.querySelector('img').src = fotosZoom[indiceZoom];
+    imagemZoom.src = fotosZoom[indiceZoom];
     zoom.querySelector('figcaption').textContent = 'Foto ' + (indiceZoom + 1) + ' de ' + fotosZoom.length;
   }
   function zoomAbrir(lista, indice) {
@@ -77,7 +192,7 @@
   }
   function zoomFechar() {
     zoom.hidden = true;
-    zoom.querySelector('img').removeAttribute('src');
+    imagemZoom.removeAttribute('src');
     fotosZoom = [];
   }
   zoom.addEventListener('click', e => {
@@ -99,70 +214,73 @@
     }
   }, true);
 
-  function renderizar(lado, fotos) {
-    const esquerdaLado = lado === 'anterior';
-    const grade = el(esquerdaLado ? 'cgmGridAnterior' : 'cgmGridAtual');
-    const contador = el(esquerdaLado ? 'cgmCountAnterior' : 'cgmCountAtual');
+  function painel(lado) {
+    const nome = lado === 'anterior' ? 'Anterior' : 'Atual';
+    return {grade: el('cgmGrid' + nome), contador: el('cgmCount' + nome), status: el('cgmStatus' + nome)};
+  }
+
+  function estadoGaleria(lado, estado) {
+    if (lado === 'anterior') estadoAnterior = estado;
+    else estadoAtual = estado;
+  }
+
+  function limparPainel(lado, texto = '') {
+    const {grade, contador, status} = painel(lado);
+    if (lado === 'anterior') ampliarAnterior = null;
+    else ampliarAtual = null;
     grade.replaceChildren();
-    const fragmento = document.createDocumentFragment();
-    fotos.forEach((src, indice) => {
-      if (typeof src !== 'string' || !src) return;
-      const figura = document.createElement('figure');
-      const img = document.createElement('img');
-      const legenda = document.createElement('figcaption');
-      img.loading = indice < 2 ? 'eager' : 'lazy';
-      img.decoding = 'async';
-      img.src = src;
-      img.alt = 'Foto ' + (indice + 1);
-      img.title = 'Clique para ampliar';
-      img.onclick = () => zoomAbrir(fotos, indice);
-      legenda.textContent = 'Foto ' + (indice + 1);
-      figura.append(img, legenda);
-      fragmento.append(figura);
-    });
-    grade.append(fragmento);
-    contador.textContent = fotos.length + ' foto(s)';
+    contador.textContent = '0 foto(s)';
+    status.textContent = texto;
+    el(lado === 'anterior' ? 'cgmAmpliarAnterior' : 'cgmAmpliarAtual').disabled = true;
   }
-  function mensagem(lado, texto) {
-    el(lado === 'anterior' ? 'cgmStatusAnterior' : 'cgmStatusAtual').textContent = texto || '';
-  }
-  async function obterJson(caminho, opcoes) {
-    const resposta = await fetch(caminho, {credentials: 'same-origin', cache: 'no-store', ...opcoes});
-    let dado;
-    try { dado = await resposta.json(); } catch (_) { throw new Error('Resposta invalida da API (HTTP ' + resposta.status + ')'); }
-    if (!resposta.ok || !dado.ok) {
-      throw new Error((dado.code ? '[' + dado.code + '] ' : '') + (dado.error || 'Falha na consulta') + ' (HTTP ' + resposta.status + ')');
-    }
-    return dado;
-  }
-  async function buscarFotos(ss, tarefa, signal) {
-    const dado = await obterJson(api + '/relatorio-fotos', {
-      method: 'POST', signal, headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ss, tarefa})
-    });
-    return Array.isArray(dado.fotos) ? dado.fotos : [];
-  }
-  async function carregarAnterior() {
-    cargaAnterior?.abort();
-    cargaAnterior = new AbortController();
-    const token = ++versaoAnterior;
-    const registro = registros.find(r => r.numero_ss === seq.value && String(r.tarefa) === rel.value);
-    fotosAnteriores = [];
-    renderizar('anterior', []);
-    if (!registro) return;
-    mensagem('anterior', 'Consultando fotos anteriores...');
+
+  async function exibirFotos(lado, ss, tarefa, signal, iniciarPorCaptura) {
+    const {grade, contador, status} = painel(lado);
+    estadoGaleria(lado, 'carregando');
+    limparPainel(lado, 'Consultando fotos...');
     try {
-      const fotos = await buscarFotos(registro.numero_ss, registro.tarefa, cargaAnterior.signal);
-      if (token !== versaoAnterior || !modal.classList.contains('open')) return;
-      fotosAnteriores = fotos;
-      renderizar('anterior', fotos);
-      mensagem('anterior', fotos.length ? '' : 'Nenhuma foto neste relat\u00f3rio.');
+      await carregarGaleria({grade, ss, tarefa, signal, iniciarPorCaptura, aoAmpliar: zoomAbrir,
+        aoAtualizar({prontas, pendentes, falhas, recuperando, direta, truncado, ampliarPrimeira}) {
+          if (lado === 'anterior') ampliarAnterior = prontas ? ampliarPrimeira : null;
+          else ampliarAtual = prontas ? ampliarPrimeira : null;
+          el(lado === 'anterior' ? 'cgmAmpliarAnterior' : 'cgmAmpliarAtual').disabled = !prontas;
+          contador.textContent = prontas + ' foto(s)' + (truncado ? ' · limite de 40' : '');
+          if (!prontas && (pendentes || recuperando)) estadoGaleria(lado, 'carregando');
+          else if (falhas) estadoGaleria(lado, direta ? 'falha-direta' : 'falha');
+          else estadoGaleria(lado, 'pronto');
+          if (recuperando) status.textContent = 'Buscando fotos pelo relatório uMov...';
+          else if (falhas && (prontas || !pendentes)) {
+            status.textContent = (prontas ? 'Algumas fotos não carregaram.' : 'As fotos não carregaram.') +
+              ' Use Recarregar consultas para tentar de novo.';
+          } else if (prontas) status.textContent = '';
+          else status.textContent = pendentes ? 'Carregando imagens...' : 'Nenhuma fotografia encontrada.';
+        }
+      });
     } catch (err) {
-      if (token === versaoAnterior) mensagem('anterior', 'Falha ao carregar: ' + err.message);
+      if (signal.aborted) return;
+      estadoGaleria(lado, 'falha');
+      status.textContent = 'Falha ao consultar: ' + err.message + '. Use Recarregar consultas para tentar de novo.';
     }
   }
+
+  function carregarAtual(iniciarPorCaptura = false) {
+    carga?.abort();
+    carga = new AbortController();
+    void exibirFotos('atual', atualSS, tarefaAtual, carga.signal, iniciarPorCaptura);
+  }
+
+  function carregarAnterior(iniciarPorCaptura = false) {
+    cargaAnterior?.abort();
+    const registro = registros.find(r => r.numero_ss === seq.value && String(r.tarefa) === rel.value);
+    if (!registro) {
+      limparPainel('anterior');
+      return;
+    }
+    cargaAnterior = new AbortController();
+    void exibirFotos('anterior', registro.numero_ss, registro.tarefa, cargaAnterior.signal, iniciarPorCaptura);
+  }
+
   function preencherRelatorios() {
-    ++versaoAnterior;
     rel.replaceChildren();
     const lista = registros.filter(r => r.numero_ss === seq.value);
     lista.forEach((item, i) => {
@@ -178,107 +296,89 @@
   }
   seq.addEventListener('change', preencherRelatorios);
   rel.addEventListener('change', () => { void carregarAnterior(); });
-  el('cgmAmpliarAnterior').onclick = () => zoomAbrir(fotosAnteriores, 0);
-  el('cgmAmpliarAtual').onclick = () => zoomAbrir(fotosAtuais, 0);
+  el('cgmAmpliarAnterior').onclick = () => ampliarAnterior?.();
+  el('cgmAmpliarAtual').onclick = () => ampliarAtual?.();
 
-  async function carregarDados(ss, tarefa) {
-    carga?.abort();
-    cargaAnterior?.abort();
-    carga = new AbortController();
-    const {signal} = carga;
-    const token = ++versao;
-    ++versaoAnterior;
-    atualSS = String(ss);
-    tarefaAtual = Number(tarefa);
-    jaCarregando = true;
-    esquerda.hidden = false;
-    direita.hidden = false;
-    registros = [];
-    seq.replaceChildren();
-    rel.replaceChildren();
-    fotosAtuais = [];
-    fotosAnteriores = [];
-    renderizar('atual', []);
-    renderizar('anterior', []);
-    el('cgmNumeroAtual').textContent = atualSS;
-    mensagem('atual', 'Consultando fotos atuais...');
-    mensagem('anterior', 'Consultando sequ\u00eancias anteriores...');
-
-    const atualPromise = buscarFotos(atualSS, tarefaAtual, signal).then(fotos => {
-      if (token !== versao || !modal.classList.contains('open')) return;
-      fotosAtuais = fotos;
-      renderizar('atual', fotos);
-      mensagem('atual', fotos.length ? '' : 'Nenhuma fotografia encontrada.');
-    }).catch(err => {
-      if (token === versao) mensagem('atual', 'Falha ao consultar: ' + err.message);
-    });
-
-    const anteriorPromise = obterJson(api + '/umov/sequencias-fotos?ss=' + encodeURIComponent(atualSS), {signal}).then(dado => {
-      if (token !== versao || !modal.classList.contains('open')) return;
+  async function carregarSequencias() {
+    cargaSequencias?.abort();
+    cargaSequencias = new AbortController();
+    const {signal} = cargaSequencias;
+    estadoSequencias = 'carregando';
+    const {status} = painel('anterior');
+    status.textContent = 'Consultando sequências anteriores...';
+    try {
+      const dado = await obterJson(api + '/umov/sequencias-fotos?ss=' + encodeURIComponent(atualSS), {signal});
+      if (signal.aborted) return;
+      estadoSequencias = 'pronto';
       registros = Array.isArray(dado.sequencias) ? dado.sequencias : [];
       const opcoes = [...new Set(registros.map(r => r.numero_ss))].filter(Boolean);
-      if (!opcoes.length) {
-        esquerda.hidden = true; // Somente quando a consulta confirmou ausencia de sequencias.
-        return;
-      }
-      esquerda.hidden = false;
-      opcoes.forEach(numero => {
-        const opt = document.createElement('option');
-        opt.value = numero;
-        opt.textContent = numero;
-        seq.append(opt);
-      });
-      mensagem('anterior', '');
+      esquerda.hidden = !opcoes.length;
+      if (!opcoes.length) return;
+      seq.replaceChildren(...opcoes.map(numero => new Option(numero, numero)));
       preencherRelatorios();
-    }).catch(err => {
-      if (token !== versao) return;
-      esquerda.hidden = false; // Erros nao sao confundidos com ausencia de sequencias.
-      mensagem('anterior', 'Consulta indispon\u00edvel: ' + err.message);
-    });
-    await Promise.allSettled([atualPromise, anteriorPromise]);
-    if (token === versao) jaCarregando = false;
+    } catch (err) {
+      if (signal.aborted) return;
+      estadoSequencias = 'falha';
+      esquerda.hidden = false;
+      status.textContent = 'Consulta indisponível: ' + err.message + '. Use Recarregar consultas para tentar de novo.';
+    }
   }
-  function obterSelecionada() {
-    const selecionada = window.__siscomBaixaSelecionada;
-    return selecionada?.ss && selecionada?.tarefa ? selecionada : null;
+
+  function redefinirGalerias() {
+    carga?.abort();
+    cargaAnterior?.abort();
+    cargaSequencias?.abort();
+    registros = [];
+    estadoAtual = estadoAnterior = estadoSequencias = '';
+    seq.replaceChildren();
+    rel.replaceChildren();
+    limparPainel('atual');
+    limparPainel('anterior');
+    zoomFechar();
   }
-  function tentarCarregar(tentativas = 0) {
-    if (!modal.classList.contains('open')) return;
-    const ss = obterSelecionada();
-    if (!ss) {
-      if (tentativas < 30) setTimeout(() => tentarCarregar(tentativas + 1), 120);
+
+  function tentarCarregar() {
+    if (!modal.classList.contains('open')) {
+      if (atualSS) redefinirGalerias();
+      atualSS = '';
+      tarefaAtual = 0;
       return;
     }
-    if (String(ss.ss) === atualSS && Number(ss.tarefa) === tarefaAtual && jaCarregando) return;
-    if (String(ss.ss) === atualSS && Number(ss.tarefa) === tarefaAtual && direita.querySelector('img')) return;
-    void carregarDados(ss.ss, ss.tarefa);
+    const ss = window.__siscomBaixaSelecionada;
+    if (!ss?.ss || !ss?.tarefa || (ss.ss === atualSS && Number(ss.tarefa) === tarefaAtual)) return;
+    redefinirGalerias();
+    atualSS = ss.ss;
+    tarefaAtual = Number(ss.tarefa);
+    esquerda.hidden = false;
+    direita.hidden = false;
+    el('cgmNumeroAtual').textContent = atualSS;
+    carregarAtual();
+    if (atualSS.endsWith('-00')) {
+      esquerda.hidden = true;
+      estadoSequencias = 'pronto';
+    } else void carregarSequencias();
   }
-  const observer = new MutationObserver(() => {
-    const aberta = modal.classList.contains('open');
-    if (aberta && !abertaAntes) {
-      abertaAntes = true;
-      setTimeout(() => tentarCarregar(), 90);
-    } else if (!aberta && abertaAntes) {
-      abertaAntes = false;
-      carga?.abort();
-      cargaAnterior?.abort();
-      ++versao;
-      ++versaoAnterior;
-      atualSS = '';
-      jaCarregando = false;
-      zoomFechar();
-    }
-  });
-  observer.observe(modal, {attributes:true, attributeFilter:['class']});
-  if (modal.classList.contains('open')) { abertaAntes = true; tentarCarregar(); }
 
-  // Evita abrir o modal antigo ao clicar em Ver fotos; abre zoom no painel atual.
+  const observer = new MutationObserver(tentarCarregar);
+  observer.observe(modal, {attributes: true, attributeFilter: ['class']});
+  tentarCarregar();
+
+  // Preserve the SISCOM refresh, with an independent retry for each failed gallery.
+  el('sbRecarregar')?.addEventListener('click', () => {
+    if (!modal.classList.contains('open') || !atualSS) return;
+    if (estadoAtual.startsWith('falha')) carregarAtual(estadoAtual === 'falha-direta');
+    if (estadoSequencias === 'falha') void carregarSequencias();
+    else if (estadoAnterior.startsWith('falha')) carregarAnterior(estadoAnterior === 'falha-direta');
+  });
+
+  // The existing photo action opens the side gallery zoom in the baixa modal.
   document.addEventListener('click', e => {
     const botao = e.target.closest?.('#viewPhotosBtn, #sbVerFotos');
     if (!botao || !modal.classList.contains('open')) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (botao.id === 'sbVerFotos' && fotosAtuais.length) zoomAbrir(fotosAtuais, 0);
-    else tentarCarregar();
+    tentarCarregar();
+    if (ampliarAtual) ampliarAtual();
+    else if (atualSS && estadoAtual.startsWith('falha')) carregarAtual(estadoAtual === 'falha-direta');
   }, true);
 })();

@@ -149,3 +149,8 @@
   min-height: var(--ss-control);
   font-size: 2rem;
 }
+
+#siscomBaixaModal .cgmFotosLateral footer button:disabled {
+  opacity: .55;
+  cursor: not-allowed !important;
+}
