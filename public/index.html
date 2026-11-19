@@ -3657,7 +3657,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'O uMov não confirmou a atualização');
    // API uMov aceita solicitação; a confirmação final depende da sincronização de volta ao banco.
    window.notify?.('Atualização enviada ao uMov. Aguarde a sincronização e recarregue para confirmar o status.','success');
-   if(typeof load==='function')await load();
+   if(typeof load==='function')Promise.resolve().then(()=>load()).catch(e=>console.warn('Atualizar lista uMov:',e));
   }catch(e){window.notify?.('Não foi possível marcar Baixada: '+e.message,'error');alert('Sincronização não confirmada: '+e.message)}
   finally{btn.disabled=false}
  };

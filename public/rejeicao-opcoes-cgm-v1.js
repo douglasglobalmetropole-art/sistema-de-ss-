@@ -109,7 +109,7 @@
             if(window.__detailSS&&porId.has(String(window.__detailSS.tarefa)))
               window.__detailSS.status_integracao=porId.get(String(window.__detailSS.tarefa)).status_integracao;
             apply();
-            if(typeof load==='function'&&!window.__buscaSSAtiva)await load(true);
+            if(typeof load==='function'&&!window.__buscaSSAtiva)Promise.resolve().then(()=>load(true)).catch(e=>console.warn('Atualizar lista uMov:',e));
           }catch(e){console.warn('Recarregar lista:',e.message)}
         }
       }
