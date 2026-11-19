@@ -3,6 +3,46 @@ GLOBAL SS — PROJETO OTIMIZADO
 O pacote contém o código completo, os testes e o relatório da análise.
 O relatório detalha o alcance das alterações e o que depende de produção.
 
+LAYOUT, FOTOS, RELATÓRIOS E GIS — NOVA REVISÃO
+
+- As telas principais compartilham fontes, espaçamento e dimensões de controles.
+  As tabelas preservam todas as colunas e rolam dentro do próprio quadro.
+  No celular, o formulário de baixa e os painéis de fotos ficam empilhados.
+- Fotos: a rota Postgres lê a cidade e o token na mesma consulta. Extrações
+  simultâneas do mesmo relatório são compartilhadas. O cache de imagens é
+  limitado a 32 MiB por instância e revalida tarefa, SS e divisão antes de servir.
+- PDF original e fotos: até duas renderizações por instância com contextos
+  Chromium isolados. O processo reutilizável é encerrado após 15 s ocioso.
+  Quando o contexto isolado não abre, a conversão usa um Chromium dedicado.
+- Agrupado: até duas conversões simultâneas. As páginas entram no PDF na ordem
+  selecionada. A biblioteca de PDF só é carregada ao abrir o agrupado.
+- Roteirização: até três consultas GIS simultâneas por planejamento. A rota
+  desenhada usa os resultados da equipe atual. A consulta direta opcional
+  dispensa a fila no caminho GIS quando a URL está configurada.
+
+CONFIGURAÇÃO GIS
+GIS_LOOKUP_URL aponta para um endpoint HTTPS da API oficial ou de uma ponte
+da organização. O servidor usa GET com o parâmetro de consulta ss e aceita
+GIS_LOOKUP_TOKEN como Bearer opcional. A resposta JSON deve seguir o contrato
+abaixo, usando a unidade executora oficial para o controle por divisão:
+  {"ok":true,"found":true,"ss":"11/26-000001-01","unidade":"VITÓRIA",
+   "matricula":"123456","hidrometro":"ABC123","lat":-20.3,"lon":-40.3}
+Quando não houver coordenadas, a resposta pode incluir found:false e error.
+Sem GIS_LOOKUP_URL, a rota usa a fila existente. O worker do ZIP recebido
+não inclui a operação gis_localizar_ss. Nesse caso, é necessário um worker
+implantado que já processe essa operação. A API oficial e o ambiente de
+produção não estavam disponíveis para validar a integração real.
+
+VALIDAÇÃO DESTA REVISÃO
+- Chromium com dados simulados, de 320 a 1920 px, em sete rotas.
+- Agrupado com três PDFs de teste e entregas fora de ordem, mantendo a ordem
+  das páginas. Três renderizações sintéticas compartilharam um Chromium.
+- API GIS simulada com verificação de sessão e de divisão.
+- npm test: 19 aprovados e 1 falha reproduzida no ZIP original, na comparação
+  da consulta da aba de baixa com a consulta de referência.
+- Tempos em produção dependem de uMov, PostgreSQL, GIS e do ambiente Chromium.
+  Os arquivos de benchmark e o relatório anterior são históricos.
+
 VALIDAR LOCALMENTE (Node.js 24)
 1. Extraia o ZIP em uma pasta nova e preserve a instalação anterior.
 2. Configure o .env com os valores do seu ambiente, usando .env.example como referência.

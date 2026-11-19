@@ -1343,7 +1343,8 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 
 
 
-</head><body><main>
+<link rel="stylesheet" href="/layout-responsivo.css?v=2">
+</head><body class="ss-app"><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
  <div class="siscomTopButtons"><span id="siscomIdentityLabel">SISCOM: não conectado</span><button type="button" class="btn primary" id="siscomLoginTop">🔐 Login SISCOM</button><button type="button" class="btn" id="siscomConsultaTop" disabled>Consultar SS</button><button type="button" class="btn" id="siscomLogoutTop" hidden>Sair</button></div>
@@ -3757,10 +3758,9 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 <link rel="stylesheet" href="/siscom-baixa-layout.css?v=20261116-umov-layout-v1">
 <script src="/siscom-baixa-layout.js?v=20261116-umov-v3" defer></script>
 <!-- GLOBAL_SS_RELATORIO_AGRUPADO_V10_SCRIPT -->
-<script src="/vendor/pdf-lib.min.js"></script>
-<script src="/relatorio-agrupado-v10.js?v=cgm-agrupado-v12-20261117"></script>
+<script src="/relatorio-agrupado-v10.js?v=20261118-paralelo"></script>
 <!-- CGM_ROTEIRIZADOR_ACOES_SS_V1 -->
-<script src="/roteirizador-ss-cgm-v1.js?v=20261118copiassv6" defer></script>
+<script src="/roteirizador-ss-cgm-v1.js?v=20261118-fluid" defer></script>
 <script src="/duplicidades-recepcao.js"></script>
 <script src="/duplicidades-global.js?v=matriz-v4-20261029"></script>
 
@@ -3945,7 +3945,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
   }
 })();
 </script>
-<script src="/gis-ss-map.js" defer></script>
+<script src="/gis-ss-map.js?v=20261118-fluid" defer></script>
 
 <!-- GLOBAL_SS_CORRECAO_FECHAR_FOTOS_V2 -->
 <style id="globalSsFecharFotosV2">
@@ -4028,8 +4028,8 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 
 
 <!-- CGM_FOTOS_FIXO_V7 -->
-<link rel="stylesheet" href="/fotos-sequencias.css?v=20261116v13">
-<script defer src="/fotos-sequencias.js?v=20261116v11"></script>
+<link rel="stylesheet" href="/fotos-sequencias.css?v=20261118-fluid">
+<script defer src="/fotos-sequencias.js?v=20261118-fluid"></script>
 <script src="/rejeicao-opcoes-cgm-v1.js?v=rejeicao-v1-20261117" defer></script>
 <!-- CGM_DUPLICAR_SS_UMOV_V1 -->
 <script defer src="/duplicar-ss-cgm-v1.js?v=20261118copiassv6"></script>

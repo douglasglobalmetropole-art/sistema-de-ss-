@@ -1,0 +1,198 @@
+@media screen {
+  :root {
+    --ss-font: system-ui, "Segoe UI", Arial, sans-serif;
+    --ss-text: 0.8125rem;
+    --ss-small: 0.75rem;
+    --ss-icon: 1rem;
+    --ss-gap: clamp(0.5rem, 1vw, 0.875rem);
+    --ss-pad: clamp(0.5rem, 1.3vw, 1.25rem);
+    --ss-control: 2.25rem;
+    --ss-radius: 0.5rem;
+  }
+
+  body.ss-app, body.ss-maintenance, body.ss-central {
+    font: var(--ss-text)/1.4 var(--ss-font);
+  }
+
+  :is(.ss-app, .ss-central, .ss-maintenance) :is(button, input, select, textarea) {
+    font-family: inherit;
+    max-width: 100%;
+  }
+
+  .ss-app main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ss-gap);
+    min-width: 0;
+    min-height: 100dvh;
+    padding: var(--ss-pad);
+  }
+
+  .ss-app main > :is(.toolbar, .box, .lower, .siscomTopAuth) {
+    margin: 0 !important;
+    min-width: 0;
+    border-radius: var(--ss-radius);
+  }
+
+  .ss-app main > .toolbar {
+    flex-wrap: wrap;
+    gap: var(--ss-gap);
+  }
+
+  .ss-app .siscomTopAuth, .ss-app .siscomTopButtons,
+  .ss-app .pagination, .ss-app .modalBtns {
+    flex-wrap: wrap;
+    gap: var(--ss-gap);
+  }
+
+  .ss-app :is(.toolbar .tab, .toolbar .btn, .siscomTopButtons .btn, .modalBtns .btn) {
+    height: auto;
+    min-height: var(--ss-control);
+    white-space: normal;
+    font-size: var(--ss-small);
+    overflow-wrap: anywhere;
+  }
+
+  .ss-app :is(.toolbar, .modalBox) :is(input, select, textarea):not([type=checkbox], [type=radio]) {
+    font-size: var(--ss-text);
+    min-width: 0;
+  }
+
+  .ss-app .toolbar > :is(label, .multi, .ssQuickSearch) {
+    max-width: 100%;
+  }
+
+  .ss-app main > .box {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+  }
+
+  .ss-app main > .box > .tableScroll {
+    flex: 1 1 0;
+    height: auto !important;
+    min-height: clamp(12rem, 40dvh, 20rem) !important;
+    max-width: 100%;
+    overflow: auto !important;
+  }
+
+  .ss-app .tableScroll :is(th,td) {font-size: var(--ss-text);}
+  .ss-app .tramPagination {flex-wrap: wrap;}
+  .ss-app :is(.tramTableWrap, #buscaDiretaResultados) {max-width: 100%; overflow: auto;}
+  .ss-app main > #lower.open > .card {min-width: 0; max-width: 100%;}
+  .ss-app #lower .val {overflow-wrap: anywhere;}
+  .ss-app #lower.open .card > .actions > .action {
+    height: auto !important;
+    min-height: 3rem !important;
+    max-height: none !important;
+    padding: 0.375rem !important;
+    font: 600 var(--ss-small)/1.2 var(--ss-font) !important;
+  }
+
+  .ss-app #lower.open .card > .actions > .action b {
+    font-size: var(--ss-icon) !important;
+    line-height: 1.15 !important;
+  }
+
+  .ss-app .modalBg, .ss-app .tramDetailOverlay {
+    padding: var(--ss-gap);
+  }
+
+  .ss-app .modalBg > .modalBox,
+  .ss-app :is(#siscomRejeicaoModal > .rejBox, #umovFotosModal > div, .tramDetailWindow) {
+    min-width: 0;
+    max-width: 100%;
+    max-height: calc(100dvh - var(--ss-gap) * 2);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  .ss-app :is(#globalSsAgrupadoV10, #cgmRotaModal) {
+    font-family: var(--ss-font) !important;
+    font-size: var(--ss-text) !important;
+  }
+
+  .ss-app #globalSsAgrupadoV10 .ga-card {width: min(100%, 50rem); max-height: calc(100dvh - 28px);}
+  .ss-app #globalSsAgrupadoV10 .ga-footer > button {min-height: var(--ss-control);}
+  body.ss-app #cgmRotaModal {inset: var(--ss-gap) !important; overflow: auto;}
+  body.ss-app #cgmRotaModal .body {
+    grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr) !important;
+    overflow: visible !important;
+  }
+
+  .ss-app #cgmRotaModal :is(.controls, .head, footer, #cgmRotaPlano) {overflow-wrap: anywhere;}
+  .ss-app #cgmRotaModal .controls :is(label, select) {max-width: 100%; min-width: 0;}
+
+  .ss-central main {padding: var(--ss-pad);}
+  .ss-central .top, .ss-maintenance header, .ss-maintenance :is(.tools, .actions) {flex-wrap: wrap;}
+  .ss-central :is(.filters, .top, .layout, .bottom) > *, .ss-maintenance .form > * {min-width: 0;}
+  .ss-central :is(.filters, .map-actions) :is(button, select, input:not([type=checkbox])) {min-height: 2rem;}
+  .ss-central .multi-menu {
+    min-width: 0;
+    max-width: min(18rem, calc(100vw - var(--ss-pad) * 4));
+  }
+  .ss-central .filters > :nth-child(even) .multi-menu {right: 0; left: auto;}
+
+  @media (min-width: 1100px) {
+    html:has(body.ss-app.panel-open), body.ss-app.panel-open {
+      max-height: none;
+      overflow: auto !important;
+    }
+    body.ss-app:not(.ss-bank2).panel-open:not(.tram-mode) main:has(> #lower.open) {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) clamp(22rem, 30vw, 32rem);
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+    }
+    .ss-app.panel-open main:has(> #lower.open) > .siscomTopAuth {grid-area: 1 / 1 / 2 / -1;}
+    .ss-app.panel-open main:has(> #lower.open) > .toolbar {grid-area: 2 / 1;}
+    .ss-app.panel-open main:has(> #lower.open) > #buscaDiretaPainel {grid-area: 3 / 1; min-width: 0;}
+    .ss-app.panel-open main:has(> #lower.open) > .box {grid-area: 4 / 1;}
+    body.ss-app.panel-open:not(.tram-mode) main > #lower.open {
+      grid-area: 2 / 2 / 5 / 3;
+      display: flex !important;
+      flex-direction: column;
+      align-self: start;
+      position: sticky !important;
+      inset: var(--ss-pad) auto auto !important;
+      width: auto !important;
+      max-width: 100% !important;
+      max-height: calc(100dvh - var(--ss-pad) * 2);
+      overflow: auto;
+      z-index: auto !important;
+    }
+    .ss-app #lower.open > .card {flex: 0 0 auto;}
+    body.ss-bank2.panel-open main > #lower.open {position: static !important; max-height: none;}
+  }
+
+  @media (max-width: 950px) {
+    body.ss-app #cgmRotaModal .body {
+      flex: 0 0 auto;
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: clamp(12rem, 42dvh, 24rem) auto !important;
+    }
+    body.ss-app #cgmRotaModal #cgmRotaPlano {max-height: min(45dvh, 28rem);}
+  }
+
+  @media (max-width: 650px) {
+    .ss-app .toolbar > .ssQuickSearch {flex: 1 1 13rem;}
+    .ss-app :is(.siscomTopAuth, .siscomTopButtons) {justify-content: flex-start;}
+    .ss-app .toolbar .multiMenu {max-width: min(16rem, calc(100vw - 2rem)); min-width: 0;}
+    .ss-app .toolbar label {overflow-wrap: anywhere;}
+    .ss-app #lower .details {grid-template-columns: minmax(0, 1fr) !important;}
+    .ss-app #lower.open .card > .actions {grid-template-columns: repeat(2, minmax(0, 1fr)) !important;}
+    .ss-central #map-panel .map {height: clamp(14rem, 52dvh, 24rem) !important;}
+  }
+
+  @media (max-width: 380px) {
+    .ss-central .filters {grid-template-columns: minmax(0, 1fr);}
+    .ss-central .filters > :nth-child(even) .multi-menu {left: 0; right: auto;}
+  }
+
+  @media (pointer: coarse) {
+    :root {--ss-control: 2.625rem;}
+    .ss-app :is(.toolbar,.modalBox) :is(input,select,textarea):not([type=checkbox], [type=radio]),
+    .ss-central .filters :is(input,select), .ss-maintenance :is(input,select,textarea) {
+      font-size: 1rem;
+    }
+  }
+}

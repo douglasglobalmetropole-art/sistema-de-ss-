@@ -11,6 +11,18 @@
  const api=()=>location.pathname.startsWith('/lote1')?'/lote1/api':'/api';
  const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n;};
  let data=null,gerando=false;
+ let pdfLibrary;
+ function carregarBiblioteca(){
+  if(window.PDFLib?.PDFDocument)return Promise.resolve(window.PDFLib);
+  pdfLibrary??=new Promise((resolve,reject)=>{
+   const script=el('script');
+   script.src='/vendor/pdf-lib.min.js';
+   script.onload=()=>window.PDFLib?.PDFDocument?resolve(window.PDFLib):reject(Error('Biblioteca de PDF indisponível.'));
+   script.onerror=()=>{script.remove();reject(Error('Biblioteca de PDF indisponível.'));};
+   document.head.append(script);
+  }).catch(e=>{pdfLibrary=undefined;throw e;});
+  return pdfLibrary;
+ }
  const style=el('style');style.textContent=`
  #${ID}{position:fixed;inset:0;background:#061d36ad;z-index:100000;display:flex;align-items:center;justify-content:center;padding:14px;font:14px Arial,sans-serif;color:#16395c}
  #${ID}[hidden]{display:none!important} #${ID} .ga-card{width:min(790px,98vw);max-height:92vh;overflow:auto;background:#fff;border-radius:12px;box-shadow:0 16px 50px #102c4b65}
@@ -70,6 +82,7 @@
  root.addEventListener('click',e=>{if(e.target===root)closeModal()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!root.hidden)closeModal()});
  async function open(){const ss=getSS();if(!ss){alert('Selecione uma SS para agrupar seus relatórios.');return;}
+  void carregarBiblioteca().catch(()=>{});
   ssAtual=ss;root.hidden=false;busy(true);try{await load(ss)}catch(e){stats.textContent='Consulta indisponível';msg(e.message,true)}finally{busy(false)}
  }
  reload.onclick=async()=>{const ss=ssAtual;if(!ss)return msg('SS inválida',true);busy(true);try{await load(ss)}catch(e){msg(e.message,true)}finally{busy(false)}};
@@ -77,24 +90,36 @@
   if(gerando||!data)return;
   const seqs=chosen();if(!seqs.length)return msg('Selecione pelo menos um relatório disponível.',true);
   if(seqs.length>50)return msg('Limite de 50 relatorios por PDF. Desmarque algumas tarefas.',true);
-  if(!window.PDFLib?.PDFDocument)return msg('Biblioteca local de união de PDF indisponível. Reinstale o pacote V10.',true);
   // Abre aba no clique do usuário, antes de qualquer await, para evitar bloqueio de pop-up.
   const preview=mode==='view'?window.open('about:blank','_blank'):null;
   if(mode==='view'&&!preview)return msg('O navegador bloqueou a aba. Permita pop-ups ou use Gerar e baixar PDF.',true);
   busy(true);progress.hidden=false;progress.max=seqs.length;progress.value=0;
+  const controller=new AbortController();
+  // Uma conversão à frente da incorporação, preservando a ordem e o limite de memória.
+  async function fetchPdf(x){
+    const response=await fetch(api()+'/relatorio-original-pdf',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:x.link,ss:x.ss,tarefa:x.tarefa}),signal:controller.signal});
+    if(!response.ok){const j=await response.json().catch(()=>({}));throw Error('SS '+x.ss+': '+(j.error||'falha HTTP '+response.status));}
+    return response.arrayBuffer();
+  }
+  const prefetch=i=>fetchPdf(seqs[i]).then(bytes=>({bytes}),error=>({error}));
   let objectUrl=null;
   try{
-   const merged=await PDFLib.PDFDocument.create();let totalBytes=0;
+   const PDFLib=await carregarBiblioteca();
+   const merged=await PDFLib.PDFDocument.create();
+   let totalBytes=0;
+   const pending=seqs.slice(0,2).map((_,i)=>prefetch(i));
    for(let i=0;i<seqs.length;i++){
     const x=seqs[i];msg(`Convertendo e incorporando ${x.ss} (${i+1}/${seqs.length})...`);
-    const response=await fetch(api()+'/relatorio-original-pdf',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({link:x.link,ss:x.ss,tarefa:x.tarefa})});
-    if(!response.ok){const j=await response.json().catch(()=>({}));throw Error('SS '+x.ss+': '+(j.error||'falha HTTP '+response.status));}
-    const bytes=await response.arrayBuffer();totalBytes+=bytes.byteLength;
+    const result=await pending.shift();
+    if(result.error)throw result.error;
+    const bytes=result.bytes;
+    totalBytes+=bytes.byteLength;
     if(totalBytes>120*1024*1024)throw Error('Os PDFs excedem 120 MB. Divida o relatório em grupos menores.');
-    if(new Uint8Array(bytes).slice(0,5).some((b,k)=>b!==[37,80,68,70,45][k]))throw Error('SS '+x.ss+': resposta não é PDF.');
+    if(bytes.byteLength<5||new Uint8Array(bytes,0,5).some((b,k)=>b!==[37,80,68,70,45][k]))throw Error('SS '+x.ss+': resposta não é PDF.');
     const source=await PDFLib.PDFDocument.load(bytes,{ignoreEncryption:false});
     const pages=await merged.copyPages(source,source.getPageIndices());pages.forEach(p=>merged.addPage(p));
     progress.value=i+1;
+    if(i+2<seqs.length)pending.push(prefetch(i+2));
    }
    if(!merged.getPageCount())throw Error('Nenhuma página disponível.');
    msg('Finalizando '+merged.getPageCount()+' páginas...');
@@ -106,7 +131,7 @@
    msg('PDF concluído: '+seqs.length+' relatórios completos, '+merged.getPageCount()+' páginas.');
    setTimeout(()=>URL.revokeObjectURL(objectUrl),180000);
   }catch(e){if(preview&&!preview.closed)preview.close();if(objectUrl)URL.revokeObjectURL(objectUrl);msg('Não foi gerado arquivo parcial. '+(e.message||'Erro ao agrupar PDFs.'),true)}
-  finally{busy(false);progress.hidden=true}
+  finally{controller.abort();busy(false);progress.hidden=true}
  }
  view.onclick=()=>generate('view');download.onclick=()=>generate('download');
  // O botão já existe no sistema; captura para evitar handlers antigos de agrupamento.

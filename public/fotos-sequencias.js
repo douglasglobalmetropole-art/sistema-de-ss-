@@ -1,6 +1,7 @@
 /* CGM_FOTOS_FIXO_V7 - paineis independentes; baixa SISCOM intacta */
 (function () {
   'use strict';
+  const api = location.pathname.startsWith('/lote1') ? '/lote1/api' : '/api';
   const el = id => document.getElementById(id);
   const modal = el('siscomBaixaModal');
   const shell = modal && modal.querySelector('.sbShell');
@@ -58,6 +59,7 @@
   let indiceZoom = 0;
   let abertaAntes = false;
   let jaCarregando = false;
+  let carga, cargaAnterior;
   const seq = el('cgmSeqAnterior');
   const rel = el('cgmRelAnterior');
 
@@ -108,8 +110,9 @@
       const figura = document.createElement('figure');
       const img = document.createElement('img');
       const legenda = document.createElement('figcaption');
-      img.src = src;
       img.loading = indice < 2 ? 'eager' : 'lazy';
+      img.decoding = 'async';
+      img.src = src;
       img.alt = 'Foto ' + (indice + 1);
       img.title = 'Clique para ampliar';
       img.onclick = () => zoomAbrir(fotos, indice);
@@ -132,14 +135,16 @@
     }
     return dado;
   }
-  async function buscarFotos(ss, tarefa) {
-    const dado = await obterJson('/api/relatorio-fotos', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
+  async function buscarFotos(ss, tarefa, signal) {
+    const dado = await obterJson(api + '/relatorio-fotos', {
+      method: 'POST', signal, headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ss, tarefa})
     });
     return Array.isArray(dado.fotos) ? dado.fotos : [];
   }
   async function carregarAnterior() {
+    cargaAnterior?.abort();
+    cargaAnterior = new AbortController();
     const token = ++versaoAnterior;
     const registro = registros.find(r => r.numero_ss === seq.value && String(r.tarefa) === rel.value);
     fotosAnteriores = [];
@@ -147,7 +152,7 @@
     if (!registro) return;
     mensagem('anterior', 'Consultando fotos anteriores...');
     try {
-      const fotos = await buscarFotos(registro.numero_ss, registro.tarefa);
+      const fotos = await buscarFotos(registro.numero_ss, registro.tarefa, cargaAnterior.signal);
       if (token !== versaoAnterior || !modal.classList.contains('open')) return;
       fotosAnteriores = fotos;
       renderizar('anterior', fotos);
@@ -177,6 +182,10 @@
   el('cgmAmpliarAtual').onclick = () => zoomAbrir(fotosAtuais, 0);
 
   async function carregarDados(ss, tarefa) {
+    carga?.abort();
+    cargaAnterior?.abort();
+    carga = new AbortController();
+    const {signal} = carga;
     const token = ++versao;
     ++versaoAnterior;
     atualSS = String(ss);
@@ -195,7 +204,7 @@
     mensagem('atual', 'Consultando fotos atuais...');
     mensagem('anterior', 'Consultando sequ\u00eancias anteriores...');
 
-    const atualPromise = buscarFotos(atualSS, tarefaAtual).then(fotos => {
+    const atualPromise = buscarFotos(atualSS, tarefaAtual, signal).then(fotos => {
       if (token !== versao || !modal.classList.contains('open')) return;
       fotosAtuais = fotos;
       renderizar('atual', fotos);
@@ -204,7 +213,7 @@
       if (token === versao) mensagem('atual', 'Falha ao consultar: ' + err.message);
     });
 
-    const anteriorPromise = obterJson('/api/umov/sequencias-fotos?ss=' + encodeURIComponent(atualSS)).then(dado => {
+    const anteriorPromise = obterJson(api + '/umov/sequencias-fotos?ss=' + encodeURIComponent(atualSS), {signal}).then(dado => {
       if (token !== versao || !modal.classList.contains('open')) return;
       registros = Array.isArray(dado.sequencias) ? dado.sequencias : [];
       const opcoes = [...new Set(registros.map(r => r.numero_ss))].filter(Boolean);
@@ -251,6 +260,8 @@
       setTimeout(() => tentarCarregar(), 90);
     } else if (!aberta && abertaAntes) {
       abertaAntes = false;
+      carga?.abort();
+      cargaAnterior?.abort();
       ++versao;
       ++versaoAnterior;
       atualSS = '';

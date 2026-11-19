@@ -109,10 +109,10 @@ const cgmActionStyle=document.createElement('style');
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();setInterval(init,1000);
 async function abrir(){const regs=selectedRows();if(!regs.length){const d=detailRow();if(d)regs.push(d)}if(!regs.length)return alert('Selecione SS em Notas em Campo ou abra uma SS.');if(regs.length>25)return alert('Limite de 25 SS por planejamento.');
 const grupos={};regs.forEach(x=>(grupos[x.equipe||'Equipe não identificada']??=[]).push({...x,prioridade:'normal'}));
-$('cgmRotaModal')?.remove();const el=document.createElement('section');el.id='cgmRotaModal';el.innerHTML='<div class="head"><strong>Roteirizador de SS — Planejamento por prioridade</strong><button class="close">Fechar ✕</button></div><div class="pdf-title">CONSÓRCIO GLOBAL METRÓPOLE — ROTA DE ATENDIMENTO</div><div id="cgmRotaStatus" style="padding:8px 12px">Preparando...</div><div class="controls"><label>Equipe <select id="cgmRotaEquipe"></select></label><label>Modo <select id="cgmRotaModo"><option value="auto">Automático</option><option value="prioridade">Por prioridade</option><option value="manual">Ordem manual</option></select></label><label><input type="checkbox" id="cgmRotaVoltar"> Retornar à base</label><button id="cgmRotaCalcular">Aplicar e recalcular</button><span>Base: Rua Lacedópolis, 153 — Cobilândia</span></div><div class="body"><div id="cgmRotaMapa"></div><div id="cgmRotaPlano"></div></div><footer><button id="cgmRotaGoogle" disabled>Abrir Google Maps</button><button id="cgmRotaLink" disabled>Copiar link</button><button id="cgmRotaPDF" disabled>Imprimir / Salvar PDF</button></footer>';document.body.appendChild(el);el.querySelector('.close').onclick=()=>el.remove();
+$('cgmRotaModal')?.querySelector('.close')?.click();const el=document.createElement('section');el.id='cgmRotaModal';el.innerHTML='<div class="head"><strong>Roteirizador de SS — Planejamento por prioridade</strong><button class="close">Fechar ✕</button></div><div class="pdf-title">CONSÓRCIO GLOBAL METRÓPOLE — ROTA DE ATENDIMENTO</div><div id="cgmRotaStatus" style="padding:8px 12px">Preparando...</div><div class="controls"><label>Equipe <select id="cgmRotaEquipe"></select></label><label>Modo <select id="cgmRotaModo"><option value="auto">Automático</option><option value="prioridade">Por prioridade</option><option value="manual">Ordem manual</option></select></label><label><input type="checkbox" id="cgmRotaVoltar"> Retornar à base</label><button id="cgmRotaCalcular">Aplicar e recalcular</button><span>Base: Rua Lacedópolis, 153 — Cobilândia</span></div><div class="body"><div id="cgmRotaMapa"></div><div id="cgmRotaPlano"></div></div><footer><button id="cgmRotaGoogle" disabled>Abrir Google Maps</button><button id="cgmRotaLink" disabled>Copiar link</button><button id="cgmRotaPDF" disabled>Imprimir / Salvar PDF</button></footer>';document.body.appendChild(el);el.querySelector('.close').onclick=()=>{$('cgmRotaCalcular').disabled=true;lookupController?.abort();routeController?.abort();map?.remove();el.remove()};
 const equipe=$('cgmRotaEquipe'),modo=$('cgmRotaModo'),status=$('cgmRotaStatus'),plano=$('cgmRotaPlano');Object.keys(grupos).forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k+' ('+grupos[k].length+' SS)';equipe.appendChild(o)});
-let map,poly,markers=[],url='',pontos=[],pendentes=[],lastRoute=[];try{await leaflet();if(!el.isConnected)return;map=L.map('cgmRotaMapa');L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);map.setView([BASE.lat,BASE.lon],12);setTimeout(()=>map.invalidateSize(),200)}catch(e){status.textContent=e.message;return}
-const orderPriority={urgente:0,alta:1,normal:2};
+let lookupController,routeController;
+let map,poly,markers=[],url='',pontos=[],pendentes=[];try{await leaflet();if(!el.isConnected)return;map=L.map('cgmRotaMapa');L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19}).addTo(map);map.setView([BASE.lat,BASE.lon],12);setTimeout(()=>map.invalidateSize(),200)}catch(e){status.textContent=e.message;return}
 
 function renderEditor(){
   const manual = modo.value === 'manual';
@@ -170,9 +170,56 @@ function renderEditor(){
   });
 }
 
-async function carregar(){status.textContent='Consultando coordenadas GIS...';pontos=[];pendentes=[];const items=grupos[equipe.value];for(let i=0;i<items.length;i++){if(!el.isConnected)return;const x=items[i];status.textContent='GIS '+(i+1)+'/'+items.length+': '+x.ss;try{const r=await fetch('/api/gis/localizar-ss?ss='+encodeURIComponent(x.ss),{credentials:'same-origin'});const j=await r.json(),lat=Number(j.lat),lon=Number(j.lon);if(!r.ok||!j.ok||!j.found||!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)throw Error(j.error||'Não localizada');pontos.push({...x,lat,lon})}catch(e){pendentes.push(x.ss+': '+e.message)}}if(!el.isConnected)return;renderEditor();await calcular()}
+const localizacoes=new Map();
+async function carregar(){
+ lookupController?.abort();
+ routeController?.abort();
+ const controller=new AbortController();
+ lookupController=controller;
+ const {signal}=controller;
+ const items=grupos[equipe.value];
+ status.textContent='Consultando coordenadas GIS...';
+ url='';pontos=[];pendentes=[];
+ ['cgmRotaGoogle','cgmRotaLink','cgmRotaPDF','cgmRotaCalcular'].forEach(id=>$(id).disabled=true);
+ if(poly){map.removeLayer(poly);poly=null;}
+ markers.forEach(marker=>map.removeLayer(marker));markers=[];
+ renderEditor();
+ const resultados=new Array(items.length);
+ let next=0, concluídas=0;
+ const emAndamento=new Map();
+ async function localizar(ss){
+  if(localizacoes.has(ss))return localizacoes.get(ss);
+  const r=await fetch((location.pathname.startsWith('/lote1')?'/lote1':'')+'/api/gis/localizar-ss?ss='+encodeURIComponent(ss),{credentials:'same-origin',signal});
+  const j=await r.json();
+  const lat=Number(j.lat),lon=Number(j.lon);
+  if(!r.ok||!j.ok||!j.found||j.lat==null||j.lon==null||j.lat===''||j.lon===''||
+     !Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){
+   throw Error(j.error||'Não localizada');
+  }
+  const ponto={lat,lon};
+  if(!signal.aborted)localizacoes.set(ss,ponto);
+  return ponto;
+ }
+ async function consultar(){
+  while(next<items.length&&el.isConnected&&!signal.aborted){
+   const i=next++,item=items[i];
+   try{
+    if(!emAndamento.has(item.ss))emAndamento.set(item.ss,localizar(item.ss));
+    resultados[i]={ponto:{...item,...await emAndamento.get(item.ss)}};
+   }catch(e){resultados[i]={erro:item.ss+': '+e.message};}
+   if(!signal.aborted)status.textContent='GIS '+(++concluídas)+'/'+items.length;
+  }
+ }
+ await Promise.all(Array.from({length:Math.min(3,items.length)},consultar));
+ if(signal.aborted||!el.isConnected)return;
+ pontos=resultados.flatMap(x=>x.ponto?[x.ponto]:[]);
+ pendentes=resultados.flatMap(x=>x.erro?[x.erro]:[]);
+ $('cgmRotaCalcular').disabled=false;
+ renderEditor();
+ await calcular();
+}
 const coord=p=>p.lon+','+p.lat;
-async function getTrip(start,items){if(!items.length)return [];if(items.length===1)return items;const arr=[start,...items],r=await fetch('https://router.project-osrm.org/trip/v1/driving/'+arr.map(coord).join(';')+'?roundtrip=false&source=first&destination=any&overview=false');if(!r.ok)throw Error('OSRM trip HTTP '+r.status);const j=await r.json();if(j.code!=='Ok'||!j.waypoints||j.waypoints.length!==arr.length)throw Error(j.message||'Falha ao otimizar grupo');return items.map((p,i)=>({...p,ord:j.waypoints[i+1].waypoint_index})).sort((a,b)=>a.ord-b.ord).map(({ord,...p})=>p)}
-async function calcular(){if(!el.isConnected)return;url='';['cgmRotaGoogle','cgmRotaLink','cgmRotaPDF'].forEach(id=>$(id).disabled=true);if(!pontos.length){status.textContent='Nenhuma SS localizada no GIS';return}status.textContent='Calculando percurso OSRM...';try{let ordem=[];if(modo.value==='manual')ordem=[...pontos];else if(modo.value==='auto')ordem=await getTrip(BASE,pontos);else{let origem=BASE;for(const nivel of ['urgente','alta','normal']){const grupo=pontos.filter(p=>p.prioridade===nivel);const trecho=await getTrip(origem,grupo);ordem.push(...trecho);if(trecho.length)origem=trecho[trecho.length-1]}}if(!el.isConnected)return;const volta=$('cgmRotaVoltar')?.checked;const path=[BASE,...ordem,...(volta?[BASE]:[])];const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+path.map(coord).join(';')+'?overview=full&geometries=geojson&steps=false');if(!r.ok)throw Error('OSRM route HTTP '+r.status);const j=await r.json();if(j.code!=='Ok'||!j.routes?.length)throw Error(j.message||'Percurso não encontrado');if(!el.isConnected)return;const route=j.routes[0];lastRoute=ordem;if(poly)map.removeLayer(poly);markers.forEach(m=>map.removeLayer(m));markers=[];poly=L.polyline(route.geometry.coordinates.map(c=>[c[1],c[0]]),{color:'#0879f7',weight:5}).addTo(map);[BASE,...ordem].forEach((p,i)=>{const icon=L.divIcon({className:'cgm-rota-pin'+(i===0?' base':''),html:'<span>'+(i||'⌂')+'</span>',iconSize:[30,34],iconAnchor:[15,33]});markers.push(L.marker([p.lat,p.lon],{icon}).addTo(map).bindPopup(esc(i?p.ss:'BASE OPERACIONAL')))});map.fitBounds(poly.getBounds().pad(.12));const km=(route.distance/1000).toLocaleString('pt-BR',{maximumFractionDigits:2});status.textContent=equipe.value+' | '+ordem.length+' SS | '+km+' km | '+Math.round(route.duration/60)+' min | '+(modo.value==='manual'?'Ordem manual':modo.value==='prioridade'?'Prioridades respeitadas':'Rota automática')+(pendentes.length?' | '+pendentes.length+' pendente(s)':'');const cp=p=>p.lat+','+p.lon;const params=new URLSearchParams({api:'1',origin:cp(BASE),destination:cp(volta?BASE:ordem[ordem.length-1]),travelmode:'driving'});const via=volta?ordem:ordem.slice(0,-1);if(via.length)params.set('waypoints',via.map(cp).join('|'));url='https://www.google.com/maps/dir/?'+params.toString();['cgmRotaGoogle','cgmRotaLink','cgmRotaPDF'].forEach(id=>$(id).disabled=false)}catch(e){status.textContent='Erro no cálculo: '+e.message;console.error(e)}}
+async function getTrip(start,items,signal){if(!items.length)return [];if(items.length===1)return items;const arr=[start,...items],r=await fetch('https://router.project-osrm.org/trip/v1/driving/'+arr.map(coord).join(';')+'?roundtrip=false&source=first&destination=any&overview=false',{signal});if(!r.ok)throw Error('OSRM trip HTTP '+r.status);const j=await r.json();if(j.code!=='Ok'||!j.waypoints||j.waypoints.length!==arr.length)throw Error(j.message||'Falha ao otimizar grupo');return items.map((p,i)=>({...p,ord:j.waypoints[i+1].waypoint_index})).sort((a,b)=>a.ord-b.ord).map(({ord,...p})=>p)}
+async function calcular(){if(!el.isConnected||$('cgmRotaCalcular').disabled)return;routeController?.abort();routeController=new AbortController();const {signal}=routeController;url='';['cgmRotaGoogle','cgmRotaLink','cgmRotaPDF'].forEach(id=>$(id).disabled=true);if(!pontos.length){status.textContent='Nenhuma SS localizada no GIS';return}status.textContent='Calculando percurso OSRM...';try{let ordem=[];if(modo.value==='manual')ordem=[...pontos];else if(modo.value==='auto')ordem=await getTrip(BASE,pontos,signal);else{let origem=BASE;for(const nivel of ['urgente','alta','normal']){const grupo=pontos.filter(p=>p.prioridade===nivel);const trecho=await getTrip(origem,grupo,signal);ordem.push(...trecho);if(trecho.length)origem=trecho[trecho.length-1]}}if(!el.isConnected||signal.aborted)return;const volta=$('cgmRotaVoltar')?.checked;const path=[BASE,...ordem,...(volta?[BASE]:[])];const r=await fetch('https://router.project-osrm.org/route/v1/driving/'+path.map(coord).join(';')+'?overview=full&geometries=geojson&steps=false',{signal});if(!r.ok)throw Error('OSRM route HTTP '+r.status);const j=await r.json();if(j.code!=='Ok'||!j.routes?.length)throw Error(j.message||'Percurso não encontrado');if(!el.isConnected||signal.aborted)return;const route=j.routes[0];if(poly)map.removeLayer(poly);markers.forEach(m=>map.removeLayer(m));markers=[];poly=L.polyline(route.geometry.coordinates.map(c=>[c[1],c[0]]),{color:'#0879f7',weight:5}).addTo(map);[BASE,...ordem].forEach((p,i)=>{const icon=L.divIcon({className:'cgm-rota-pin'+(i===0?' base':''),html:'<span>'+(i||'⌂')+'</span>',iconSize:[30,34],iconAnchor:[15,33]});markers.push(L.marker([p.lat,p.lon],{icon}).addTo(map).bindPopup(esc(i?p.ss:'BASE OPERACIONAL')))});map.fitBounds(poly.getBounds().pad(.12));const km=(route.distance/1000).toLocaleString('pt-BR',{maximumFractionDigits:2});status.textContent=equipe.value+' | '+ordem.length+' SS | '+km+' km | '+Math.round(route.duration/60)+' min | '+(modo.value==='manual'?'Ordem manual':modo.value==='prioridade'?'Prioridades respeitadas':'Rota automática')+(pendentes.length?' | '+pendentes.length+' pendente(s)':'');const cp=p=>p.lat+','+p.lon;const params=new URLSearchParams({api:'1',origin:cp(BASE),destination:cp(volta?BASE:ordem[ordem.length-1]),travelmode:'driving'});const via=volta?ordem:ordem.slice(0,-1);if(via.length)params.set('waypoints',via.map(cp).join('|'));url='https://www.google.com/maps/dir/?'+params.toString();['cgmRotaGoogle','cgmRotaLink','cgmRotaPDF'].forEach(id=>$(id).disabled=false)}catch(e){if(signal.aborted||!el.isConnected)return;status.textContent='Erro no cálculo: '+e.message;console.error(e)}}
 $('cgmRotaCalcular').onclick=()=>{renderEditor();calcular()};equipe.onchange=carregar;modo.onchange=renderEditor;$('cgmRotaVoltar').onchange=calcular;$('cgmRotaGoogle').onclick=()=>url&&window.open(url,'_blank','noopener');$('cgmRotaLink').onclick=()=>url&&prompt('Copie o link:',url);$('cgmRotaPDF').onclick=()=>{if(url){map.invalidateSize();window.print()}};await carregar()}
 })();

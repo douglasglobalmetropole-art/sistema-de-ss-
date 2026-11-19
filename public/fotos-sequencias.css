@@ -1,88 +1,77 @@
 /* CGM_FOTOS_V11: somente posicionamento dos paineis. Formulario original preservado. */
 #siscomBaixaModal {
-  --cgm-largura-foto: 350px;
-  --cgm-largura-centro: clamp(830px, calc(100vw - 760px), 1020px);
-  --cgm-altura-modal: min(780px, calc(100dvh - 24px));
+  --cgm-altura-modal: min(58.5rem, calc(100dvh - 2 * var(--ss-gap)));
 }
 #siscomBaixaModal.open {
   position: fixed !important;
   inset: 0 !important;
   display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important;
   justify-content: center !important;
   align-items: center !important;
-  gap: 12px !important;
-  padding: 10px !important;
+  gap: var(--ss-gap) !important;
+  padding: var(--ss-gap) !important;
   margin: 0 !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
+  overflow: auto !important;
+}
+#siscomBaixaModal.open > :is(.sbShell,.cgmFotosLateral) {
   box-sizing: border-box !important;
+  position: relative !important;
+  inset: auto !important;
+  transform: none !important;
+  margin: 0 !important;
+  min-width: 0 !important;
+  height: var(--cgm-altura-modal) !important;
+  min-height: 0 !important;
+  max-height: var(--cgm-altura-modal) !important;
 }
 #siscomBaixaModal.open > .sbShell {
-  box-sizing: border-box !important;
-  position: relative !important;
-  inset: auto !important;
-  transform: none !important;
-  margin: 0 !important;
+  flex: 3 1 50rem !important;
+  width: min(100%, 65rem) !important;
+  max-width: 65rem !important;
   padding: 0 !important;
-  flex: 0 0 var(--cgm-largura-centro) !important;
-  width: var(--cgm-largura-centro) !important;
-  min-width: 0 !important;
-  max-width: var(--cgm-largura-centro) !important;
-  height: var(--cgm-altura-modal) !important;
-  min-height: 0 !important;
-  max-height: var(--cgm-altura-modal) !important;
-  z-index: 2 !important;
 }
-#siscomBaixaModal.open > #cgmFotosAnteriorLateral,
-#siscomBaixaModal.open > #cgmFotosAtualLateral {
-  box-sizing: border-box !important;
-  position: relative !important;
-  inset: auto !important;
-  left: auto !important;
-  right: auto !important;
-  top: auto !important;
-  bottom: auto !important;
-  transform: none !important;
-  margin: 0 !important;
-  flex: 0 0 var(--cgm-largura-foto) !important;
-  width: var(--cgm-largura-foto) !important;
-  min-width: var(--cgm-largura-foto) !important;
-  max-width: var(--cgm-largura-foto) !important;
-  height: var(--cgm-altura-modal) !important;
-  min-height: 0 !important;
-  max-height: var(--cgm-altura-modal) !important;
-  border: 1px solid #bfd5e8 !important;
-  border-radius: 9px !important;
-  background: #fff !important;
-  overflow: hidden !important;
+#siscomBaixaModal.open > .cgmFotosLateral {
+  flex: 1 1 16rem !important;
+  width: min(100%, 24rem) !important;
+  max-width: 24rem !important;
+  border: 1px solid #bfd5e8;
+  border-radius: var(--ss-radius);
+  background: white;
+  overflow: hidden;
   display: flex !important;
-  flex-direction: column !important;
-  box-shadow: 0 8px 24px #001c3b30 !important;
-  z-index: 3 !important;
-  visibility: visible !important;
-  opacity: 1 !important;
+  flex-direction: column;
+  box-shadow: 0 8px 24px #001c3b30;
 }
-#siscomBaixaModal.open > .cgmFotosLateral[hidden] {
-  display: none !important;
+#siscomBaixaModal.open > .cgmFotosLateral[hidden] {display: none !important;}
+#siscomBaixaModal.open .sbFooter {flex-wrap: wrap !important; padding: var(--ss-gap) !important;}
+#siscomBaixaModal.open .sbFooter .btn {white-space: normal; height: auto !important; min-height: var(--ss-control);}
+#siscomBaixaModal.open .sbV3Tabs {flex-wrap: wrap;}
+#siscomBaixaModal.open .sbV3Tab {min-width: 0; padding: 0.65rem 0.75rem;}
+#siscomBaixaModal.open .sbHeader {flex-wrap: wrap;}
+#siscomBaixaModal.open .sbHeader > * {min-width: 0;}
+#siscomBaixaModal.open .sbHeader h3 {font-size: clamp(0.875rem, 1.35vw, 1.375rem) !important;}
+@media (min-width: 1051px) and (max-width: 1330px) {
+  #siscomBaixaModal.open .sbRibbon .sbSummaryTop {grid-template-columns: repeat(3, minmax(0, 1fr)) !important;}
 }
-@media (max-width: 1650px) {
-  #siscomBaixaModal { --cgm-largura-foto: 310px; --cgm-largura-centro: clamp(800px, calc(100vw - 660px), 1020px); }
+@media (max-width: 1050px) {
+  #siscomBaixaModal.open {
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    flex-direction: column !important;
+  }
+  #siscomBaixaModal.open > :is(.sbShell,.cgmFotosLateral) {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+  #siscomBaixaModal.open > .sbShell {order: -1;}
+  #siscomBaixaModal.open > .cgmFotosLateral {height: clamp(19rem, 65dvh, 38rem) !important; max-height: none !important;}
+  #siscomBaixaModal.open .sbColumns {grid-template-columns: minmax(0, 1fr) !important;}
 }
-@media (max-width: 1450px) {
-  #siscomBaixaModal { --cgm-largura-foto: 270px; --cgm-largura-centro: clamp(790px, calc(100vw - 580px), 1020px); }
+@media (max-width: 650px) {
+  #siscomBaixaModal.open .sbFooter :is(#sbPrevia, #sbFinalizar) {min-width: 0 !important;}
 }
-@media (max-width: 1200px) {
-  #siscomBaixaModal.open { justify-content: flex-start !important; }
-  #siscomBaixaModal { --cgm-largura-foto: 270px; --cgm-largura-centro: 830px; }
-}
-#siscomBaixaModal .sbColumns {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) !important;
-  gap: 14px !important;
-}
-#siscomBaixaModal .sbColumns > .sbPane { min-width: 0 !important; }
+
 #siscomBaixaModal > .cgmFotosLateral h4 {
   flex: 0 0 auto !important;
   margin: 0 !important;
@@ -149,49 +138,14 @@
 #cgmFotosZoomV7 button{border:0;background:transparent;color:#fff;cursor:pointer;font-size:50px;}
 #cgmFotosZoomV7 .cgmZoomFechar{position:absolute;right:18px;top:7px;font-size:36px;}
 
-/* CGM_FOTOS_PROPORCOES_V12: largura maior, altura original preservada */
-#siscomBaixaModal {
-  --cgm-largura-foto: 375px;
-  --cgm-largura-centro: clamp(850px, calc(100vw - 790px), 1080px);
-}
-@media (max-width: 1850px) {
-  #siscomBaixaModal {
-    --cgm-largura-foto: 345px;
-    --cgm-largura-centro: clamp(830px, calc(100vw - 730px), 1050px);
-  }
-}
-@media (max-width: 1650px) {
-  #siscomBaixaModal {
-    --cgm-largura-foto: 305px;
-    --cgm-largura-centro: clamp(800px, calc(100vw - 650px), 1020px);
-  }
-}
-@media (max-width: 1450px) {
-  #siscomBaixaModal {
-    --cgm-largura-foto: 275px;
-    --cgm-largura-centro: clamp(790px, calc(100vw - 590px), 1000px);
-  }
-}
-@media (max-width: 1200px) {
-  #siscomBaixaModal.open { justify-content: flex-start !important; }
-  #siscomBaixaModal {
-    --cgm-largura-foto: 275px;
-    --cgm-largura-centro: 830px;
-  }
-}
-#siscomBaixaModal .cgmFotosMiniaturas {
-  padding: 7px !important;
-  gap: 9px !important;
-}
-#siscomBaixaModal .cgmFotosMiniaturas figure { padding: 0 !important; }
-#siscomBaixaModal .cgmFotosMiniaturas figure img {
-  width: 100% !important;
-  height: 225px !important;
-  object-fit: cover !important;
-  object-position: center !important;
-}
 
-/* CGM_FOTOS_ALTURA_V13: 780px x 1.20 = 936px; respeita altura da janela */
-#siscomBaixaModal {
-  --cgm-altura-modal: min(936px, calc(100dvh - 16px));
+#siscomBaixaModal .cgmFotosMiniaturas figure img {
+  width: 100%;
+  height: clamp(7rem, 24dvh, 14rem);
+  object-fit: contain;
+}
+#cgmFotosZoomV7 button {
+  min-width: var(--ss-control);
+  min-height: var(--ss-control);
+  font-size: 2rem;
 }

@@ -1,0 +1,282 @@
+﻿const fs = require('fs');
+const vm = require('vm');
+
+const file = 'public/index.html';
+let html = fs.readFileSync(file, 'utf8');
+
+const marker = 'CGM_DUPLICIDADES_STATUS_V1';
+
+if (html.includes(marker)) {
+  console.log('Ajuste ja instalado. Nenhuma alteracao.');
+  process.exit(0);
+}
+
+const css = `
+<style id="${marker}-css">
+/* CGM_DUPLICIDADES_STATUS_V1 */
+
+.cgm-dup-expanded {
+  width: 94vw !important;
+  max-width: 1900px !important;
+  max-height: 94vh !important;
+}
+
+.cgm-dup-expanded table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.cgm-dup-expanded th {
+  background: #08477f;
+  color: white;
+  padding: 10px 8px;
+  white-space: nowrap;
+}
+
+.cgm-dup-expanded td {
+  padding: 6px 8px;
+  border: 1px solid #d6e2ef;
+}
+
+.cgm-dup-expanded tbody tr:nth-child(even) {
+  background: #f4f8fd;
+}
+
+.cgm-dup-expanded td:last-child,
+.cgm-dup-expanded td:nth-last-child(2) {
+  min-width: 145px;
+}
+
+.cgm-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 15px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cgm-ok {
+  background: #d8f8df;
+  color: #086b26;
+}
+
+.cgm-error {
+  background: #fbd9de;
+  color: #aa1024;
+}
+
+.cgm-wait {
+  background: #fff0c9;
+  color: #965400;
+}
+
+.cgm-unknown {
+  background: #e7eef7;
+  color: #415675;
+}
+</style>
+`;
+
+const js = `
+<script id="${marker}-js">
+(function () {
+  'use strict';
+
+  const marker = '${marker}';
+
+  function normalizar(v) {
+    return String(v == null ? '' : v)
+      .normalize('NFD')
+      .replace(/[\\u0300-\\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+  }
+
+  function statusIntegracao(raw) {
+    const v = normalizar(raw);
+
+    if (/REJEITAD|REJEICAO/.test(v))
+      return ['Rejeitada', 'cgm-error', '✕'];
+
+    if (/BAIXAD|ENCERRAD|FINALIZAD|EXECUTAD/.test(v))
+      return ['Executada', 'cgm-ok', '✓'];
+
+    if (/ABERTA|PENDENTE|EM ANDAMENTO/.test(v))
+      return ['Pendente', 'cgm-wait', '◷'];
+
+    return ['Não consultada', 'cgm-unknown', '•'];
+  }
+
+  function statusCampo(raw) {
+    const v = normalizar(raw);
+
+    if (/REJEITAD/.test(v))
+      return ['Rejeitada em Campo', 'cgm-error', '✕'];
+
+    if (/NAO EXECUTAD/.test(v))
+      return ['Não executada', 'cgm-error', '✕'];
+
+    if (/EXECUTAD|CONCLUID/.test(v))
+      return ['Executada em Campo', 'cgm-ok', '✓'];
+
+    if (/PROGRAMAD/.test(v))
+      return ['Programada', 'cgm-wait', '◷'];
+
+    if (/EM EXECUCAO/.test(v))
+      return ['Em execução', 'cgm-wait', '◷'];
+
+    if (/PENDENTE/.test(v))
+      return ['Pendente', 'cgm-wait', '◷'];
+
+    return ['Não verificada', 'cgm-unknown', '•'];
+  }
+
+  function badge(info) {
+    const span = document.createElement('span');
+    span.className = 'cgm-status ' + info[1];
+    span.textContent = info[2] + ' ' + info[0];
+    return span;
+  }
+
+  function localizarTabela() {
+    return Array.from(document.querySelectorAll('table'))
+      .find(t => {
+        const h = normalizar(t.tHead?.textContent);
+        return h.includes('CRITERIOS ENCONTRADOS') &&
+               h.includes('HIDROMETRO') &&
+               h.includes('CLASSIFICACAO');
+      });
+  }
+
+  function aplicar() {
+    const tabela = localizarTabela();
+    if (!tabela || !tabela.tHead || !tabela.tBodies.length)
+      return;
+
+    const container =
+      tabela.closest('[role="dialog"], .modal, .modal-content, .dialog, .popup') ||
+      tabela.parentElement;
+
+    if (container)
+      container.classList.add('cgm-dup-expanded');
+
+    const header = tabela.tHead.rows[0];
+    if (!header) return;
+
+    const colunas = Array.from(header.cells);
+    const indice = colunas.findIndex(c =>
+      normalizar(c.textContent).includes('CRITERIOS ENCONTRADOS')
+    );
+
+    if (indice < 0) return;
+
+    // Preserva as colunas originais de classificacao.
+    // Acrescenta status somente quando ausente.
+    const nomes = Array.from(header.cells)
+      .map(c => normalizar(c.textContent));
+
+    const temIntegracao = nomes.some(x =>
+      x.includes('STATUS DA INTEGRACAO')
+    );
+
+    const temCampo = nomes.some(x =>
+      x.includes('SITUACAO DE CAMPO')
+    );
+
+    if (!temIntegracao) {
+      const th = document.createElement('th');
+      th.textContent = 'Status da Integração';
+      header.appendChild(th);
+    }
+
+    if (!temCampo) {
+      const th = document.createElement('th');
+      th.textContent = 'Situação de Campo';
+      header.appendChild(th);
+    }
+
+    Array.from(tabela.tBodies[0].rows).forEach(tr => {
+      if (tr.cells.length < indice + 1) return;
+
+      const dados = tr.dataset;
+
+      // Somente campos presentes na linha.
+      // Nunca presume execucao a partir da classificacao.
+      const integracao =
+        dados.statusIntegracao ||
+        dados.statusSiscom ||
+        dados.statusDashboard ||
+        '';
+
+      const campo =
+        dados.situacaoCampo ||
+        dados.statusCampo ||
+        '';
+
+      if (!temIntegracao &&
+          !tr.querySelector('[data-cgm-integracao]')) {
+        const td = document.createElement('td');
+        td.dataset.cgmIntegracao = '1';
+        td.appendChild(badge(statusIntegracao(integracao)));
+        tr.appendChild(td);
+      }
+
+      if (!temCampo &&
+          !tr.querySelector('[data-cgm-campo]')) {
+        const td = document.createElement('td');
+        td.dataset.cgmCampo = '1';
+        td.appendChild(badge(statusCampo(campo)));
+        tr.appendChild(td);
+      }
+    });
+  }
+
+  let agendado = false;
+
+  function agendar() {
+    if (agendado) return;
+    agendado = true;
+    requestAnimationFrame(() => {
+      agendado = false;
+      aplicar();
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    aplicar();
+
+    const observer = new MutationObserver(agendar);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  });
+
+  window.CGMAtualizarDuplicidades = aplicar;
+})();
+</script>
+`;
+
+html = html.replace('</head>', css + '\n</head>');
+html = html.replace('</body>', js + '\n</body>');
+
+if (!html.includes(marker + '-js')) {
+  throw new Error('Falha ao instalar ajuste.');
+}
+
+// Validacao de sintaxe do novo JavaScript.
+const script = js.replace(/^<script[^>]*>/, '')
+                 .replace(/<\\/script>$/, '');
+
+new vm.Script(script);
+
+fs.writeFileSync(file, html, 'utf8');
+
+console.log('Layout de duplicidades instalado.');
+console.log('Colunas: Status da Integracao e Situacao de Campo.');
+console.log('Arquivo:', file);

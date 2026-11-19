@@ -3,6 +3,7 @@ require('dotenv').config();
 const express=require('express'),{Pool}=require('pg'),path=require('path');
 const fs=require('node:fs');
 const performance=require('./lib/performance');
+const {withReportPage,openReport}=require('./lib/umov-browser');
 const pageTemplates=new performance.BoundedMap(8);
 function readPage(name){if(!pageTemplates.has(name))pageTemplates.set(name,fs.readFileSync(path.join(__dirname,'public',name),'utf8'));return pageTemplates.get(name);}
 const {AsyncLocalStorage}=require('node:async_hooks');
@@ -508,36 +509,8 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     }
 
-    return pool.query({
-      text:`SELECT l.loc_city AS cidade
-            FROM u45468.dbout_task d
-            JOIN u45468.task t ON t.tsk_id=d.tsk_id
-            JOIN u45468.local l ON l.loc_id=t.loc_id
-            WHERE d.tsk_id=$1
-              AND l.loc_integrationid=$2
-              AND d.tss_id=50
-            LIMIT 1`,
-      values:[tarefa,numero],
-      query_timeout:7000
-    }).then(resultado=>{
-      const cidade=normalizarCidade(resultado.rows[0]?.cidade||'');
-      const permitidas=config.cidades.map(normalizarCidade);
-
-      if(!cidade || !permitidas.includes(cidade)){
-        return res.status(403).json({
-          ok:false,
-          error:'Fotos nao autorizadas para esta divisao.'
-        });
-      }
-
-      return next();
-    }).catch(erro=>{
-      console.error('Validacao de fotos por divisao:',erro.message);
-      return res.status(503).json({
-        ok:false,
-        error:'Nao foi possivel validar a divisao das fotos.'
-      });
-    });
+    // A rota consulta tarefa, cidade e token juntos, antes de acessar o cache.
+    return next();
   }
   // ANEXAR_RELATORIO_DIVISAO_20261113
   const anexarRelatorioDivisao =
@@ -1861,24 +1834,29 @@ function relatorioPdf(dados){
  trailer+=`trailer\n<< /Size ${objects.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;
  buffers.push(Buffer.from(trailer));return Buffer.concat(buffers);
 }
+function validarUrlRelatorio(link){
+ const url=new URL(link);
+ if(url.origin!=='https://'+hostRelatorioUmov()||url.username||url.password||
+    !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||
+    url.search||url.hash)throw Error('URL do relatório uMov inválida');
+}
+const pdfOriginalEmAndamento=performance.singleFlight();
 async function gerarPdfOriginalUmov(link){
- let browser;
- try{
-  const url=new URL(link);
-  if(url.protocol!=='https:'||url.hostname!==hostRelatorioUmov()||!/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash)throw Error('URL do relatÃ³rio uMov invÃ¡lida');
-  const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
-  browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
-  const page=await browser.newPage();await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
-  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
-  await page.evaluate(async()=>{await Promise.race([Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,14000))])});
+ validarUrlRelatorio(link);
+ return pdfOriginalEmAndamento(cacheScope()+'|'+link,()=>withReportPage(async page=>{
+  await openReport(page,link,14000);
   await page.emulateMediaType('print');
-  return Buffer.from(await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}}));
- }finally{if(browser)await browser.close().catch(()=>{})}
+  return Buffer.from(await page.pdf({
+   format:'A4',printBackground:true,preferCSSPageSize:true,
+   margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}
+  }));
+ }));
 }
 
 // GLOBAL_SS_RELATORIO_AGRUPADO_V10_BEGIN
 // V11: consulta localizada por SS; evita ordenar todas as tarefas do banco.
 // Operacao exclusivamente de leitura. Nenhum dado e gravado no SISCOM ou uMov.
+const consultaAgrupadosEmAndamento=performance.singleFlight();
 app.get('/api/relatorios-agrupados',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const ss=String(req.query.ss||'').trim();
@@ -1889,7 +1867,8 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
   // Materializar primeiro os locais evita varrer e ordenar tarefas de outras SS.
   // LATERAL limita as tarefas pesquisadas por local, preservando a mais recente
   // com relatorio valido; o limite protege a API contra consultas sem fim.
-  const r=await pool.query({
+  const chaveConsulta=cacheScope()+'|'+performance.getGeneration()+'|'+ss;
+  const r=await consultaAgrupadosEmAndamento(chaveConsulta,()=>pool.query({
    text:`WITH locais AS MATERIALIZED (
      SELECT loc_id,loc_integrationid FROM u45468.local
      WHERE loc_integrationid LIKE $1
@@ -1906,7 +1885,7 @@ app.get('/api/relatorios-agrupados',async(req,res)=>{
     LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id AND d.tss_id=50
     ORDER BY l.loc_integrationid,t.tsk_id DESC LIMIT 8040`,
    values:[base+'-%',ss],query_timeout:18000
-  });
+  }));
   // Preserva todos os relatorios concluÃ­dos de cada sequencia (nao so um por SS).
   const porSS=new Map();
   const tarefasIncluidas=new Set();
@@ -2095,40 +2074,19 @@ async function validarPdfDivisao(req,res,next){
  }
 }
 app.post('/api/relatorio-original-pdf',validarPdfDivisao,async(req,res)=>{
- let browser;
  try{
   const link=String(req.body?.link||'');
-  const url=new URL(link);
-  if(url.protocol!=='https:'||url.hostname!==hostRelatorioUmov()||
-    !/^\/CenterWeb\/report\/schedule\/\d+\/[a-zA-Z0-9._~-]+\/?$/.test(url.pathname)||url.search||url.hash){
-    return res.status(400).json({ok:false,error:'EndereÃ§o do relatÃ³rio uMov invÃ¡lido.'});
+  try{validarUrlRelatorio(link)}catch{
+   return res.status(400).json({ok:false,error:'Endereço do relatório uMov inválido.'});
   }
-  const chromium=require('@sparticuz/chromium');
-  const puppeteer=require('puppeteer-core');
-  browser=await puppeteer.launch({
-    args:chromium.args,executablePath:await chromium.executablePath(),
-    headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}
-  });
-  const page=await browser.newPage();
-  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
-  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
-  // Aguarda imagens do relatÃ³rio original antes da impressÃ£o.
-  await page.evaluate(async()=>{
-    const imgs=Array.from(document.images);
-    await Promise.race([Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(resolve=>{
-      img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});
-    }))),new Promise(resolve=>setTimeout(resolve,14000))]);
-  });
-  await page.emulateMediaType('print');
-  const pdf=await page.pdf({format:'A4',printBackground:true,preferCSSPageSize:true,
-    margin:{top:'8mm',bottom:'8mm',left:'8mm',right:'8mm'}});
+  const pdf=await gerarPdfOriginalUmov(link);
   res.setHeader('Content-Type','application/pdf');
   res.setHeader('Content-Disposition',`attachment; filename="relatorio_original_${String(req.body?.ss||'ss').replace(/[^a-zA-Z0-9_-]/g,'_')}.pdf"`);
-  res.setHeader('Cache-Control','no-store');res.send(Buffer.from(pdf));
+  res.setHeader('Cache-Control','no-store');res.send(pdf);
  }catch(e){
   console.error('PDF original uMov:',e.message);
   if(!res.headersSent)res.status(502).json({ok:false,error:'NÃ£o foi possÃ­vel converter o relatÃ³rio original. Verifique se o link abre normalmente e se a funÃ§Ã£o possui Chromium disponÃ­vel.'});
- }finally{if(browser)await browser.close().catch(()=>{});}
+ }
 });
 app.post('/api/relatorio-pdf',validarPdfDivisao,(req,res)=>{
  try{
@@ -2257,61 +2215,80 @@ app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
 });
 
 // Fotos: renderiza apenas imagens do relatÃ³rio ORIGINAL do uMov, sem copiar o relatÃ³rio inteiro.
-const fotosUmovCache = new Map();
+const fotosUmovCache = new performance.BoundedMap(12);
+const fotosEmAndamento = performance.singleFlight();
 const FOTOS_UMOV_TTL = 5 * 60 * 1000;
+const FOTOS_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+function guardarFotos(chave,dados){
+ const bytes=dados.fotos.reduce((total,foto)=>total+foto.length,0);
+ if(bytes>FOTOS_CACHE_MAX_BYTES||!dados.fotos.length)return;
+ const agora=Date.now();
+ for(const [key,item] of fotosUmovCache)if(item.expira<=agora)fotosUmovCache.delete(key);
+ let total=bytes+[...fotosUmovCache.values()].reduce((soma,item)=>soma+item.bytes,0);
+ while(total>FOTOS_CACHE_MAX_BYTES){
+  const key=fotosUmovCache.keys().next().value;
+  total-=fotosUmovCache.get(key).bytes;
+  fotosUmovCache.delete(key);
+ }
+ fotosUmovCache.set(chave,{expira:agora+FOTOS_UMOV_TTL,bytes,dados});
+}
+async function extrairFotosUmov(page,link){
+ await openReport(page,link,13000);
+ const indices=await page.$$eval('img',images=>images.flatMap((img,index)=>{
+  const r=img.getBoundingClientRect();
+  const style=getComputedStyle(img);
+  const src=img.currentSrc||img.src||'';
+  return img.naturalWidth>=180&&img.naturalHeight>=120&&r.width>=90&&r.height>=70&&
+    style.display!=='none'&&style.visibility!=='hidden'&&
+    !/logo|icone|icon|brasao|banner|assinatura/i.test(src)?[index]:[];
+ }));
+ const images=await page.$$('img');
+ const fotos=[];
+ // Capturas na mesma página são sequenciais para manter o enquadramento.
+ for(const index of indices){
+  if(fotos.length===40)break;
+  try{
+   const image=await images[index].screenshot({type:'jpeg',quality:74,encoding:'base64',timeout:6000});
+   if(image.length>3336&&image.length<2400000)fotos.push('data:image/jpeg;base64,'+image);
+  }catch(e){console.warn('Foto uMov ignorada:',String(e.message).slice(0,100));}
+ }
+ return {ok:true,fotos,truncado:indices.length>40,total:indices.length};
+}
 app.post('/api/relatorio-fotos',async(req,res)=>{
  res.set('Cache-Control','no-store');
- if(!siscomIndividual(req)||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'FaÃ§a login individual no SISCOM para visualizar fotos.'});
+ if(!siscomIndividual(req)||!siscomSameOrigin(req))return res.status(401).json({ok:false,error:'Faça login individual no SISCOM para visualizar fotos.'});
  const tarefa=Number(req.body?.tarefa),ss=String(req.body?.ss||'').trim();
- if(!Number.isSafeInteger(tarefa)||tarefa<=0||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'Informe uma SS vÃ¡lida.'});
- const chaveFotos=String(tarefa)+'|'+ss;
- const agoraFotos=Date.now();
- const fotosGuardadas=fotosUmovCache.get(chaveFotos);
-
- if(fotosGuardadas && fotosGuardadas.expira>agoraFotos){
-   return res.json(fotosGuardadas.dados);
- }
-
- let browser;
+ if(!Number.isSafeInteger(tarefa)||tarefa<=0||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'Informe uma SS válida.'});
  try{
-  const q=await pool.query({text:`SELECT d.tss_id,d.tsk_accesstoken,l.loc_integrationid AS numero_ss FROM u45468.dbout_task d JOIN u45468.task t ON t.tsk_id=d.tsk_id JOIN u45468.local l ON l.loc_id=t.loc_id WHERE d.tsk_id=$1 LIMIT 1`,values:[tarefa],query_timeout:7000});
-  const row=q.rows[0];
-  if(!row||String(row.numero_ss||'').trim()!==ss||Number(row.tss_id)!==50||!row.tsk_accesstoken||!/^[a-zA-Z0-9._~-]+$/.test(String(row.tsk_accesstoken)))return res.status(404).json({ok:false,error:'RelatÃ³rio original uMov nÃ£o encontrado para esta SS.'});
-  const link=hostRelatorioUmov()?'https://'+hostRelatorioUmov()+'/CenterWeb/report/schedule/'+tarefa+'/'+row.tsk_accesstoken:'';
-  const chromium=require('@sparticuz/chromium'),puppeteer=require('puppeteer-core');
-  browser=await puppeteer.launch({args:chromium.args,executablePath:await chromium.executablePath(),headless:true,defaultViewport:{width:1280,height:960,deviceScaleFactor:1}});
-  const page=await browser.newPage();
-  await page.setExtraHTTPHeaders({'Accept-Language':'pt-BR,pt;q=0.9'});
-  await page.goto(link,{waitUntil:'domcontentloaded',timeout:30000});
-  await page.evaluate(async()=>{await Promise.race([Promise.all(Array.from(document.images).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true})}))),new Promise(resolve=>setTimeout(resolve,13000))])});
-  const images=await page.$$('img');const fotos=[];let candidatas=0;
-  for(const img of images){
-   const info=await img.evaluate(el=>{const r=el.getBoundingClientRect();const style=getComputedStyle(el);return {nw:el.naturalWidth,nh:el.naturalHeight,w:r.width,h:r.height,visible:style.display!=='none'&&style.visibility!=='hidden',src:el.currentSrc||el.src||''}}).catch(()=>null);
-   if(!info||!info.visible||info.nw<180||info.nh<120||info.w<90||info.h<70)continue;
-   // Ignora logos e Ã­cones; inclui fotografias do corpo do relatÃ³rio.
-   if(/logo|icone|icon|brasao|banner|assinatura/i.test(info.src))continue;
-   candidatas++;
-   if(fotos.length>=40)continue;
-   try{
-    const buffer=await img.screenshot({type:'jpeg',quality:74,timeout:6000});
-    if(buffer.length>2500&&buffer.length<1800000)fotos.push('data:image/jpeg;base64,'+Buffer.from(buffer).toString('base64'));
-   }catch(e){console.warn('Foto uMov ignorada:',String(e.message).slice(0,100))}
-  }
-  const dadosFotos={ok:true,fotos,truncado:candidatas>40,total:candidatas};
-
-  // Limite de memoria: no maximo 12 conjuntos de fotos por instancia.
-  if(fotosUmovCache.size>=12){
-    fotosUmovCache.delete(fotosUmovCache.keys().next().value);
-  }
-
-  fotosUmovCache.set(chaveFotos,{
-    expira:Date.now()+FOTOS_UMOV_TTL,
-    dados:dadosFotos
+  const q=await pool.query({
+   text:`SELECT d.tsk_accesstoken,l.loc_city AS cidade
+      FROM u45468.dbout_task d
+      JOIN u45468.task t ON t.tsk_id=d.tsk_id
+      JOIN u45468.local l ON l.loc_id=t.loc_id
+      WHERE d.tsk_id=$1 AND l.loc_integrationid=$2 AND d.tss_id=50 LIMIT 1`,
+   values:[tarefa,ss],query_timeout:7000
   });
-
-  return res.json(dadosFotos);
- }catch(e){console.error('Fotos uMov:',e.message);return res.status(502).json({ok:false,error:'NÃ£o foi possÃ­vel extrair as fotos do relatÃ³rio original. Verifique se o relatÃ³rio estÃ¡ acessÃ­vel.'})}
- finally{if(browser)await browser.close().catch(()=>{})}
+  const row=q.rows[0];
+  if(req.divisaoSS&&(!row||!req.divisaoSS.cidades.map(normalizarCidade).includes(normalizarCidade(row.cidade||'')))){
+   return res.status(403).json({ok:false,error:'Fotos não autorizadas para esta divisão.'});
+  }
+  const token=String(row?.tsk_accesstoken||'');
+  const host=hostRelatorioUmov();
+  if(!host||!/^[a-zA-Z0-9._~-]+$/.test(token))return res.status(404).json({ok:false,error:'Relatório original uMov não encontrado para esta SS.'});
+  const link='https://'+host+'/CenterWeb/report/schedule/'+tarefa+'/'+token;
+  const chave=cacheScope()+'|'+ss+'|'+link;
+  const guardadas=fotosUmovCache.get(chave);
+  if(guardadas?.expira>Date.now())return res.json(guardadas.dados);
+  const dados=await fotosEmAndamento(chave,async()=>{
+   const fotos=await withReportPage(page=>extrairFotosUmov(page,link));
+   guardarFotos(chave,fotos);
+   return fotos;
+  });
+  return res.json(dados);
+ }catch(e){
+  console.error('Fotos uMov:',e.message);
+  return res.status(502).json({ok:false,error:'Não foi possível extrair as fotos do relatório original. Verifique se o relatório está acessível.'});
+ }
 });
 
 
