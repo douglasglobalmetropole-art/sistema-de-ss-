@@ -1524,6 +1524,7 @@ window.notify = function(message, kind) {
 </script>
 <script>
 const $=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));let currentScreen='recepcao';const fixedCols=['ss','logradouro','bairro','cidade','setor','servico','tags'];const currentCols=()=>currentScreen==='campo'?[...fixedCols,'equipe_executou']:(currentScreen==='baixar'?[...fixedCols,'data_finalizacao','equipe_executou']:((currentScreen==='encerradas'||currentScreen==='tramitacao')?[...fixedCols,'data_finalizacao','equipe_executou','status_integracao']:[fixedCols[0],'equipe_executou',...fixedCols.slice(1),'criado_em']));let raw=[],view=[],cities=[],macros=[],selected={},page=25,sort='',dir=1,target=null;
+window.__cgmGetSelectedUmov=()=>Object.values(selected);
 const isoDate=d=>{const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`};
 function setDefaultDateRange(){
   // SS_BAIXAR_DATAS_V2
@@ -1748,7 +1749,7 @@ configureActions(currentScreen);
 // ===== V10.6 - VISUALIZAR RELATÓRIO =====
 // Usa diretamente o objeto selecionado que já contém link. Não consulta o banco.
 $('viewReportBtn').onclick=()=>{
-  const itens=Object.values(selected||{});
+  const itens=typeof window.__cgmGetSelectedUmov==="function"?window.__cgmGetSelectedUmov():[];
   if(!itens.length)return alert('Selecione uma SS pelo checkbox para visualizar o relatório.');
   const x=itens[0];
   if(!x.link)return alert('Esta SS não possui relatório disponível (tss_id diferente de 50 ou token indisponível).');
@@ -1758,7 +1759,7 @@ $('viewReportBtn').onclick=()=>{
 $('viewSSBtn').onclick=()=>$('viewReportBtn').click();
 $('generatePdfBtn').onclick=async()=>{
   if(currentScreen!=='baixar')return;
-  const itens=Object.values(selected||{});
+  const itens=typeof window.__cgmGetSelectedUmov==="function"?window.__cgmGetSelectedUmov():[];
   const x=itens[0]||window.__detailSS;
   if(!x?.link)return window.notify('Esta SS não possui link do relatório original uMov.','error');
   const btn=$('generatePdfBtn');btn.disabled=true;
@@ -1909,7 +1910,7 @@ load();
  async function carregar(ss){$('itensLista').textContent='Carregando itens já lançados...';const r=await fetch('/api/itens?ss='+encodeURIComponent(ss)).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Erro ao consultar itens.');const itens=r.rows||[];$('itensLista').innerHTML=itens.length?'<table style="width:100%"><thead><tr><th>Material</th><th>UN</th><th>Qtd.</th><th>Valor</th><th>Ação</th></tr></thead><tbody>'+itens.map(i=>'<tr><td>'+esc(i.material||i.nome||'')+'</td><td>'+esc(i.unidade||'')+'</td><td>'+esc(i.quantidade||'')+'</td><td>'+moeda(i.valor_total||i.valor||0)+'</td><td><button class="btn excluirItem" data-id="'+esc(i.id||i.item_id||'')+'">Excluir</button></td></tr>').join('')+'</tbody></table>':'Nenhum item lançado nesta SS.';listaHandlers()}
  function listaHandlers(){$('itensLista').querySelectorAll('.excluirItem').forEach(b=>b.onclick=async()=>{if(!b.dataset.id||!confirm('Excluir este item já lançado?'))return;try{const r=await fetch('/api/itens/'+encodeURIComponent(b.dataset.id),{method:'DELETE'}).then(x=>x.json());if(!r.ok)throw new Error(r.error||'Falha ao excluir');await carregar(ssAtual)}catch(e){alert(e.message)}})}
  async function salvar(){if(!pendentes.length)return alert('Adicione materiais à lista.');const b=$('itensSalvar');b.disabled=true;$('itensStatus').textContent='Salvando itens no servidor...';try{const r=await fetch('/api/itens/lote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ss:ssAtual,itens:pendentes})}).then(x=>x.json());if(!Array.isArray(r.resultados))throw new Error(r.error||'Não foi possível confirmar o salvamento. Confira os itens lançados antes de tentar novamente.');const gravados=new Set(r.resultados.filter(i=>i.ok).map(i=>i.index));pendentes=pendentes.filter((_,i)=>!gravados.has(i));$('qtdPendentes').textContent=pendentes.length;$('itensStatus').textContent=r.gravados+' de '+r.total+' itens gravados. '+(pendentes.length?'Confira os pendentes antes de tentar novamente.':'Todos os itens foram processados.');await carregar(ssAtual)}catch(e){$('itensStatus').textContent=e.message}finally{b.disabled=false}}
- $('launchItemsBtn').onclick=async()=>{const itens=Object.values(selected||{});if(itens.length!==1)return alert('Selecione somente uma SS.');const ss=itens[0].ss;if(!ss)return alert('SS sem número.');modal();if(ssAtual!==ss){pendentes=[];ssAtual=ss}$('itensSS').textContent=ss;$('qtdPendentes').textContent=pendentes.length;$('itensModal').classList.add('open');try{if(!materiais.length){const r=await fetch('/api/materiais').then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível carregar os materiais.');materiais=r.rows||[];$('itensMateriais').innerHTML=materiais.map(x=>'<option value="'+esc(x.nome||'')+'">').join('')}await carregar(ss)}catch(e){$('itensLista').textContent='Erro: '+e.message}};
+ $('launchItemsBtn').onclick=async()=>{const itens=typeof window.__cgmGetSelectedUmov==="function"?window.__cgmGetSelectedUmov():[];if(itens.length!==1)return alert('Selecione somente uma SS.');const ss=itens[0].ss;if(!ss)return alert('SS sem número.');modal();if(ssAtual!==ss){pendentes=[];ssAtual=ss}$('itensSS').textContent=ss;$('qtdPendentes').textContent=pendentes.length;$('itensModal').classList.add('open');try{if(!materiais.length){const r=await fetch('/api/materiais').then(x=>x.json());if(!r.ok)throw new Error(r.error||'Não foi possível carregar os materiais.');materiais=r.rows||[];$('itensMateriais').innerHTML=materiais.map(x=>'<option value="'+esc(x.nome||'')+'">').join('')}await carregar(ss)}catch(e){$('itensLista').textContent='Erro: '+e.message}};
 })();
 </script>
 <script>
@@ -4047,7 +4048,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  const toolbar=document.querySelector('.toolbar');
  if(!toolbar)return;
  toolbar.appendChild(botao);toolbar.insertAdjacentElement('afterend',painel);
- const ativo=()=>document.querySelector('.tab[data-screen="encerradas"]')?.classList.contains('active');
+ const ativo=()=>!!document.querySelector('.tab.active[data-screen="encerradas"],.tab.active[data-screen="baixar"]');
  const atualizar=()=>{botao.hidden=!ativo();if(!ativo())painel.hidden=true};
  document.addEventListener('click',e=>{if(e.target.closest('.tab'))setTimeout(atualizar,0)});
  atualizar();
@@ -4079,7 +4080,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  botao.onclick=async()=>{
    if(rodando)return;
    if(!ativo())return alert('Abra a aba Notas Baixadas.');
-   const itens=Object.values(selected||{});
+   const itens=typeof window.__cgmGetSelectedUmov==="function"?window.__cgmGetSelectedUmov():[];
    if(!itens.length)return alert('Selecione as SS na tabela.');
    const unicos=[...new Map(itens.map(x=>[String(x.ss||'').trim(),x])).values()];
    if(!confirm('Verificar '+unicos.length+' SS no SISCOM e enviar ao uMov SOMENTE as que tiverem baixa oficial confirmada?'))return;
