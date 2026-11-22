@@ -4040,7 +4040,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  const $=id=>document.getElementById(id);
  const botao=document.createElement('button');
  botao.id='cgmUmovLoteBtn';botao.type='button';botao.className='btn primary';
- botao.textContent='Baixar selecionadas no uMov';
+ botao.textContent='Baixar uMov';
  botao.style.marginLeft='8px';
  const painel=document.createElement('div');
  painel.id='cgmUmovLotePainel';painel.hidden=true;
@@ -4113,7 +4113,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
      }
      const enviados=resultados.filter(x=>x.status.startsWith('Solicitacao')).length;
      alert('Lote finalizado. '+enviados+' solicitacoes enviadas ao uMov. Consulte o painel para conferir os demais resultados. A confirmacao final depende da sincronizacao do uMov.');
-   }finally{rodando=false;botao.disabled=false;botao.textContent='Baixar selecionadas no uMov'}
+   }finally{rodando=false;botao.disabled=false;botao.textContent='Baixar uMov'}
  };
 })();
 </script>
