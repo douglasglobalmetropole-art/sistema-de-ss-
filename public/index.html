@@ -4033,4 +4033,81 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 <script src="/rejeicao-opcoes-cgm-v1.js?v=rejeicao-v1-20261117" defer></script>
 <!-- CGM_DUPLICAR_SS_UMOV_V1 -->
 <script defer src="/duplicar-ss-cgm-v1.js?v=20261118copiassv6"></script>
+<script>
+(function(){
+ 'use strict';
+ const $=id=>document.getElementById(id);
+ const botao=document.createElement('button');
+ botao.id='cgmUmovLoteBtn';botao.type='button';botao.className='btn primary';
+ botao.textContent='Baixar selecionadas no uMov';
+ botao.style.marginLeft='8px';
+ const painel=document.createElement('div');
+ painel.id='cgmUmovLotePainel';painel.hidden=true;
+ painel.style.cssText='margin:8px 0;padding:12px;border:1px solid #b8d4e7;border-radius:8px;background:#fff;color:#123e6e;max-height:300px;overflow:auto';
+ const toolbar=document.querySelector('.toolbar');
+ if(!toolbar)return;
+ toolbar.appendChild(botao);toolbar.insertAdjacentElement('afterend',painel);
+ const ativo=()=>document.querySelector('.tab[data-screen="encerradas"]')?.classList.contains('active');
+ const atualizar=()=>{botao.hidden=!ativo();if(!ativo())painel.hidden=true};
+ document.addEventListener('click',e=>{if(e.target.closest('.tab'))setTimeout(atualizar,0)});
+ atualizar();
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ async function json(url,options){
+   const r=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});
+   let data={};try{data=await r.json()}catch{}
+   if(!r.ok)throw Error(data.error||('HTTP '+r.status));
+   return data;
+ }
+ async function validar(ss){
+   const first=await json('/api/siscom-gateway/consultar-eventos-ss',{
+     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:ss})
+   });
+   if(!first.id)throw Error('Consulta oficial nao iniciada');
+   for(let i=0;i<45;i++){
+     await sleep(1200);
+     const state=await json('/api/siscom-gateway/jobs/'+encodeURIComponent(first.id));
+     if(state.status==='erro')throw Error(state.error_message||'Falha na consulta oficial');
+     if(state.status==='concluido'){
+       if(state.result?.status_verificado!=='encerrada'||state.result?.encerramento_oficial!==true)
+         throw Error('Evento oficial 9 nao confirmado no SISCOM');
+       return first.id;
+     }
+   }
+   throw Error('Tempo esgotado na verificacao SISCOM');
+ }
+ let rodando=false;
+ botao.onclick=async()=>{
+   if(rodando)return;
+   if(!ativo())return alert('Abra a aba Notas Baixadas.');
+   const itens=Object.values(selected||{});
+   if(!itens.length)return alert('Selecione as SS na tabela.');
+   const unicos=[...new Map(itens.map(x=>[String(x.ss||'').trim(),x])).values()];
+   if(!confirm('Verificar '+unicos.length+' SS no SISCOM e enviar ao uMov SOMENTE as que tiverem baixa oficial confirmada?'))return;
+   rodando=true;botao.disabled=true;botao.textContent='Processando lote...';painel.hidden=false;
+   const resultados=[];
+   const render=()=>{
+     painel.replaceChildren();
+     const h=document.createElement('strong');h.textContent='Baixa uMov em lote â€” '+resultados.length+'/'+unicos.length; painel.append(h);
+     for(const r of resultados){const d=document.createElement('div');d.style.padding='5px 0';d.textContent=r.ss+' â€” '+r.status; painel.append(d)}
+   };
+   try{
+     for(const x of unicos){
+       const ss=String(x.ss||'').trim(),tarefa=Number(x.tarefa);
+       if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)||!Number.isSafeInteger(tarefa)||tarefa<=0){resultados.push({ss,status:'Bloqueada: SS ou tarefa invalida'});render();continue}
+       if(/^baixad/i.test(String(x.status_integracao||'').trim())){resultados.push({ss,status:'Ja baixada no uMov'});render();continue}
+       try{
+         const job_id=await validar(ss);
+         const ret=await json('/api/siscom-gateway/sincronizar-baixa-existente',{
+           method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:ss,tarefa,job_id})
+         });
+         resultados.push({ss,status:ret.ja_baixada?'Ja baixada no uMov':'Solicitacao enviada ao uMov; aguardar sincronizacao'});
+       }catch(e){resultados.push({ss,status:'Nao atualizada: '+e.message})}
+       render();
+     }
+     const enviados=resultados.filter(x=>x.status.startsWith('Solicitacao')).length;
+     alert('Lote finalizado. '+enviados+' solicitacoes enviadas ao uMov. Consulte o painel para conferir os demais resultados. A confirmacao final depende da sincronizacao do uMov.');
+   }finally{rodando=false;botao.disabled=false;botao.textContent='Baixar selecionadas no uMov'}
+ };
+})();
+</script>
 </body></html>
