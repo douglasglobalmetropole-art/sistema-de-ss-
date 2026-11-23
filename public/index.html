@@ -1343,6 +1343,14 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 
 
 
+
+<style id="CGM_SISCOM_FEEDBACK_V2">
+#sbCompStatus[data-estado] { display:block!important; padding:12px 14px; border-radius:7px; font-size:12px; line-height:1.6; white-space:pre-wrap; border:1px solid #d2e4f4; background:#f0f7fd; color:#194b73; }
+#sbCompStatus[data-estado="running"]{background:#eaf2ff;border-color:#a9c7e9;color:#175892;font-weight:600}
+#sbCompStatus[data-estado="success"]{background:#e2f5e9;border-color:#86cf9f;color:#12623c;font-weight:700}
+#sbCompStatus[data-estado="warning"]{background:#fff2d5;border-color:#e7ad56;color:#815011;font-weight:700}
+#rejStatus.rejSucesso { background:#e3f5e9!important; color:#15603d!important; border:1px solid #7cc79b!important; padding:12px!important; }
+</style>
 </head><body><main>
 <div class="siscomTopAuth" aria-label="Autenticação individual SISCOM">
  <div class="siscomTopBrand">▣ GLOBAL SS <span>Integração SISCOM</span></div>
@@ -2205,7 +2213,7 @@ load();
    const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{cache:'no-store'});
    const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
    const state=String(x.status).toLowerCase();
-   if(['concluido','concluído','completed','done','success'].includes(state))return route==='baixar-ss'?{...x.result,__job_id:j.id}:x.result;
+   if(['concluido','concluído','completed','done','success'].includes(state))return (route==='baixar-ss'||route==='complementar-criar')?{...x.result,__job_id:j.id}:x.result;
    if(['erro','error','failed','errored'].includes(state))throw Error(x.error_message||'Falha no worker');
   }
   throw Error('Tempo excedido. Confira o worker VPN.');
@@ -2354,7 +2362,7 @@ load();
   options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
   $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
   $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbObservacoes').value='';sbAtualizarDuracao();
-  compAreas=[];compServicos=[];compExistentes=[];compConsultadaSS='';compConsultaEmAndamentoSS='';$('sbCompDescricao').value='';compStatus('Abra a aba Complementar para consultar áreas e SS complementares.');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
+  compAreas=[];compServicos=[];compExistentes=[];compConsultadaSS='';compConsultaEmAndamentoSS='';compEnvioIncertoSS='';$('sbCompDescricao').value='';compStatus('Abra a aba Complementar para consultar áreas e SS complementares.');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
   status('Consultando SISCOM automaticamente...');
   $('siscomBaixaModal').classList.add('open');loadAll();
  };
@@ -2366,7 +2374,10 @@ load();
  };
  // Complementares: criação manual independente, sem disparar baixa automaticamente.
  let compAreas=[],compServicos=[],compExistentes=[],compConsultadaSS='',compConsultaEmAndamentoSS='';
- const compStatus=t=>{$('sbCompStatus').textContent=t;};
+ let compEnvioIncertoSS='';
+ const compStatus=(t,estado='info')=>{
+  const el=$('sbCompStatus');el.textContent=t;el.dataset.estado=estado;
+ };
  async function compConsultar(force=false){
   const g=generation,ss=current;
   if(!ss||(!force&&(compConsultadaSS===ss||compConsultaEmAndamentoSS===ss)))return;
@@ -2379,7 +2390,11 @@ load();
    options('sbCompArea',compAreas,'Selecione a área',x=>x.codAraeExecutora,x=>x.codAraeExecutora+' — '+(x.descricaoAreaExecutora||''));
    options('sbCompServico',[],'Selecione uma área',x=>x.cdServico,x=>x.dcServico);
    compConsultadaSS=ss;
-   compStatus('Áreas: '+compAreas.length+' | Complementares existentes: '+compExistentes.length+'.');
+   if(compEnvioIncertoSS===ss){
+    compStatus('Reconsulta concluída: '+compExistentes.length+' complementar(es) retornadas. ATENÇÃO: há um envio anterior sem confirmação de identificação. Confira o SISCOM antes de qualquer novo envio.','warning');
+   }else{
+    compStatus('Áreas: '+compAreas.length+' | Complementares existentes: '+compExistentes.length+'.','info');
+   }
   }catch(e){if(g===generation&&ss===current)compStatus('Falha na consulta: '+e.message);}
   finally{if(compConsultaEmAndamentoSS===ss)compConsultaEmAndamentoSS='';}
  }
@@ -2397,15 +2412,40 @@ load();
  $('siscomBaixaModal').addEventListener('siscom:complementar-open',()=>{void compConsultar(false);});
  $('sbCompCriar').onclick=async()=>{
   const ss=current,area=Number($('sbCompArea').value),macro=Number($('sbCompServico').value),descricao=$('sbCompDescricao').value.trim();
-  if(!compAreas.some(x=>Number(x.codAraeExecutora)===area)||!compServicos.some(x=>Number(x.cdServico)===macro)||!descricao)return compStatus('Selecione área, serviço macro e informe a descrição.');
-  const resumo='SS '+ss+'\nÁrea: '+area+'\nMacro: '+macro+'\nDescrição: '+descricao;
-  if(!window.confirm('GERAR NOVA SS COMPLEMENTAR NO SISCOM?\n\n'+resumo+'\n\nEsta ação é independente da baixa. Não repita em caso de resultado incerto.'))return;
-  const btn=$('sbCompCriar');btn.disabled=true;compStatus('Enviando criação da complementar; aguarde a confirmação...');
-  try{const r=await job('complementar-criar',{numero_ss:ss,area,macro,descricao,confirmacao:'COMPLEMENTAR '+ss},generation);
-   compStatus('Resultado: '+(r.status_complementar||'INCERTO')+' — '+(r.mensagem||'')+' | Consulte o SISCOM antes de qualquer novo envio.');
-   if(r.status_complementar==='CONFIRMADA')alert('Complementar confirmada no SISCOM. A baixa da SS original permanece independente.');
-  }catch(e){compStatus('Resultado não confirmado: '+e.message+'. NÃO reenvie antes de conferir a complementar no SISCOM.');}
-  finally{btn.disabled=false;}
+  if(!compAreas.some(x=>Number(x.codAraeExecutora)===area)||!compServicos.some(x=>Number(x.cdServico)===macro)||!descricao)
+   return compStatus('Preencha área, serviço macro e descrição antes de continuar.','warning');
+  if(compEnvioIncertoSS===ss){
+   compStatus('Existe uma criação com resultado INCERTO para esta SS. Atualize a consulta, verifique o SISCOM e NÃO reenvie sem confirmação externa.','warning');return;
+  }
+  const resumo='SS original: '+ss+'\nÁrea: '+area+'\nMacro: '+macro+'\nDescrição: '+descricao;
+  if(!window.confirm('CONFIRMAR A CRIAÇÃO DE UMA NOVA SS COMPLEMENTAR NO SISCOM?\n\n'+resumo+'\n\nÉ independente da baixa. Uma resposta de envio não garante o cadastro; não repita se houver dúvida.'))return;
+  const btn=$('sbCompCriar');btn.disabled=true;
+  compStatus('Solicitação enviada. Aguardando resultado oficial da criação...','running');
+  try{
+   const r=await job('complementar-criar',{numero_ss:ss,area,macro,descricao,confirmacao:'COMPLEMENTAR '+ss},generation);
+   if(ss!==current)return;
+   const situacao=String(r?.status_complementar||'INCERTO').trim().toUpperCase();
+   const tarefa=r?.__job_id?' | Tentativa: '+r.__job_id:'';
+   if(situacao==='CONFIRMADA'){
+    compEnvioIncertoSS='';
+    const numero=r?.numero_ss_complementar||r?.ss_complementar||r?.numero_complementar||'';
+    const texto='COMPLEMENTAR REALIZADA E CONFIRMADA NO SISCOM. SS original: '+ss+
+      (numero?' | SS complementar: '+String(numero):'')+tarefa+'. A baixa da SS original é independente.';
+    compStatus(texto,'success');
+    window.alert(texto);
+    // O resultado permanece visivel; o usuario pode atualizar a lista sem reenviar.
+   }else{
+    compEnvioIncertoSS=ss;
+    const texto='RESULTADO NÃO CONFIRMADO: '+(r?.mensagem||'A complementar não foi identificada')+tarefa+
+      '. O SISCOM pode ter recebido a criação. NÃO REENVIE antes de conferir as complementares desta SS.';
+    compStatus(texto,'warning');
+    window.alert(texto);
+   }
+  }catch(e){
+   compEnvioIncertoSS=ss;
+   const texto='CRIAÇÃO SEM CONFIRMAÇÃO: '+String(e.message||e)+'. O envio pode ter sido processado. NÃO REENVIE sem conferir o histórico SISCOM.';
+   compStatus(texto,'warning');window.alert(texto);
+  }finally{btn.disabled=false;}
  };
  // A janela abre mesmo sem habilitação: nunca iniciar o POST antes de confirmação explícita.
  let anexoAtual=null,anexoEmEnvio=false;
@@ -2857,7 +2897,7 @@ load();
  </div>
 </section>
 <section class="rejSection"><div class="rejTitle">▣ &nbsp;Período da execução</div><div class="rejContent rejGrid"><div><label for="rejInicio">Início da execução</label><input id="rejInicio" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"></div><div><label for="rejFim">Fim da execução</label><input id="rejFim" type="text" placeholder="DD/MM/AAAA HH:mm" autocomplete="off" inputmode="numeric"></div></div></section>
-  <section class="rejSection"><div class="rejTitle">♙ &nbsp;Equipe</div><div class="rejContent"><label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe"></div></section>
+  <section class="rejSection"><div class="rejTitle">♙ &nbsp;Equipe</div><div class="rejContent"><label for="rejEquipe">Código da equipe</label><input id="rejEquipe" type="number" min="1" step="1" placeholder="Informe o código oficial da equipe"><div id="rejEquipeReferencia" style="font-size:11px;color:#456c89;margin-top:5px" aria-live="polite">Aguardando dados do uMov/SISCOM.</div></div></section>
   <section class="rejSection"><div class="rejTitle">▣ &nbsp;Observação obrigatória</div><div class="rejContent"><label for="rejObservacao">Motivo detalhado</label><textarea id="rejObservacao" rows="3" maxlength="1000" placeholder="Descreva a razão da não execução"></textarea><div id="rejObsContador" class="rejCounter">0/1000</div></div></section>
   <div id="rejPermissao" hidden>Verificando autorização de escrita...</div><div id="rejStatus" role="status" aria-live="polite">Aguardando validação.</div>
  </div>
@@ -2867,13 +2907,13 @@ load();
 // Rejeição oficial SISCOM: sem gravação local até evento oficial 4 confirmado.
 (()=>{
  const $=id=>document.getElementById(id),modal=$('siscomRejeicaoModal');
- let validada=null,permissao=false,ocupado=false,ultimoConfirmado=null;
+ let validada=null,permissao=false,ocupado=false,ultimoConfirmado=null,envioRejeicaoPendente=false;
  const setStatus=s=>{
   const el=$('rejStatus');
   el.textContent=s;
   el.classList.toggle(
     'rejSucesso',
-    s==='Rejeição CONFIRMADA no SISCOM e status atualizado no uMov. Atualize a listagem.'
+    s.startsWith('Rejeição CONFIRMADA no SISCOM.')
   );
 };
  const ssValida=s=>/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(s);
@@ -2886,6 +2926,8 @@ load();
   !validada||
   modalidade!=='NAO_EXECUCAO'||
   !$('rejMotivoOficial').value||
+  !!ultimoConfirmado||
+  envioRejeicaoPendente||
   validada.numero_ss!==$('rejNumero').value.trim();
 }
  async function api(url,payload){
@@ -2934,10 +2976,52 @@ load();
     atualizarBotao();
    }
   }
+
+ let rejGeracaoPreenchimento=0;
+ function rejDataBR(valor){
+  const str=String(valor??'').trim();
+  const br=str.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})/);
+  if(br)return br[1]+' '+br[2];
+  const iso=str.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if(iso && !/[Zz]|[+\-]\d{2}:?\d{2}$/.test(str))return iso[3]+'/'+iso[2]+'/'+iso[1]+' '+iso[4]+':'+iso[5];
+  const dt=new Date(str);
+  if(!Number.isFinite(dt.getTime()))return '';
+  const p=Object.fromEntries(new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,hourCycle:'h23'}).formatToParts(dt).map(x=>[x.type,x.value]));
+  return [p.day,p.month,p.year].join('/')+' '+p.hour+':'+p.minute;
+ }
+ function rejPreencherRetorno(dados){
+  if(!dados||typeof dados!=='object')return;
+  const ini=rejDataBR(dados.inicio_atividade||dados.dataHoraExecucaoIni||dados.inicio_execucao);
+  const fim=rejDataBR(dados.fim_atividade||dados.dataHoraExecucaoFim||dados.fim_execucao||dados.data_finalizacao);
+  if(ini&&!$('rejInicio').value.trim())$('rejInicio').value=ini;
+  if(fim&&!$('rejFim').value.trim())$('rejFim').value=fim;
+  const equipe=dados.codEquipe??dados.cdEquipe??dados.codigoEquipe??dados.codigo_equipe??dados.equipe_codigo;
+  if(equipe!=null && /^\d+$/.test(String(equipe).trim()) && Number(equipe)>0 && !$('rejEquipe').value.trim())$('rejEquipe').value=String(equipe).trim();
+ }
+ async function rejConsultarEquipeOficial(numero,geracao){
+  if($('rejEquipe').value.trim())return;
+  try{
+   const solicitacao=await api('/api/siscom-gateway/consultar-ss-baixa',{numero_ss:numero});
+   const resultado=await acompanhar(solicitacao.id);
+   if(geracao!==rejGeracaoPreenchimento||$('rejNumero').value.trim()!==numero||!modal.classList.contains('open'))return;
+   rejPreencherRetorno(resultado?.data||resultado?.result||resultado||{});
+   if(!$('rejEquipe').value.trim())$('rejEquipeReferencia').textContent='O SISCOM não informou o código oficial da equipe. Confirme e informe manualmente.';
+   else $('rejEquipeReferencia').textContent='Código oficial de equipe obtido da consulta SISCOM. Confira antes de enviar.';
+  }catch(e){
+   if(geracao===rejGeracaoPreenchimento && $('rejNumero').value.trim()===numero)
+    $('rejEquipeReferencia').textContent='Consulta complementar da equipe indisponível. Confira o código oficial antes de rejeitar. ('+e.message+')';
+  }
+ }
   window.openSiscomRejeicao=async()=>{
   const ss=selectedSS();if(ss===null)return;
   $('rejNumero').value=ss;
   const escolhido=Object.values(selected||{})[0]||window.__detailSS||{};
+  ++rejGeracaoPreenchimento;
+  ['rejEquipe','rejInicio','rejFim','rejObservacao'].forEach(id=>$(id).value='');
+  $('rejObsContador').textContent='0/1000';
+  rejPreencherRetorno(escolhido);
+  const referencia=String(escolhido.equipe_executou||escolhido.tecnico||escolhido.nome_equipe||'').trim();
+  $('rejEquipeReferencia').textContent=referencia?'Equipe no uMov: '+referencia+'. Confirme o código oficial SISCOM antes de enviar.':'Equipe no uMov não informada. Confirme o código oficial no SISCOM.';
   const mostrar=(id,v)=>$(id).textContent=(v!==undefined&&v!==null&&String(v).trim())?String(v):'Não informado';
   mostrar('rejResumoSS',ss||'—');
   mostrar('rejResumoEndereco',escolhido.endereco||escolhido.logradouro||escolhido.rua);
@@ -2945,7 +3029,7 @@ load();
   mostrar('rejResumoSetor',escolhido.setor||escolhido.nome_setor);
   mostrar('rejResumoMacro',escolhido.macro_oficial||escolhido.macro||escolhido.descricao_macro);
   mostrar('rejResumoTipo',escolhido.tipo_solicitacao||escolhido.servico_solicitado||escolhido.servico||escolhido.tipo_servico);
-  $('rejResumo').textContent='Nenhuma SS validada.';validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;ocupado=false;permissao=false;atualizarBotao();
+  $('rejResumo').textContent='Nenhuma SS validada.';validada=null;ultimoConfirmado=null;envioRejeicaoPendente=false;$('rejSincronizar').hidden=true;ocupado=false;permissao=false;atualizarBotao();
   modal.classList.add('open');carregarMotivosOficiais();setStatus('Aguardando validação oficial.');
   try{
    const r=await fetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'}),me=await r.json();
@@ -2964,7 +3048,7 @@ load();
  $('rejObservacao').addEventListener('input',()=>{$('rejObsContador').textContent=String($('rejObservacao').value.length)+'/1000'});
  $('rejFechar').onclick=()=>{if(ocupado)return alert('Aguarde a tarefa terminar ou consulte o histórico antes de fechar.');modal.classList.remove('open')};
  modal.addEventListener('click',e=>{if(e.target===modal&&!ocupado)modal.classList.remove('open')});
- $('rejNumero').addEventListener('input',()=>{$('rejResumoSS').textContent=$('rejNumero').value.trim()||'—';['rejResumoEndereco','rejResumoBairro','rejResumoSetor','rejResumoMacro','rejResumoTipo'].forEach(id=>$(id).textContent='Aguardando validação');validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;$('rejResumo').textContent='Validação pendente.';atualizarBotao()});
+ $('rejNumero').addEventListener('input',()=>{++rejGeracaoPreenchimento;$('rejResumoSS').textContent=$('rejNumero').value.trim()||'—';['rejResumoEndereco','rejResumoBairro','rejResumoSetor','rejResumoMacro','rejResumoTipo'].forEach(id=>$(id).textContent='Aguardando validação');validada=null;ultimoConfirmado=null;$('rejSincronizar').hidden=true;$('rejResumo').textContent='Validação pendente.';atualizarBotao()});
  $('rejConsultar').onclick=async()=>{
   const numero=$('rejNumero').value.trim();if(!ssValida(numero))return setStatus('Informe uma SS no formato 08/26-106136-02.');
   $('rejConsultar').disabled=true;validada=null;atualizarBotao();setStatus('Consultando e validando SS no SISCOM...');
@@ -2973,6 +3057,10 @@ load();
    const r=await acompanhar(job.id);
    if(r.numero_ss!==numero||!r.validada)throw Error('SISCOM não validou esta SS');
    validada=r;
+   rejPreencherRetorno(r);
+   // Consulta de leitura já utilizada na baixa, para obter o codEquipe oficial
+   // quando a validação de rejeição não o fornece. Não executa baixa.
+   if(!$('rejEquipe').value.trim())void rejConsultarEquipeOficial(numero,rejGeracaoPreenchimento);
    if(r.macro!==undefined&&r.macro!==null)$('rejResumoMacro').textContent=String(r.macro)+(r.descricao_macro?' — '+r.descricao_macro:'');
    $('rejResumo').textContent='SS: '+r.numero_ss+' | Unidade: '+(r.unidade||r.executor)+' | Macro: '+r.macro+' — '+(r.descricao_macro||'');
    setStatus('SS validada. Confira a equipe, datas e observação antes de confirmar.');
@@ -2983,8 +3071,9 @@ load();
   $('rejSincronizar').disabled=true;
   try{
    const sync=await api('/api/siscom-gateway/sincronizar-rejeicao',{numero_ss:ultimoConfirmado.numero,job_id:ultimoConfirmado.id});
-   setStatus(sync.ok?'Rejeição CONFIRMADA no SISCOM e status atualizado no uMov. Atualize a listagem.':'Rejeição confirmada no SISCOM, mas sincronização local pendente.');
-  }catch(e){setStatus('Rejeição CONFIRMADA no SISCOM; sincronização uMov pendente: '+e.message+'. NÃO reenviar rejeição.');}
+   setStatus(sync.ok?'Rejeição CONFIRMADA no SISCOM. Envio da atualização uMov aceito; acompanhe a sincronização.':'Rejeição confirmada no SISCOM, mas sincronização uMov pendente.');
+   return !!sync.ok;
+  }catch(e){setStatus('Rejeição CONFIRMADA no SISCOM; sincronização uMov pendente: '+e.message+'. NÃO reenviar rejeição.');return false;}
   finally{$('rejSincronizar').disabled=false}
  }
  $('rejSincronizar').onclick=sincronizarConfirmada;
@@ -2996,7 +3085,7 @@ load();
    const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Falha na consulta');
    setStatus('Tentativa '+j.id+' | '+j.status+' | '+(j.result?.status_rejeicao||j.error_message||'Sem resultado oficial')+'. '+(j.result?.mensagem||''));
    if(j.status==='concluido'&&j.result?.status_rejeicao==='CONFIRMADA'){ultimoConfirmado={id:j.id,numero};$('rejSincronizar').hidden=false;}
-  }catch(e){setStatus('Tentativa: '+e.message)}finally{$('rejTentativa').disabled=false}
+  }catch(e){setStatus('Tentativa: '+e.message)}finally{$('rejTentativa').disabled=false;atualizarBotao()}
  };
  $('rejConfirmar').onclick=async()=>{
   const numero=$('rejNumero').value.trim();if(!validada||validada.numero_ss!==numero||!permissao)return setStatus('Valide a SS e verifique a permissão.');
@@ -3014,7 +3103,7 @@ load();
  }
  return d.toISOString();
 }
-const equipe=Number($('rejEquipe').value),ini=$('rejInicio').value,fim=$('rejFim').value,observacao=$('rejObservacao').value.trim();
+const equipe=Number($('rejEquipe').value),ini=$('rejInicio').value.trim(),fim=$('rejFim').value.trim(),observacao=$('rejObservacao').value.trim();
   if(!Number.isSafeInteger(equipe)||equipe<1)return setStatus('Informe o código da equipe.');
   let inicioISO,fimISO;
 try {
@@ -3025,24 +3114,33 @@ try {
 }
 if(fimISO<inicioISO)return setStatus('Informe datas válidas e cronológicas.');
   if(!observacao||observacao.length>1000)return setStatus('Informe a observação (até 1000 caracteres).');
-  if(!confirm('ATENÇÃO: rejeitar oficialmente a SS '+numero+' no SISCOM como NÃO EXECUÇÃO? Esta operação não será reenviada automaticamente.'))return;
+  const motivoDescricao=$('rejMotivoOficial').selectedOptions[0]?.textContent||'Não execução';
+  if(!confirm('CONFIRMAR REJEIÇÃO OFICIAL NO SISCOM?\n\nSS: '+numero+'\nMotivo: '+motivoDescricao+
+   '\nEquipe (código oficial): '+equipe+'\nInício: '+ini+'\nFim: '+fim+'\nObservação: '+observacao+
+   '\n\nEssa operação altera o SISCOM. NÃO repita se o resultado for incerto.'))return;
 
   ocupado=true;atualizarBotao();$('rejConsultar').disabled=true;setStatus('Enviando UMA ÚNICA vez para o SISCOM...');
   try{
    const motivoId=Number($('rejMotivoOficial').value);
 if(!Number.isSafeInteger(motivoId)||motivoId<1)
  throw Error('Selecione um motivo oficial de não execução.');
+    envioRejeicaoPendente=true;
     const job=await api('/api/siscom-gateway/rejeicao-confirmar',{numero_ss:numero,motivo:'NAO_EXECUCAO',motivo_nao_execucao_id:Number($('rejMotivoOficial').value),equipe,inicio:inicioISO,fim:fimISO,observacao,confirmacao:'REJEITAR '+numero});
    setStatus('Tarefa '+job.id+' registrada. Aguardando confirmação oficial...');
    const r=await acompanhar(job.id);
    if(r.status_rejeicao!=='CONFIRMADA'){
-    setStatus('RESULTADO INCERTO: '+(r.mensagem||'Não houve confirmação oficial')+' NÃO reenvie. Tarefa: '+job.id);
-    return;
+    const mensagem='RESULTADO INCERTO: '+(r.mensagem||'Não houve confirmação oficial')+' NÃO reenvie. Tarefa: '+job.id;
+    setStatus(mensagem);window.alert(mensagem);return;
    }
    setStatus('Rejeição confirmada no SISCOM. Sincronizando status com o uMov...');
    ultimoConfirmado={id:job.id,numero};$('rejSincronizar').hidden=false;
-   await sincronizarConfirmada();
-  }catch(e){setStatus('Não foi possível confirmar o resultado: '+e.message+'. Se o envio foi iniciado, NÃO tente novamente sem verificar a tentativa oficial.');}
+   const sincronizada=await sincronizarConfirmada();
+   if(sincronizada){
+    window.alert('REJEIÇÃO OFICIAL REALIZADA E CONFIRMADA NO SISCOM: '+numero+'. Envio da atualização ao uMov aceito; confira a sincronização.');
+   }else{
+    window.alert('REJEIÇÃO OFICIAL CONFIRMADA NO SISCOM: '+numero+'. A atualização ao uMov ainda não foi confirmada. NÃO envie a rejeição novamente.');
+   }
+  }catch(e){const msg='Não foi possível confirmar o resultado: '+e.message+'. Se o envio foi iniciado, NÃO tente novamente sem verificar a tentativa oficial.';setStatus(msg);if(envioRejeicaoPendente)window.alert(msg);}
   finally{ocupado=false;$('rejConsultar').disabled=false;atualizarBotao()}
  };
 
