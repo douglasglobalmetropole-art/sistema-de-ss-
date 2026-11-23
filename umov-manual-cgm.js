@@ -30,16 +30,15 @@ function validarRegistros(itens,rows,status,cidades,normalizarCidade){
   return porId;
 }
 const SQL=`SELECT t.tsk_id,l.loc_integrationid AS ss,l.loc_city AS cidade,
-  COALESCE(NULLIF(TRIM(d.tsk_situation),''),t.tsk_situation,'') AS situacao_campo,
+  COALESCE(NULLIF(TRIM(t.tsk_situation),''),'') AS situacao_campo,
   COALESCE(NULLIF(TRIM((SELECT COALESCE(NULLIF(TRIM(ce.cev_description::text),''),
   NULLIF(TRIM(v.cfv_externalvalue::text),''),NULLIF(TRIM(v.cfv_internalvalue::text),''),'')
   FROM u45468.customfieldvalue v JOIN u45468.customfield cf ON cf.cfd_id=v.cfd_id
   LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$'
   THEN v.cfv_internalvalue::bigint ELSE NULL END
   WHERE v.cfv_registerid=t.tsk_id AND LOWER(TRIM(cf.cfd_integrationid))='situacao'
-  AND LOWER(TRIM(cf.cfd_table))='task' LIMIT 1)),''),NULLIF(TRIM(d.e_situacao),''),'') AS status_integracao
+  AND LOWER(TRIM(cf.cfd_table))='task' LIMIT 1)),''),'') AS status_integracao
   FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
-  LEFT JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id
   WHERE t.tsk_id=ANY($1::bigint[])`;
 function registrar(app,{pool,autorizado,podeEscrever,origemOk,postUmovXml,identificadorSituacao,xmlEscape,cidadesPermitidas,normalizarCidade}){
   const autenticado=(req,res,escrita)=>{
@@ -80,7 +79,10 @@ function registrar(app,{pool,autorizado,podeEscrever,origemOk,postUmovXml,identi
         aviso:'Somente status de integracao no uMov. Nenhum evento de baixa ou rejeicao SISCOM foi consultado ou executado.'});
     }catch(e){
       const validacao=/SS ou tarefa|fora da divisao|ja possui status|situacao de campo/.test(e.message);
-      return res.status(validacao?409:503).json({ok:false,error:validacao?e.message:'Falha ao validar as SS antes do envio ao uMov. Nenhuma alteracao solicitada.'});
+      if(!validacao)console.error('[CGM_UMOV_MANUAL] Falha na consulta fisica, nenhuma escrita:',e.code||e.message);
+      const codigo=/^[A-Z0-9]{5}$/.test(String(e.code||''))?e.code:null;
+      return res.status(validacao?409:503).json({ok:false,error:validacao?e.message:
+        'Falha na leitura do banco uMov antes do envio'+(codigo?' (codigo '+codigo+')':'')+'. Nenhuma alteracao solicitada.'});
     }
   });
   app.post('/api/umov/manual-status/conferir',async(req,res)=>{
