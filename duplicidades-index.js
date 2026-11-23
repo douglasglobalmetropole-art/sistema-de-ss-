@@ -1,8 +1,15 @@
 'use strict';
 const {normalizarRegistro,comparar}=require('./duplicidades-core');
 const {definirMatriz,SS_RE}=require('./duplicidades-matriz');
+const {analisarComplementar,extrairSSCitadas}=require('./duplicidades-inteligencia');
 const TABELA='ss_duplicidades_indice';
-const COL='origem,tsk_id,loc_id,ss,matricula,hidrometro,cidade,bairro,logradouro,numero,complemento,chave_rua,chave_endereco,servico,situacao,registro_em,capturado_em';
+const COL='origem,tsk_id,loc_id,ss,matricula,hidrometro,cidade,bairro,logradouro,numero,complemento,chave_rua,chave_endereco,servico,situacao,registro_em,capturado_em,telefone,protocolo_referenciado';
+const COL_RICO=COL+',informacao_solicitante,esclarecimento_solicitante,referencia_localizacao';
+const dadosPublicos=v=>{
+ if(!v)return v;
+ const {telefone,protocolo_referenciado,informacao_solicitante,esclarecimento_solicitante,referencia_localizacao,...resto}=v;
+ return resto;
+};
 const arr=x=>Array.isArray(x)?x:[];
 const CLASSES=['matricula','hidrometro','chave_endereco','chave_rua'];
 const MAX_BUSCA=500;
@@ -20,7 +27,7 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
   throw Error('Configuracao de autorizacao da Matriz incompleta.');
  const caminho=(col,val,limit)=>`${TABELA}?select=${COL}&${col}=eq.${encodeURIComponent(val)}&order=tsk_id.desc&limit=${limit}`;
  async function buscarMatriz(ss,req,comDetalhes=false){
-   const candidatas=arr(await rest(`${TABELA}?select=${COL}&ss=eq.${encodeURIComponent(ss)}&order=tsk_id.desc&limit=100`));
+   const candidatas=arr(await rest(`${TABELA}?select=${COL_RICO}&ss=eq.${encodeURIComponent(ss)}&order=tsk_id.desc&limit=100`));
    const fontePreferida=fonteReq(req);
    let base=candidatas.find(x=>(!fontePreferida||x.origem===fontePreferida)&&cidadeOk(x.cidade,req));
    let origem='indice';
@@ -50,18 +57,30 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
      if(!base)return null;
    }
    const consultas=CLASSES.filter(col=>base[col]&&String(base[col]).length<180)
-    .map(col=>({col,url:caminho(col,base[col],col==='chave_rua'?75:MAX_BUSCA)}));
+    .map(col=>({col,limite:col==='chave_rua'?75:MAX_BUSCA,
+      url:caminho(col,base[col],col==='chave_rua'?75:MAX_BUSCA)}));
+   // Busca adicional SOMENTE por SS explicitamente citada no atendimento.
+   // Usa indice de SS existente; ate cinco referencias, dez tarefas por SS.
+   const citadas=extrairSSCitadas(base).filter(c=>c!==ss).slice(0,5);
+   for(const citada of citadas)consultas.push({col:'ss',limite:10,url:caminho('ss',citada,10)});
    const encontrados=await Promise.all(consultas.map(x=>rest(x.url)));
-   const truncado=encontrados.some((reg,i)=>arr(reg).length >= (consultas[i].col==='chave_rua'?75:MAX_BUSCA));
+   const truncado=encontrados.some((reg,i)=>arr(reg).length>=consultas[i].limite);
    const porSS=new Map();
    for(const reg of encontrados.flatMap(arr)){
      if(reg.ss===ss||!SS_RE.test(String(reg.ss||'')))continue;
+     if(citadas.includes(reg.ss)&&!cidadeOk(reg.cidade,req))continue;
      const chave=String(reg.origem)+'|'+String(reg.ss);
      const antes=porSS.get(chave);
      if(!antes||Number(reg.tsk_id)>Number(antes.tsk_id))porSS.set(chave,reg);
    }
-   const todos=[...porSS.values()].map(r=>({...r,...comparar(base,r)})).filter(r=>r.pontos>=3)
-    .sort((a,b)=>b.pontos-a.pontos||Number(b.tsk_id)-Number(a.tsk_id));
+   const todos=[...porSS.values()].map(r=>{
+     const legado=comparar(base,r);
+     const extra=analisarComplementar(base,r);
+     return {...r,...legado,analise_complementar:extra,
+       categoria:legado.pontos>=3?legado.categoria:extra.referencia_direta?'referencia':legado.categoria};
+   }).filter(r=>r.pontos>=3||r.analise_complementar.referencia_direta)
+    .sort((a,b)=>Number(b.analise_complementar.referencia_direta)-Number(a.analise_complementar.referencia_direta)
+      ||b.pontos-a.pontos||Number(b.tsk_id)-Number(a.tsk_id));
 
    const grupo=definirMatriz(base,todos);
 
@@ -147,8 +166,10 @@ function registrar(app,{pool,poolLote1,schemaLote1='u46915',autorizado,podeEscre
      const dados=await buscarMatriz(ss,req,req.query.detalhes==='1');
      if(!dados)return res.status(404).json({ok:false,codigo:'nao_indexada',erro:'SS nao localizada no indice ou uMov.'});
      const {alvo,origem,resultados,grupo,grupoSeguro,cobertura,truncado}=dados;
-     res.json({ok:true,alvo,origem_alvo:origem,resultados,cobertura,
-       matriz:grupo.matriz||null,duplicatas:grupo.duplicatas||[],
+     res.json({ok:true,alvo:dadosPublicos(alvo),origem_alvo:origem,
+       resultados:resultados.map(dadosPublicos),cobertura,
+       matriz:grupo.matriz?dadosPublicos(grupo.matriz):null,
+       duplicatas:(grupo.duplicatas||[]).map(dadosPublicos),
        pode_selecionar:grupoSeguro,
        motivo_bloqueio:grupoSeguro?null:!cobertura.completa?'Conclua a sincronizacao do indice para definir a Matriz com seguranca.':
          truncado?'Limite de correspondencias atingido. E necessario ampliar a busca antes da marcacao.':

@@ -220,6 +220,12 @@
       const categoria = r.categoria || 'proximidade';
       const classe = isDuplicata ? 'dgm-red' :
         categoria === 'provavel' ? 'dgm-orange' : 'dgm-blue';
+      const extra = r.analise_complementar;
+      const detalhesExtra = extra ? [
+        ...(extra.indicios || []),
+        ...(extra.alertas || []).map(m => 'ATENÇÃO: ' + m),
+        ...(extra.contexto || [])
+      ].join(' · ') : '';
 
       return `
         <tr>
@@ -237,6 +243,7 @@
           <td>${safe(r.hidrometro || '—')}</td>
           <td>${safe(r.pontos ?? '—')}</td>
           <td>${safe((r.motivos || []).join(' · ') || 'Conferir dados')}</td>
+          <td>${safe(detalhesExtra || 'Sem dados adicionais disponíveis')}</td>
           <td class="dgm-status-integracao">${safe(dgmStatusIntegracao(r))}</td>
           <td class="dgm-status-campo">${safe(dgmSituacaoCampo(r))}</td>
         </tr>`;
@@ -273,6 +280,7 @@
                 <th>Hidrômetro</th>
                 <th>Pontos</th>
                 <th>Critérios encontrados</th>
+                <th>Análise complementar</th>
                 <th>Status da Integração</th>
                 <th>Situação de Campo</th>
               </tr>
@@ -292,6 +300,7 @@
 
       <div class="dgm-note">
         <strong>Importante:</strong> correspondências são indícios para conferência.
+        A análise complementar não altera a seleção de Matriz nem autoriza TAG/rejeição automática.
         Nenhuma SS foi alterada ou recebeu TAG nesta consulta.
       </div>
     `;
@@ -427,11 +436,16 @@
       } else if (dado?.resposta) {
         const j = dado.resposta;
         const n = Math.max((j.duplicatas || []).length, (j.resultados || []).length);
-        if (n) {
-          classe += ' found';
+      if (n) {
+          const somenteCitacoes = !(j.duplicatas || []).length &&
+            Array.isArray(j.resultados) && j.resultados.length > 0 &&
+            j.resultados.every(r => r.categoria === 'referencia');
+          classe += somenteCitacoes ? ' error' : ' found';
           simbolo = '●';
-          rotulo = 'Possível duplicata';
-          titulo = n + ' correspondência(s). Clique para ver as SS.';
+          rotulo = somenteCitacoes ? 'Revisar' : 'Possível duplicata';
+          titulo = somenteCitacoes
+            ? 'SS citada em outro atendimento. Conferir antes de marcar duplicidade.'
+            : n + ' correspondência(s). Clique para ver as SS.';
         } else {
           simbolo = '●';
           if (j.cobertura && j.cobertura.completa === true &&
