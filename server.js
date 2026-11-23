@@ -1364,7 +1364,7 @@ async function paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBu
 app.get('/api/busca-ss',async(req,res)=>{try{
  const ss=String(req.query.ss||'').trim();if(ss.length<3)return res.json({ok:true,rows:[],total:0,hasMore:false});
  const tela=String(req.query.tela||'recepcao'),limit=Math.min(Math.max(Number(req.query.limit)||25,1),100),offset=Math.max(Number(req.query.offset)||0,0);
- const cond={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
+ const cond={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
  if(!cond[tela])return res.status(400).json({ok:false,error:'Aba invÃ¡lida'});
  const base=`FROM u45468.local l JOIN u45468.task t ON t.loc_id=l.loc_id JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id LEFT JOIN u45468.agent a ON a.age_id=t.age_id LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id WHERE l.loc_integrationid ILIKE $1 AND ${cond[tela]}`;
  const values=['%'+ss+'%'];
@@ -1437,7 +1437,7 @@ app.get('/api/pesquisa-global',async(req,res)=>{
    return res.json({...cacheHit.dados,ms:Date.now()-inicioConsulta,tempos:{banco_ms:0,detalhes_ms:0,cache:true}});
  }
  const tela=String(req.query.tela||'recepcao');
- const status={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
+ const status={recepcao:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
  if(!status[tela])return res.status(400).json({ok:false,error:'Aba invÃ¡lida'});
  const limit=Math.min(Math.max(Number(req.query.limit)||25,1),100),offset=Math.max(Number(req.query.offset)||0,0);
  const allowed={ss:'l.loc_integrationid',logradouro:'l.loc_street',bairro:'l.loc_neighborhood',cidade:'l.loc_city',setor:'dl.e_setor',servico:'tt.tty_description',tags:'d.e_tag',equipe_executou:'a.age_name',status_integracao:'d.e_situacao',criado_em:"TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')",data_finalizacao:"TO_CHAR(d.tsk_realinitialdatehour,'DD/MM/YYYY HH24:MI')"};
@@ -1580,9 +1580,48 @@ app.get('/api/localizar-ss', async (req,res)=>{
 });
 app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.query('SELECT current_database() banco,NOW() agora')).rows[0]})}catch(e){res.status(500).json({ok:false,error:e.message})}});
 // Consulta rÃ¡pida: limita task primeiro e sÃ³ consulta dbout_local para atÃ© 100 SS.
+// CGM_NOTAS_BAIXAR_TOTAL_REAL_V1 - contagem independente, somente leitura.
+// Nao atrasa a listagem nem informa um total estimado como se fosse exato.
+app.get('/api/recepcao-total-baixar',async(req,res)=>{
+ res.set('Cache-Control','private, no-store');
+ const ini=String(req.query.inicio||'').trim(),fim=String(req.query.fim||'').trim();
+ if((ini&&!/^\d{4}-\d{2}-\d{2}$/.test(ini))||(fim&&!/^\d{4}-\d{2}-\d{2}$/.test(fim)))
+  return res.status(400).json({ok:false,error:'Periodo invalido.'});
+ const equipe=String(req.query.equipe||'').trim().slice(0,100);
+ const macros=String(req.query.macro||'').split('\u001f').map(v=>v.trim()).filter(Boolean).slice(0,30);
+ const cidades=String(req.query.municipios||req.query.cidade||'').split('\u001f').map(v=>v.trim().toUpperCase()).filter(Boolean).slice(0,30);
+ const cacheKey='ss:contagem:baixar:'+String(req.divisaoSS?.codigo||'geral')+':'+JSON.stringify([ini,fim,equipe,macros,cidades]);
+ const hit=req.query._refresh?null:getCache(cacheKey,60000);
+ if(hit)return res.json(hit);
+ const values=[];
+ const param=v=>{values.push(v);return '$'+values.length};
+ const where=["LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo'",
+              "NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL",
+              'd.tsk_lastexecutiondatehour IS NOT NULL'];
+ if(ini||fim){
+  const a=param(ini||fim),b=param(fim||ini);
+  where.push(`d.tsk_lastexecutiondatehour >= ${a}::date AND d.tsk_lastexecutiondatehour < (${b}::date + INTERVAL '1 day')`);
+ }
+ try{
+  if(equipe){
+   const ag=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1',values:['%'+equipe+'%'],query_timeout:3500});
+   if(!ag.rows.length)return res.json({ok:true,total:0});
+   where.push(`t.age_id=ANY(${param(ag.rows.map(r=>String(r.age_id)))}::bigint[])`);
+  }
+  if(macros.length)where.push(`EXISTS(SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY(${param(macros)}::text[]))`);
+  if(cidades.length)where.push(`EXISTS(SELECT 1 FROM u45468.local cl LEFT JOIN u45468.dbout_local dl ON dl.loc_id=cl.loc_id WHERE cl.loc_id=t.loc_id AND translate(UPPER(TRIM(COALESCE(NULLIF(TRIM(dl.e_localidade),''),cl.loc_city))),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY(${param(cidades)}::text[]))`);
+  const sql=`SELECT COUNT(*)::bigint AS total FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE ${where.join(' AND ')}`;
+  const q=await pool.query({text:sql,values,query_timeout:6500});
+  const total=Number(q.rows[0]?.total);
+  if(!Number.isSafeInteger(total)||total<0)throw Error('Contagem invalida.');
+  const out={ok:true,total};setCache(cacheKey,out);return res.json(out);
+ }catch(e){console.warn('[CGM] contagem notas para baixar:',e.message);
+  return res.status(503).json({ok:false,total:null,error:'Contagem exata temporariamente indisponivel.'});}
+});
+
 app.get('/api/recepcao',async(req,res)=>{try{
- const inicio=String(req.query.tela||'')==='baixar'?(req.query.inicio||''):(req.query.inicio||'2026-10-01'),fim=String(req.query.tela||'')==='baixar'?(req.query.fim||''):(req.query.fim||'2026-10-05'),limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas','tramitacao']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${emLote1()?'lote1':'lote2'}:${req.divisaoSS?.codigo||'geral'}:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=req.query._refresh?null:getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
- const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
+ const inicio=String(req.query.tela||'')==='baixar'?(req.query.inicio||''):(req.query.inicio||'2026-10-01'),fim=String(req.query.tela||'')==='baixar'?(req.query.fim||''):(req.query.fim||'2026-10-05'),limit=Math.min(Math.max(+req.query.limit||25,1),100),offset=Math.max(+req.query.offset||0,0),equipeBusca=String(req.query.equipe||'').trim(),macroBusca=String(req.query.macro||'').split('\u001f').map(x=>x.trim()).filter(Boolean),cidadeBusca=String(req.query.municipios||req.query.cidade||'').split('\u001f').map(x=>x.trim().toUpperCase()).filter(Boolean),consultaLimit=limit+1,telas=new Set(['campo','baixar','encerradas','tramitacao']),tela=telas.has(String(req.query.tela||''))?String(req.query.tela):'recepcao',key=`ss:${emLote1()?'lote1':'lote2'}:${req.divisaoSS?.codigo||'geral'}:${tela}:${inicio}:${fim}:${limit}:${offset}:${equipeBusca.toLowerCase()}:${macroBusca.join('|')}:${cidadeBusca.join('|')}`,hit=req.query._refresh?null:getCache(key,180000);if(hit){res.set('X-Cache','HIT');return res.json(hit)}const started=Date.now();
+ const condicoes={campo:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo' AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL AND d.tsk_lastexecutiondatehour IS NOT NULL",encerradas:"NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NOT NULL",tramitacao:"LOWER(TRIM(COALESCE(d.e_situacao,''))) LIKE 'baixad%'"};
  if(tela==='recepcao'){
   const pagina=await paginaRecepcaoRapida({inicio,fim,limit,offset,equipeBusca,macroBusca,cidadeBusca});
   const [locals,tasks]=await Promise.all([extrasLocal(pagina.rows.map(x=>x.loc_id)),extrasTask(pagina.rows.map(x=>x.tsk_id))]);

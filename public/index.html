@@ -1844,7 +1844,22 @@ async function load(forcarAtualizacao=false){
 
     return status==='';
   })
-);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();if(direta&&!raw.length&&j.encontrados_fora_da_aba)$('countInfo').textContent='SS localizada no uMov, mas não pertence à aba '+currentScreen+'.';else if(direta&&j.aviso)$('countInfo').textContent=j.aviso;
+);window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
+    // CGM_NOTAS_BAIXAR_TOTAL_CLIENTE_V1: total real, buscado sem bloquear a pagina.
+    if(currentScreen==='baixar'&&!global&&!direta){
+      const consulta=p.toString();
+      fetch('/api/recepcao-total-baixar?'+consulta,{cache:'no-store',signal:consultaListaAtual.signal})
+       .then(r=>r.ok?r.json():null)
+       .then(jc=>{
+        if(!jc?.ok||!Number.isSafeInteger(jc.total)||numero!==numeroConsultaLista||currentScreen!=='baixar')return;
+        window.__totalSS=jc.total;
+        const n=view.slice(0,page).length;
+        const a=n?window.__pageOffset+1:0,b=window.__pageOffset+n;
+        $('countInfo').textContent='Exibindo '+a+'–'+b+' de '+jc.total+' SS sem status de integração'+(window.ms?' • consulta '+window.ms+' ms':'');
+        renderPagination();
+       }).catch(e=>{if(e.name!=='AbortError')console.warn('[CGM] Contagem pendente:',e.message)});
+    }
+    if(direta&&!raw.length&&j.encontrados_fora_da_aba)$('countInfo').textContent='SS localizada no uMov, mas não pertence à aba '+currentScreen+'.';else if(direta&&j.aviso)$('countInfo').textContent=j.aviso;
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}
 }
 let globalSearchTimer;document.querySelectorAll('.filter input[data-col]:not([data-col="ss"])').forEach(el=>el.addEventListener('input',()=>{clearTimeout(globalSearchTimer);globalSearchTimer=setTimeout(()=>{window.__pageOffset=0;load()},500)}));

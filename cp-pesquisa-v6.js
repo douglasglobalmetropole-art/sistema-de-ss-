@@ -53,7 +53,7 @@ function statement(params, ids){
    if(tela==='baixar'&&dataInicial>dataFinal)throw Object.assign(new Error('Data Inicio maior que Data Fim.'),{status:400});
    base.push(`${col} >= ${add(dataInicial)}::date`,`${col} < (${add(dataFinal)}::date + INTERVAL '1 day')`);
  }
- const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"TRUE"};
+ const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo' AND t.tsk_lastexecutiondatehour IS NOT NULL"};
  if(conditions[tela])base.push(conditions[tela]);
  const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
  if(filters.ss)like('l.loc_integrationid',filters.ss);
