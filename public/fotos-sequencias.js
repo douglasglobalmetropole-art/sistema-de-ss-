@@ -58,6 +58,8 @@
   let indiceZoom = 0;
   let abertaAntes = false;
   let jaCarregando = false;
+  const capturaCache = new Map();
+  const capturaEmAndamento = new Set();
   const seq = el('cgmSeqAnterior');
   const rel = el('cgmRelAnterior');
 
@@ -109,6 +111,9 @@
       const img = document.createElement('img');
       const legenda = document.createElement('figcaption');
       img.src = src;
+      if (/^https:\/\//i.test(src)) {
+        img.addEventListener('error', () => { void recuperarCaptura(lado); }, {once:true});
+      }
       img.loading = indice < 2 ? 'eager' : 'lazy';
       img.alt = 'Foto ' + (indice + 1);
       img.title = 'Clique para ampliar';
@@ -119,6 +124,29 @@
     });
     grade.append(fragmento);
     contador.textContent = fotos.length + ' foto(s)';
+  }
+  async function recuperarCaptura(lado) {
+    const anterior = lado === 'anterior';
+    const reg = anterior ? registros.find(r => r.numero_ss === seq.value && String(r.tarefa) === rel.value) : null;
+    const ss = anterior ? reg?.numero_ss : atualSS;
+    const tarefa = anterior ? reg?.tarefa : tarefaAtual;
+    if (!ss || !tarefa || !modal.classList.contains('open')) return;
+    const chave = String(ss) + '|' + String(tarefa);
+    if (capturaEmAndamento.has(chave)) return;
+    capturaEmAndamento.add(chave);
+    const tokenAtual = versao, tokenAnterior = versaoAnterior;
+    mensagem(lado, 'Algumas imagens exigem autenticaÃ§Ã£o. Recuperando fotografias...');
+    try {
+      const fotos = await buscarFotos(ss, tarefa, 'captura');
+      if (!modal.classList.contains('open') || tokenAtual !== versao ||
+          (anterior && (tokenAnterior !== versaoAnterior || seq.value !== ss || rel.value !== String(tarefa)))) return;
+      if (anterior) fotosAnteriores = fotos; else fotosAtuais = fotos;
+      renderizar(lado, fotos);
+      mensagem(lado, fotos.length ? '' : 'Fotografias indisponÃ­veis neste relatÃ³rio.');
+    } catch (erro) {
+      if (tokenAtual === versao && (!anterior || tokenAnterior === versaoAnterior))
+        mensagem(lado, 'NÃ£o foi possÃ­vel recuperar as imagens: ' + erro.message);
+    } finally { capturaEmAndamento.delete(chave); }
   }
   function mensagem(lado, texto) {
     el(lado === 'anterior' ? 'cgmStatusAnterior' : 'cgmStatusAtual').textContent = texto || '';
@@ -132,12 +160,19 @@
     }
     return dado;
   }
-  async function buscarFotos(ss, tarefa) {
+  async function buscarFotos(ss, tarefa, modo = 'direto') {
+    const chave = String(ss) + '|' + String(tarefa);
+    if (modo === 'direto' && capturaCache.has(chave)) return capturaCache.get(chave);
     const dado = await obterJson('/api/relatorio-fotos', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ss, tarefa})
+      body: JSON.stringify({ss, tarefa, modo})
     });
-    return Array.isArray(dado.fotos) ? dado.fotos : [];
+    const fotos = Array.isArray(dado.fotos) ? dado.fotos : [];
+    if (modo === 'captura' && fotos.length) {
+      capturaCache.set(chave, fotos);
+      while (capturaCache.size > 8) capturaCache.delete(capturaCache.keys().next().value);
+    }
+    return fotos;
   }
   async function carregarAnterior() {
     const token = ++versaoAnterior;
