@@ -561,7 +561,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
       });
     });
   }
-  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !(req.method==='GET' && rota==='/api/umov/sequencias-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !duplicarSSDivisao && !retornarRecepcaoDivisao && !pdfDivisao && !retornoEquipeDivisao && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
+  if(!(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='POST' && rota==='/api/relatorio-fotos') && !(req.method==='GET' && rota==='/api/duplicidades/consulta') && !(req.method==='GET' && rota==='/api/umov/sequencias-fotos') && !consultaRejeicaoDivisao && !materiaisDivisao && !criarComplementarDivisao && !tagsDivisao && !anexarRelatorioDivisao && !baixaSiscomDivisao && !equipesDivisao && !enviarEquipeDivisao && !removerEquipeDivisao && !duplicarSSDivisao && !retornarRecepcaoDivisao && !pdfDivisao && !retornoEquipeDivisao && !(req.method==='POST' && (rota==='/api/umov/manual-status'||rota==='/api/umov/manual-status/conferir')) && !sincronizacaoExistenteDivisao && !loginSiscomDivisao && !consultasSiscomDivisao && (req.method!=='GET'||!consultas.has(rota))){
    return res.status(403).json({
     ok:false,
     error:'Rota ainda nao liberada para operacao por divisao.'
@@ -766,7 +766,7 @@ app.use((req,res,next)=>{
 });
 
 const invalidatingRoutes=new Set([
- '/api/auth/logout','/api/duplicar-ss','/api/enviar-equipe','/api/status-integracao','/api/status-umov-rejeitar','/api/remover-equipe',
+ '/api/auth/logout','/api/duplicar-ss','/api/enviar-equipe','/api/status-integracao','/api/status-umov-rejeitar','/api/umov/manual-status','/api/remover-equipe',
  '/api/retornar-recepcao','/api/tags','/api/duplicidades/aplicar-tag',
  '/api/siscom-gateway/sincronizar-baixa','/api/siscom-gateway/sincronizar-baixa-existente',
  '/api/siscom-gateway/sincronizar-rejeicao'
@@ -2599,6 +2599,12 @@ app.post('/api/tags',async(req,res)=>{
   console.error('Atualizacao de tags uMov:',error.code||error.message);
   return res.status(500).json({ok:false,error:'Nao foi possivel atualizar a tag/orientacao no uMov.'});
  }
+});
+require('./umov-manual-cgm').registrar(app,{
+  pool,autorizado:gatewayAuthorized,podeEscrever:gatewayCanWrite,
+  origemOk:siscomSameOrigin,postUmovXml,identificadorSituacao,xmlEscape,
+  cidadesPermitidas:req=>req.divisaoSS?.cidades||(emLote1()?LOTE1_CIDADES:null),
+  normalizarCidade
 });
 require('./duplicidades-index').registrar(app,{
  pool:poolPrincipal, poolLote1, schemaLote1: "u46915",

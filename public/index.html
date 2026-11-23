@@ -4069,7 +4069,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  botao.style.cssText='display:block;width:100%;min-height:39px;margin:5px 0;background:#07599a;color:white;border:1px solid #07599a;border-radius:6px;font-weight:bold;cursor:pointer';
  ancora.insertAdjacentElement('afterend',botao);
  acoes.insertAdjacentElement('afterend',painel);
- const ativo=()=>!!document.querySelector('.tab.active[data-screen="encerradas"],.tab.active[data-screen="baixar"]');
+ const ativo=()=>!!document.querySelector('.tab.active[data-screen="baixar"]');
  const atualizar=()=>{botao.hidden=!ativo();if(!ativo())painel.hidden=true};
  document.addEventListener('click',e=>{if(e.target.closest('.tab'))setTimeout(atualizar,0)});
  atualizar();
@@ -4132,4 +4132,5 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  };
 })();
 </script>
+<script defer src="/umov-manual-cgm-v1.js?v=manual-20261123-v1"></script>
 </body></html>
