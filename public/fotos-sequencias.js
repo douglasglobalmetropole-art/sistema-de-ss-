@@ -59,8 +59,17 @@
   let abertaAntes = false;
   let jaCarregando = false;
   const capturaCache = new Map();
+  const fotosCacheV3 = new Map(), fotosPendentesV3 = new Map();
+  const seqCacheV3 = new Map(), seqPendentesV3 = new Map();
+  const prefetchV3 = new Set();
+  function lerV3(m,k){const v=m.get(k);if(!v)return null;if(v.expira<Date.now()){m.delete(k);return null;}return v.dados;}
+  function guardarV3(m,k,dados,ttl,limite){m.delete(k);m.set(k,{dados,expira:Date.now()+ttl});while(m.size>limite)m.delete(m.keys().next().value);}
   const capturaEmAndamento = new Set();
   const seq = el('cgmSeqAnterior');
+  const btnRetryV3=document.createElement('button');
+  btnRetryV3.type='button';btnRetryV3.textContent='Tentar novamente';btnRetryV3.hidden=true;
+  btnRetryV3.style.cssText='margin:6px 10px;padding:7px;border:1px solid #96b6cc;border-radius:5px;color:#14527b;background:#f8fcff;cursor:pointer';
+  el('cgmStatusAnterior').insertAdjacentElement('afterend',btnRetryV3);
   const rel = el('cgmRelAnterior');
 
   function zoomDesenhar() {
@@ -110,11 +119,13 @@
       const figura = document.createElement('figure');
       const img = document.createElement('img');
       const legenda = document.createElement('figcaption');
-      img.src = src;
+      img.loading = indice < 3 ? 'eager' : 'lazy';
+      img.decoding = 'async';
+      if(indice===0)img.fetchPriority='high';
       if (/^https:\/\//i.test(src)) {
         img.addEventListener('error', () => { void recuperarCaptura(lado); }, {once:true});
       }
-      img.loading = indice < 2 ? 'eager' : 'lazy';
+      img.src = src;
       img.alt = 'Foto ' + (indice + 1);
       img.title = 'Clique para ampliar';
       img.onclick = () => zoomAbrir(fotos, indice);
@@ -160,20 +171,50 @@
     }
     return dado;
   }
-  async function buscarFotos(ss, tarefa, modo = 'direto') {
-    const chave = String(ss) + '|' + String(tarefa);
-    if (modo === 'direto' && capturaCache.has(chave)) return capturaCache.get(chave);
-    const dado = await obterJson('/api/relatorio-fotos', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ss, tarefa, modo})
-    });
-    const fotos = Array.isArray(dado.fotos) ? dado.fotos : [];
-    if (modo === 'captura' && fotos.length) {
-      capturaCache.set(chave, fotos);
-      while (capturaCache.size > 8) capturaCache.delete(capturaCache.keys().next().value);
+  async function buscarFotos(ss,tarefa,modo='direto') {
+    const chave=String(ss)+'|'+String(tarefa);
+    if(modo==='direto'){
+      if(capturaCache.has(chave))return capturaCache.get(chave);
+      const salvo=lerV3(fotosCacheV3,chave);
+      if(salvo)return salvo;
+      if(fotosPendentesV3.has(chave))return fotosPendentesV3.get(chave);
     }
-    return fotos;
+    const p=(async()=>{
+      const dado=await obterJson('/api/relatorio-fotos',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ss,tarefa,modo})
+      });
+      const fotos=Array.isArray(dado.fotos)?dado.fotos:[];
+      if(modo==='captura'&&fotos.length){
+        capturaCache.set(chave,fotos);
+        while(capturaCache.size>8)capturaCache.delete(capturaCache.keys().next().value);
+      }else if(modo==='direto'&&fotos.length){
+        guardarV3(fotosCacheV3,chave,fotos,10*60*1000,12);
+      }
+      return fotos;
+    })();
+    if(modo!=='direto')return p;
+    fotosPendentesV3.set(chave,p);
+    try{return await p;}finally{if(fotosPendentesV3.get(chave)===p)fotosPendentesV3.delete(chave);}
   }
+  function buscarSequenciasV3(ss){
+    const chave=String(ss),salvo=lerV3(seqCacheV3,chave);
+    if(salvo)return Promise.resolve(salvo);
+    if(seqPendentesV3.has(chave))return seqPendentesV3.get(chave);
+    const p=obterJson('/api/umov/sequencias-fotos?ss='+encodeURIComponent(chave))
+      .then(dado=>{guardarV3(seqCacheV3,chave,dado,3*60*1000,20);return dado;})
+      .finally(()=>seqPendentesV3.delete(chave));
+    seqPendentesV3.set(chave,p);return p;
+  }
+  window.CGM_Fotos_precarregar=x=>{
+    if(!x||!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(String(x.ss))||
+      !Number.isSafeInteger(Number(x.tarefa))||Number(x.tarefa)<=0)return;
+    const k=String(x.ss)+'|'+String(x.tarefa);
+    if(prefetchV3.has(k)||prefetchV3.size>=2)return;
+    prefetchV3.add(k);
+    Promise.allSettled([buscarFotos(x.ss,x.tarefa),buscarSequenciasV3(x.ss)])
+      .finally(()=>prefetchV3.delete(k));
+  };
   async function carregarAnterior() {
     const token = ++versaoAnterior;
     const registro = registros.find(r => r.numero_ss === seq.value && String(r.tarefa) === rel.value);
@@ -220,6 +261,7 @@
     esquerda.hidden = false;
     direita.hidden = false;
     registros = [];
+    btnRetryV3.hidden=true;
     seq.replaceChildren();
     rel.replaceChildren();
     fotosAtuais = [];
@@ -239,8 +281,9 @@
       if (token === versao) mensagem('atual', 'Falha ao consultar: ' + err.message);
     });
 
-    const anteriorPromise = obterJson('/api/umov/sequencias-fotos?ss=' + encodeURIComponent(atualSS)).then(dado => {
+    const anteriorPromise = buscarSequenciasV3(atualSS).then(dado => {
       if (token !== versao || !modal.classList.contains('open')) return;
+      btnRetryV3.hidden=true;
       registros = Array.isArray(dado.sequencias) ? dado.sequencias : [];
       const opcoes = [...new Set(registros.map(r => r.numero_ss))].filter(Boolean);
       if (!opcoes.length) {
@@ -260,10 +303,34 @@
       if (token !== versao) return;
       esquerda.hidden = false; // Erros nao sao confundidos com ausencia de sequencias.
       mensagem('anterior', 'Consulta indispon\u00edvel: ' + err.message);
+      btnRetryV3.hidden=false;
     });
     await Promise.allSettled([atualPromise, anteriorPromise]);
     if (token === versao) jaCarregando = false;
   }
+  btnRetryV3.onclick=()=>{
+    if(!atualSS||!modal.classList.contains('open'))return;
+    const ss=atualSS,tarefa=tarefaAtual;
+    seqCacheV3.delete(ss);
+    btnRetryV3.hidden=true;
+    // Consultar apenas os dados anteriores; as fotos atuais permanecem na tela.
+    const token=versao;
+    mensagem('anterior','Tentando consultar sequ\u00eancias anteriores...');
+    buscarSequenciasV3(ss).then(dado=>{
+      if(token!==versao||!modal.classList.contains('open'))return;
+      registros=Array.isArray(dado.sequencias)?dado.sequencias:[];
+      const itens=[...new Set(registros.map(r=>r.numero_ss))].filter(Boolean);
+      seq.replaceChildren();
+      if(!itens.length){esquerda.hidden=true;return;}
+      esquerda.hidden=false;
+      for(const numero of itens){const op=document.createElement('option');op.value=numero;op.textContent=numero;seq.append(op);}
+      mensagem('anterior','');preencherRelatorios();
+    }).catch(err=>{
+      if(token!==versao||!modal.classList.contains('open'))return;
+      mensagem('anterior','Consulta indispon\u00edvel: '+err.message);
+      btnRetryV3.hidden=false;
+    });
+  };
   function obterSelecionada() {
     const selecionada = window.__siscomBaixaSelecionada;
     return selecionada?.ss && selecionada?.tarefa ? selecionada : null;
@@ -283,7 +350,7 @@
     const aberta = modal.classList.contains('open');
     if (aberta && !abertaAntes) {
       abertaAntes = true;
-      setTimeout(() => tentarCarregar(), 90);
+      setTimeout(() => tentarCarregar(), 0);
     } else if (!aberta && abertaAntes) {
       abertaAntes = false;
       ++versao;

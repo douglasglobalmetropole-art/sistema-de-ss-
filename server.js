@@ -1958,7 +1958,9 @@ const { consultarMateriais } = require('./umov-materiais');
         }
 
         const { consultarSequenciasFotos } = require('./umov-materiais');
+        const inicioConsulta = Date.now();
         const sequencias = await consultarSequenciasFotos(pool, ss);
+        res.setHeader('Server-Timing', 'anteriores;dur=' + (Date.now() - inicioConsulta));
 
         return res.json({
           ok: true,
@@ -1968,7 +1970,7 @@ const { consultarMateriais } = require('./umov-materiais');
         });
       } catch (error) {
         const codigoBanco = String(error.code || '');
-        console.error('Consulta sequencias uMov:', codigoBanco || error.message);
+        console.error('[CGM FOTOS ANTERIORES]', codigoBanco || error.name, String(error.message || '').slice(0,200));
         const mensagemBanco = codigoBanco === '57014'
           ? 'Consulta de sequencias uMov excedeu o tempo limite.'
           : codigoBanco === '42P01'
@@ -2248,7 +2250,7 @@ app.post('/api/siscom-gateway/sincronizar-baixa-existente',async(req,res)=>{
 
 const fotosUmovCache = new performance.BoundedMap(12);
 const fotosEmAndamento = performance.singleFlight();
-const FOTOS_UMOV_TTL = 5 * 60 * 1000;
+const FOTOS_UMOV_TTL = 10 * 60 * 1000;
 const FOTOS_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 function guardarFotos(chave,dados){
  const bytes=dados.fotos.reduce((total,foto)=>total+foto.length,0);
