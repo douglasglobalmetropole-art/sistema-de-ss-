@@ -218,8 +218,12 @@
     const lista = relacionados.map(r => {
       const isDuplicata = duplicataSet.has(ssVal(r));
       const categoria = r.categoria || 'proximidade';
-      const classe = isDuplicata ? 'dgm-red' :
-        categoria === 'provavel' ? 'dgm-orange' : 'dgm-blue';
+      // Indicios fracos (mesma rua ou citacao) nao devem ser tratados como duplicata.
+      const provavelmente = isDuplicata || categoria === 'provavel';
+      const classificacao = provavelmente ? 'POSSÍVEL DUPLICATA' :
+        categoria === 'referencia' ? 'SS CITADA' :
+        categoria === 'relacionado' ? 'SERVIÇO RELACIONADO' : 'REVISAR';
+      const classe = provavelmente ? 'dgm-red' : 'dgm-blue';
       const extra = r.analise_complementar;
       const detalhesExtra = extra ? [
         ...(extra.indicios || []),
@@ -237,7 +241,7 @@
   ].filter(v => v !== null && v !== undefined && String(v).trim() !== '').join(', ') || 'Não informado'
 )}</td>
           <td><span class="dgm-tag ${classe}">
-            ${isDuplicata ? 'DUPLICATA' : categoria.toUpperCase()}
+            ${classificacao}
           </span></td>
           <td>${safe(r.matricula || '—')}</td>
           <td>${safe(r.hidrometro || '—')}</td>
@@ -260,7 +264,7 @@
       </div>
 
       <div class="dgm-section">
-        SS MATRIZ: ${safe(matrizSS || 'Não definida')}
+        ${d.pode_selecionar ? 'SS MATRIZ:' : 'SS MATRIZ SUGERIDA (NÃO CONFIRMADA):'} ${safe(matrizSS || 'Não definida')}
       </div>
 
       <div class="dgm-section">
@@ -435,17 +439,19 @@
         titulo = 'Falha na consulta. Clique para tentar novamente.';
       } else if (dado?.resposta) {
         const j = dado.resposta;
-        const n = Math.max((j.duplicatas || []).length, (j.resultados || []).length);
-      if (n) {
-          const somenteCitacoes = !(j.duplicatas || []).length &&
-            Array.isArray(j.resultados) && j.resultados.length > 0 &&
-            j.resultados.every(r => r.categoria === 'referencia');
-          classe += somenteCitacoes ? ' error' : ' found';
+        const resultados = Array.isArray(j.resultados) ? j.resultados : [];
+        const duplicatas = Array.isArray(j.duplicatas) ? j.duplicatas : [];
+        const n = Math.max(duplicatas.length, resultados.length);
+        // So classifica como possivel duplicata se as regras legadas forem fortes.
+        // Mesma rua, numero diferente, servico relacionado ou SS citada = REVISAR.
+        const fortes = duplicatas.length || resultados.filter(r => r && r.categoria === 'provavel').length;
+        if (n) {
+          classe += fortes ? ' found' : ' error';
           simbolo = '●';
-          rotulo = somenteCitacoes ? 'Revisar' : 'Possível duplicata';
-          titulo = somenteCitacoes
-            ? 'SS citada em outro atendimento. Conferir antes de marcar duplicidade.'
-            : n + ' correspondência(s). Clique para ver as SS.';
+          rotulo = fortes ? 'Possível duplicata' : 'Revisar';
+          titulo = fortes
+            ? fortes + ' candidata(s) com criterios fortes; confira as SS relacionadas.'
+            : n + ' correspondencia(s) fraca(s) ou referencia(s); nao confirma duplicidade.';
         } else {
           simbolo = '●';
           if (j.cobertura && j.cobertura.completa === true &&
