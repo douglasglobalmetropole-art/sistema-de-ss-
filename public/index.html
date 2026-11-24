@@ -2640,7 +2640,15 @@ load();
  const compStatus=(t,estado='info')=>{
   const el=$('sbCompStatus');
    el.textContent=t;
-   el.dataset.estado=estado;
+   if(String(t||'').trim()){
+    el.dataset.estado=estado;
+    el.hidden=false;
+    el.style.display='';
+   }else{
+    delete el.dataset.estado;
+    el.hidden=true;
+    el.style.display='none';
+   }
  };
 
  async function compConsultar(force=false){
@@ -2652,7 +2660,7 @@ load();
 
   compConsultaEmAndamentoSS=ss;
   compConsultadaSS='';
-  $('sbCompCriar').disabled=true;
+  $('sbCompCriar').disabled=compPendencias.has(ss);
   compAreas=[];
   compServicos=[];
   compExistentes=[];
@@ -2738,11 +2746,7 @@ load();
      historico:erroLista
     });
 
-    compStatus(
-     erroAreas?'Atualize as areas de servico.':
-     'Geracao temporariamente indisponivel.',
-     'neutral'
-    );
+    compStatus('');
 
     return;
    }
@@ -2788,7 +2792,7 @@ load();
    if(vigente()&&compConsultaEmAndamentoSS===ss){
     compConsultaEmAndamentoSS='';
     $('sbCompCriar').disabled=
-     compConsultadaSS!==ss||compPendencias.has(ss);
+     compPendencias.has(ss);
    }
 
   }
@@ -2801,25 +2805,20 @@ load();
    if(g!==generation)return;
    options('sbCompServico',compServicos,'Selecione o serviço macro',x=>x.cdServico,x=>x.cdServico+' — '+(x.dcServico||''));
 
-   compStatus(
-    compConsultadaSS===current?'':
-     'Geracao temporariamente indisponivel.',
-    'neutral'
-   );
+   $('sbCompCriar').disabled=compPendencias.has(current);
+   compStatus('');
 
-  }catch(e){if(g===generation)compStatus('Falha ao consultar serviços: '+e.message);}
+  }catch(e){if(g===generation){
+    console.warn('[CGM Complementar] Servicos:',e.message);
+    compStatus('');
+   }}
  };
  $('sbCompAtualizar').onclick=()=>compConsultar(true);
  $('siscomBaixaModal').addEventListener('siscom:complementar-open',()=>{void compConsultar(false);});
  $('sbCompCriar').onclick=async()=>{
   const ss=current,area=Number($('sbCompArea').value),macro=Number($('sbCompServico').value),descricao=$('sbCompDescricao').value.trim();
 
-  if(!ss||compConsultadaSS!==ss){
-   return compStatus(
-    'Consulte o historico oficial antes de criar a complementar.',
-    'warning'
-   );
-  }
+  if(!ss)return;
   if(!compAreas.some(x=>Number(x.codAraeExecutora)===area)||!compServicos.some(x=>Number(x.cdServico)===macro)||!descricao)
    return compStatus('Preencha área, serviço macro e descrição antes de continuar.','warning');
   if(compEnvioIncertoSS===ss){
@@ -2855,7 +2854,7 @@ load();
   }finally{
    if(g===generation&&ss===current){
     btn.disabled=
-     compConsultadaSS!==ss||compPendencias.has(ss);
+     compPendencias.has(ss);
    }
   }
  };
