@@ -33,7 +33,7 @@ body.cgm-fit:not(.tram-mode){
  --cgm-panel-width:clamp(350px,30vw,490px);
 }
 
-body.cgm-fit:not(.tram-mode) main{
+body.cgm-fit:not(.tram-mode) > main{
  display:flex!important;
  flex-direction:column!important;
  height:100dvh!important;
@@ -44,11 +44,11 @@ body.cgm-fit:not(.tram-mode) main{
  gap:6px!important;
 }
 
-body.cgm-fit.panel-open:not(.tram-mode):has(#lower.open) main{
+body.cgm-fit.panel-open:not(.tram-mode):has(#lower.open) > main{
  width:calc(100% - var(--cgm-panel-width) - 8px)!important;
 }
 
-body.cgm-fit:not(.tram-mode) main>.toolbar{
+body.cgm-fit:not(.tram-mode) > main>.toolbar{
  flex:0 0 auto!important;
  flex-wrap:wrap!important;
  margin:0!important;
@@ -57,19 +57,19 @@ body.cgm-fit:not(.tram-mode) main>.toolbar{
  min-width:0!important;
 }
 
-body.cgm-fit:not(.tram-mode) .toolbar .f{
+body.cgm-fit:not(.tram-mode) > main .toolbar .f{
  min-width:100px!important;
  flex:1 1 120px;
 }
 
-body.cgm-fit:not(.tram-mode) .toolbar .tab,
-body.cgm-fit:not(.tram-mode) .toolbar .btn{
+body.cgm-fit:not(.tram-mode) > main .toolbar .tab,
+body.cgm-fit:not(.tram-mode) > main .toolbar .btn{
  height:32px!important;
  padding:0 9px!important;
  font-size:10px!important;
 }
 
-body.cgm-fit:not(.tram-mode) main>.box{
+body.cgm-fit:not(.tram-mode) > main>.box{
  display:flex!important;
  flex-direction:column!important;
  flex:1 1 0!important;
@@ -78,7 +78,7 @@ body.cgm-fit:not(.tram-mode) main>.box{
  margin:0!important;
 }
 
-body.cgm-fit:not(.tram-mode) main>.box>.tableScroll{
+body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll{
  flex:1 1 0!important;
  height:auto!important;
  min-height:0!important;
@@ -86,32 +86,32 @@ body.cgm-fit:not(.tram-mode) main>.box>.tableScroll{
  overflow:hidden!important;
 }
 
-body.cgm-fit:not(.tram-mode) main>.box>.tableScroll.cgm-large{
+body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll.cgm-large{
  overflow:auto!important;
 }
 
-body.cgm-fit:not(.tram-mode) .tableScroll>table{
+body.cgm-fit:not(.tram-mode) > main .tableScroll>table{
  width:100%!important;
  min-width:0!important;
  table-layout:fixed!important;
 }
 
-body.cgm-fit:not(.tram-mode) .tableScroll th,
-body.cgm-fit:not(.tram-mode) .tableScroll td{
+body.cgm-fit:not(.tram-mode) > main .tableScroll th,
+body.cgm-fit:not(.tram-mode) > main .tableScroll td{
  padding:5px 6px!important;
  font-size:11px!important;
 }
 
-body.cgm-fit:not(.tram-mode) .tableScroll .check{
+body.cgm-fit:not(.tram-mode) > main .tableScroll .check{
  width:30px!important;
  min-width:30px!important;
 }
 
-body.cgm-fit:not(.tram-mode) .tableScroll th[data-key="ss"]{
+body.cgm-fit:not(.tram-mode) > main .tableScroll th[data-key="ss"]{
  width:130px!important;
 }
 
-body.cgm-fit:not(.tram-mode) .tableScroll .filter input{
+body.cgm-fit:not(.tram-mode) > main .tableScroll .filter input{
  height:25px!important;
  min-width:0!important;
 }
@@ -131,14 +131,14 @@ body.cgm-fit #rows tr.cgm-row-off{
  display:none!important;
 }
 
-body.cgm-fit:not(.tram-mode) .pager{
+body.cgm-fit:not(.tram-mode) > main .pager{
  flex:0 0 auto!important;
  flex-wrap:wrap!important;
  padding:5px 8px!important;
  gap:5px!important;
 }
 
-body.cgm-fit:not(.tram-mode) main>.box>.hint{
+body.cgm-fit:not(.tram-mode) > main>.box>.hint{
  display:none!important;
 }
 
@@ -448,7 +448,7 @@ html body.cgm-fit.panel-open:has(#lower.open)
 }
 
 @media(max-width:900px){
- body.cgm-fit.panel-open:not(.tram-mode):has(#lower.open) main{
+ body.cgm-fit.panel-open:not(.tram-mode):has(#lower.open) > main{
   width:100%!important;
  }
  html body.cgm-fit.panel-open:has(#lower.open) #lower.open{
@@ -474,6 +474,148 @@ html body.cgm-fit.panel-open:has(#lower.open)
  white-space:pre-wrap;
  overflow-wrap:anywhere;
 }
+/* CGM_LAYOUT_COMBINADO_V2 */
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined>.cgm-details{
+ flex:0 1 auto!important;
+ height:auto!important;
+ min-height:0!important;
+ max-height:min(44%,320px)!important;
+ padding:5px!important;
+ overflow:hidden!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined .details{
+ gap:3px 5px!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined .field{
+ padding:3px 5px!important;
+ gap:2px!important;
+ text-align:left!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined .field>span{
+ text-align:left!important;
+ font-size:10px!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined .val{
+ font-size:11px!important;
+ line-height:1.3!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined>#gisSSCard:not(.cgm-stage-hidden){
+ flex:1 1 0!important;
+ min-height:0!important;
+ height:auto!important;
+ padding:0!important;
+ gap:0!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined #gisSSMap:not([hidden]){
+ flex:1 1 0!important;
+ min-height:0!important;
+ height:auto!important;
+ width:100%!important;
+}
+
+#lower.cgm-combined #gisSSCard .gisHead{
+ flex:0 0 auto;
+ padding:7px 9px!important;
+ font-size:11px!important;
+}
+
+#lower.cgm-combined #gisSSCard .gisInfo,
+#lower.cgm-combined #gisSSCard .gisActions{
+ flex:0 0 auto;
+ padding:4px 7px!important;
+ font-size:10px!important;
+}
+
+/* Retorno da equipe sempre abaixo dos detalhes */
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined>.cgm-retorno:not(.cgm-stage-hidden){
+ flex:1 1 0!important;
+ min-height:0!important;
+ height:auto!important;
+ padding:7px!important;
+ overflow:hidden!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined #detailInfoTitle{
+ background:#0965a5!important;
+ color:white!important;
+ margin:0 0 7px!important;
+ padding:7px 8px!important;
+ border-radius:5px!important;
+ font-size:11px!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined .executionGrid{
+ grid-template-columns:repeat(2,minmax(0,1fr))!important;
+ gap:6px!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined .executionGrid label{
+ font-size:10px!important;
+ margin-bottom:3px!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined .executionValue{
+ padding:5px 6px!important;
+ min-height:0!important;
+ max-height:none!important;
+ font-size:11px!important;
+ line-height:1.35!important;
+ display:-webkit-box!important;
+ -webkit-box-orient:vertical;
+ -webkit-line-clamp:3;
+ overflow:hidden!important;
+ background:#f3f8fc!important;
+ border:1px solid #dce7f2!important;
+ border-radius:4px!important;
+}
+
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined
+#executionInfo>div:has(#dMateriais),
+html body.cgm-fit.panel-open:has(#lower.open)
+#lower.open.cgm-combined
+#executionInfo>div:has(#dPavimentacao){
+ grid-column:auto!important;
+}
+
+@media(max-height:720px){
+
+ html body.cgm-fit.panel-open:has(#lower.open)
+ #lower.open.cgm-combined>.cgm-details{
+  max-height:40%!important;
+ }
+
+ html body.cgm-fit.panel-open:has(#lower.open)
+ #lower.open.cgm-combined .field{
+  padding:2px 4px!important;
+ }
+
+ html body.cgm-fit.panel-open:has(#lower.open)
+ #lower.open.cgm-combined .executionValue{
+  -webkit-line-clamp:2;
+ }
+}
+
 `;
 
 document.head.append(css);
@@ -531,7 +673,7 @@ const retorno=byId('note').closest('.card');
 const history=byId('receptionSiscomPanel');
 
 detail.classList.add('cgm-details','cgm-stage');
-retorno.classList.add('cgm-stage');
+retorno.classList.add('cgm-stage','cgm-retorno');
 
 if(history)history.classList.add('cgm-stage');
 
@@ -566,6 +708,26 @@ for(const [key,label] of tabs){
  nav.append(b);
 }
 
+
+let observedMap=null;
+
+const mapObserver=typeof ResizeObserver==='function'
+ ?new ResizeObserver(()=>{
+   requestAnimationFrame(()=>{
+    window.dispatchEvent(new Event('resize'));
+   });
+  }):null;
+
+function observeMap(){
+ const el=byId('gisSSMap');
+
+ if(el&&el!==observedMap&&mapObserver){
+  mapObserver.disconnect();
+  mapObserver.observe(el);
+  observedMap=el;
+ }
+}
+
 function showTab(key){
 
  activeTab=key;
@@ -573,19 +735,45 @@ function showTab(key){
  const gis=byId('gisSSCard');
  if(gis)gis.classList.add('cgm-stage');
 
- const target=key==='details'?detail:
-  key==='return'?retorno:
-  key==='map'?gis:
-  history&&!history.hidden?history:placeholder;
+ const combined=key==='details'&&
+  ['recepcao','baixar'].includes(currentScreen);
 
- if(!target){
+ lower.classList.toggle('cgm-combined',combined);
+
+ const visible=new Set();
+
+ if(key==='details'){
+
+  visible.add(detail);
+
+  if(currentScreen==='recepcao'){
+   placeholder.textContent='Consultando localizacao oficial...';
+   visible.add(gis||placeholder);
+  }
+
+  if(currentScreen==='baixar'){
+   visible.add(retorno);
+  }
+
+ }else if(key==='return'){
+
+  visible.add(retorno);
+
+ }else if(key==='map'){
+
   placeholder.textContent='Aguardando localizacao oficial.';
+  visible.add(gis||placeholder);
+
+ }else{
+
+  placeholder.textContent=
+   'Selecione Verificar no SISCOM para consultar o historico.';
+
+  visible.add(history&&!history.hidden?history:placeholder);
  }
 
- const chosen=target||placeholder;
-
  for(const el of lower.querySelectorAll(':scope > .cgm-stage')){
-  el.classList.toggle('cgm-stage-hidden',el!==chosen);
+  el.classList.toggle('cgm-stage-hidden',!visible.has(el));
  }
 
  for(const b of nav.children){
@@ -595,10 +783,17 @@ function showTab(key){
 
  full.hidden=key==='map';
 
- // Recalcula o tamanho do Leaflet sem consultar novamente.
- if(key==='map')requestAnimationFrame(()=>{
-  window.dispatchEvent(new Event('resize'));
- });
+ full.textContent=combined&&currentScreen==='baixar'
+  ?'Ver detalhes e retorno completos'
+  :'Ver conteudo completo';
+
+ observeMap();
+
+ if(visible.has(gis)){
+  requestAnimationFrame(()=>{
+   window.dispatchEvent(new Event('resize'));
+  });
+ }
 }
 
 let previousSS='';
@@ -608,8 +803,9 @@ function syncPanel(){
 
  ssLabel.textContent='SS '+ss;
 
- if(previousSS!==ss){
-  previousSS=ss;
+ const panelKey=currentScreen+'|'+ss;
+ if(previousSS!==panelKey){
+  previousSS=panelKey;
   showTab('details');
  }else{
   showTab(activeTab);
@@ -638,7 +834,7 @@ if(history){
 
 if(window.ResizeObserver){
  const panelResize=new ResizeObserver(()=>{
-  if(activeTab==='map'){
+  if(activeTab==='map'||(activeTab==='details'&&currentScreen==='recepcao')){
    window.dispatchEvent(new Event('resize'));
   }
  });
@@ -670,6 +866,11 @@ full.onclick=()=>{
   pre.textContent=Array.from(
    detail.querySelectorAll('.field')
   ).map(el=>el.innerText).join('\n\n');
+
+  if(currentScreen==='baixar'){
+   pre.textContent+='\n\nRETORNO DA EQUIPE\n\n'+
+    byId('executionInfo').innerText;
+  }
 
  }else if(activeTab==='return'){
   const note=byId('note');
