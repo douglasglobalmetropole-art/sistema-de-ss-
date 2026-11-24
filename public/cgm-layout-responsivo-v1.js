@@ -87,7 +87,11 @@ body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll{
 }
 
 body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll.cgm-large{
- overflow:auto!important;
+ overflow-y:auto!important;
+ overflow-x:auto!important;
+ overscroll-behavior:contain;
+ scrollbar-width:thin;
+ scrollbar-color:#91aec6 #eef4fa;
 }
 
 body.cgm-fit:not(.tram-mode) > main .tableScroll>table{
@@ -147,6 +151,10 @@ body.cgm-fit:not(.tram-mode) > main>.box>.hint{
  align-items:center;
  gap:5px;
  font-size:11px;
+}
+
+.cgm-visual-pager[hidden]{
+ display:none!important;
 }
 
 .cgm-visual-pager button{
@@ -941,16 +949,48 @@ function fitTable(){
  if(signature!==sig){
   signature=sig;
   visualStart=0;
+  wrap.scrollTop=0;
  }
 
- const large=Number(page)>100;
+ const large=Number(page)>=100;
 
  wrap.classList.toggle('cgm-large',large);
 
  local.hidden=large||currentScreen==='tramitacao';
 
  if(!list.length||large){
-  list.forEach(tr=>tr.classList.remove('cgm-row-off'));
+
+  list.forEach(tr=>{
+   tr.classList.remove('cgm-row-off');
+
+   const ss=tr.querySelector('td.ss');
+
+   if(ss){
+    ss.tabIndex=0;
+    ss.setAttribute('role','button');
+    ss.setAttribute('aria-label',
+     'Selecionar SS '+ss.textContent);
+   }
+  });
+
+  visualStart=0;
+
+  const all=byId('all');
+  const displayed=view.slice(0,page);
+  const marked=displayed.filter(
+   x=>selected[x.tarefa]
+  ).length;
+
+  all.checked=displayed.length>0&&
+   marked===displayed.length;
+
+  all.indeterminate=marked>0&&
+   marked<displayed.length;
+
+  all.title='Selecionar todas as SS da pagina';
+
+  anchor=null;
+
   return;
  }
 
@@ -1016,7 +1056,7 @@ function fitTable(){
 
 byId('all').onchange=e=>{
  const list=view.slice(0,page);
- const items=Number(page)>100?list:
+ const items=Number(page)>=100?list:
   list.slice(visualStart,visualStart+capacity);
 
  items.forEach(x=>{
