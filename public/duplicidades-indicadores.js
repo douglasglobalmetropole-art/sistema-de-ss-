@@ -391,12 +391,12 @@
 
 `;
 
+  css.textContent += "\n\n/* CGM_DUPLICIDADES_COMPACTO_V4 */\n\n#dupGlobalModal #dgmContent{\n padding:8px 10px!important;\n gap:5px!important;\n overflow:hidden!important;\n}\n\n#dupGlobalModal header{\n padding:8px 12px!important;\n}\n\n#dupGlobalModal .dgm-summary{\n padding:6px 9px!important;\n font-size:12px!important;\n line-height:1.3!important;\n}\n\n#dupGlobalModal .dgm-note{\n padding:5px 8px!important;\n font-size:11px!important;\n line-height:1.3!important;\n}\n\n#dupGlobalModal .dgm-historico{\n align-items:center!important;\n margin:0!important;\n gap:6px!important;\n}\n\n#dupGlobalModal .dgm-scroll{\n flex:1 1 0!important;\n min-height:0!important;\n height:auto!important;\n max-height:none!important;\n overflow-y:auto!important;\n overflow-x:auto!important;\n overscroll-behavior:contain;\n scrollbar-width:thin;\n scrollbar-color:#91aec6 #eef4fa;\n}\n\n#dupGlobalModal .dgm-historico-table{\n width:100%!important;\n min-width:0!important;\n table-layout:fixed!important;\n border-collapse:separate!important;\n border-spacing:0!important;\n font-size:11px!important;\n}\n\n#dupGlobalModal .dgm-historico-table th{\n position:sticky!important;\n top:0!important;\n z-index:3!important;\n padding:6px 7px!important;\n font-size:11px!important;\n background:#e3edf7!important;\n}\n\n#dupGlobalModal .dgm-historico-table td{\n padding:5px 7px!important;\n font-size:11px!important;\n line-height:1.25!important;\n vertical-align:top!important;\n white-space:normal!important;\n overflow-wrap:anywhere!important;\n}\n\n#dupGlobalModal .dgm-historico-table tbody tr:nth-child(even){\n background:#f4f8fc;\n}\n\n#dupGlobalModal .dgm-muted{\n margin:2px 0!important;\n font-size:10px!important;\n line-height:1.25!important;\n}\n\n#dupGlobalModal .dgm-data{\n margin-bottom:2px!important;\n}\n\n#dupGlobalModal .dgm-spacer{\n margin-top:4px!important;\n}\n\n#dupGlobalModal .dgm-tag{\n padding:3px 6px!important;\n font-size:10px!important;\n}\n\n#dupGlobalModal .dgm-evidencias{\n margin:2px 0!important;\n padding-left:13px!important;\n}\n\n#dupGlobalModal .dgm-evidencias li{\n margin:1px 0!important;\n line-height:1.25!important;\n}\n\n#dupGlobalModal .dgm-acao{\n margin-top:3px!important;\n font-size:11px!important;\n line-height:1.3!important;\n}\n\n#dupGlobalModal .dgm-alvo td{\n background:#dbeeff!important;\n border-top:2px solid #237fc1!important;\n border-bottom:2px solid #237fc1!important;\n}\n\n#dupGlobalModal .dgm-ir-alvo{\n padding:5px 9px;\n border:1px solid #bad1e5;\n border-radius:5px;\n background:#f0f6fc;\n color:#07599a;\n font-weight:700;\n font-size:11px;\n cursor:pointer;\n}\n\n#dupGlobalModal .dgm-pagebar{\n display:none!important;\n}\n\n@media(max-height:500px){\n #dupGlobalModal #dgmContent{\n  overflow:auto!important;\n }\n #dupGlobalModal .dgm-scroll{\n  flex:0 0 auto!important;\n  min-height:0!important;\n  overflow:visible!important;\n }\n}\n\n";
   document.body.append(modal);
 
   const content = document.getElementById('dgmContent');
 
   function fechar() {
-    limparPaginacao();
     modal.classList.remove('open');
   }
 
@@ -410,222 +410,57 @@
 
 
 
-  let limparPaginacao=()=>{};
 
-  function paginarHistorico(){
-
-    limparPaginacao();
+  function organizarHistorico(){
 
     const wrap=content.querySelector('.dgm-scroll');
     const table=wrap?.querySelector('table');
 
     if(!table)return;
 
-    const rows=Array.from(table.tBodies[0].rows);
-
-    if(!rows.length)return;
-
     const labels=Array.from(
       table.querySelectorAll('thead th')
     ).map(x=>x.textContent);
 
+    const rows=Array.from(table.tBodies[0].rows);
+
     rows.forEach(tr=>{
+
+      tr.classList.remove('dgm-page-hidden');
+
       Array.from(tr.cells).forEach((td,i)=>{
         td.dataset.label=labels[i]||'';
       });
+
     });
 
-    const bar=document.createElement('div');
-    bar.className='dgm-pagebar';
+    wrap.scrollTop=0;
 
-    const info=document.createElement('span');
-    info.className='dgm-pageinfo';
+    const alvo=table.querySelector('.dgm-alvo');
+    const section=content.querySelector('.dgm-historico');
 
-    const buttons=document.createElement('div');
+    if(alvo&&section){
 
-    function botao(texto){
-      const b=document.createElement('button');
-      b.type='button';
-      b.textContent=texto;
-      buttons.append(b);
-      return b;
+      const button=document.createElement('button');
+
+      button.type='button';
+      button.className='dgm-ir-alvo';
+      button.textContent='Ir para SS consultada';
+
+      button.onclick=()=>{
+
+        const head=table.tHead?.offsetHeight||0;
+
+        wrap.scrollTop+=
+          alvo.getBoundingClientRect().top-
+          wrap.getBoundingClientRect().top-
+          head-6;
+
+      };
+
+      section.append(button);
     }
-
-    const first=botao('Primeira');
-    const prev=botao('Anterior');
-    const next=botao('Proxima');
-    const last=botao('Ultima');
-    const alvo=botao('Ir para SS consultada');
-
-    bar.append(info,buttons);
-    wrap.after(bar);
-
-    let grupos=[];
-    let atual=0;
-    let agendado=false;
-    let observer=null;
-    let encerrado=false;
-
-    const alvoIndex=rows.findIndex(
-      tr=>tr.classList.contains('dgm-alvo')
-    );
-
-    function exibir(){
-
-      if(!grupos.length)return;
-
-      atual=Math.max(
-        0,Math.min(atual,grupos.length-1)
-      );
-
-      const g=grupos[atual];
-
-      rows.forEach((tr,i)=>{
-        tr.classList.toggle(
-          'dgm-page-hidden',
-          i<g.inicio||i>=g.fim
-        );
-      });
-
-      wrap.classList.toggle(
-        'dgm-overflow',
-        g.excede
-      );
-
-      wrap.scrollTop=0;
-
-      info.textContent=
-        'Registros '+(g.inicio+1)+'–'+g.fim+
-        ' de '+rows.length+
-        ' | Pagina '+(atual+1)+' de '+grupos.length;
-
-      first.disabled=prev.disabled=atual===0;
-
-      next.disabled=last.disabled=
-        atual===grupos.length-1;
-
-      alvo.disabled=alvoIndex<0;
-    }
-
-    function ajustar(){
-
-      if(encerrado||
-         !modal.classList.contains('open')||
-         !wrap.isConnected)return;
-
-      const anterior=grupos[atual]?.inicio??0;
-
-      rows.forEach(tr=>
-        tr.classList.remove('dgm-page-hidden')
-      );
-
-      const alturas=rows.map(tr=>
-        Math.max(1,tr.getBoundingClientRect().height)
-      );
-
-      const cabecalho=
-        table.tHead?.getBoundingClientRect().height||0;
-
-      const disponivel=Math.max(
-        1,wrap.clientHeight-cabecalho-10
-      );
-
-      grupos=[];
-
-      let i=0;
-
-      while(i<rows.length){
-
-        const inicio=i;
-        let soma=0;
-
-        while(i<rows.length){
-
-          const altura=alturas[i]+2;
-
-          if(i>inicio&&soma+altura>disponivel)
-            break;
-
-          soma+=altura;
-          i++;
-        }
-
-        grupos.push({
-          inicio,
-          fim:i,
-          excede:soma>disponivel
-        });
-      }
-
-      atual=grupos.findIndex(
-        g=>anterior>=g.inicio&&anterior<g.fim
-      );
-
-      if(atual<0)atual=0;
-
-      exibir();
-    }
-
-    function agendar(){
-
-      if(agendado||encerrado)return;
-
-      agendado=true;
-
-      requestAnimationFrame(()=>{
-        agendado=false;
-        ajustar();
-      });
-    }
-
-    first.onclick=()=>{
-      atual=0;
-      exibir();
-    };
-
-    prev.onclick=()=>{
-      atual--;
-      exibir();
-    };
-
-    next.onclick=()=>{
-      atual++;
-      exibir();
-    };
-
-    last.onclick=()=>{
-      atual=grupos.length-1;
-      exibir();
-    };
-
-    alvo.onclick=()=>{
-
-      const destino=grupos.findIndex(
-        g=>alvoIndex>=g.inicio&&alvoIndex<g.fim
-      );
-
-      if(destino>=0){
-        atual=destino;
-        exibir();
-      }
-    };
-
-    if(typeof ResizeObserver==='function'){
-      observer=new ResizeObserver(agendar);
-      observer.observe(wrap);
-    }
-
-    window.addEventListener('resize',agendar);
-
-    limparPaginacao=()=>{
-      encerrado=true;
-      observer?.disconnect();
-      window.removeEventListener('resize',agendar);
-    };
-
-    agendar();
   }
-
 
   function mostrar(d) {
     const alvo = d.alvo || {};
@@ -708,7 +543,7 @@
       ${d.aviso?`<div class="dgm-note">${safe(d.aviso)}</div>`:''}
       ${d.motivo_bloqueio&&!d.pode_selecionar?`<div class="dgm-note">${safe(d.motivo_bloqueio)}</div>`:''}
       <div class="dgm-note"><strong>Importante:</strong> as ações são orientações de conferência. Nenhuma SS foi alterada, rejeitada ou recebeu TAG. A classificação e as regras de autorização existentes permanecem inalteradas.</div>`;
-    paginarHistorico();
+    organizarHistorico();
   }
 
   async function abrir(ss) {
