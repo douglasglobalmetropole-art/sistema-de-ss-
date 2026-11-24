@@ -1453,7 +1453,7 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 <div class="full"><label>Descrição da complementar *</label><textarea id="sbCompDescricao" maxlength="1000" placeholder="Descreva o serviço complementar..." rows="3"></textarea></div>
 </div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn" id="sbCompAtualizar" type="button">↻ Atualizar áreas e complementares</button><button class="btn primary" id="sbCompCriar" type="button">+ Confirmar e gerar complementar</button></div>
-<p aria-live="polite" class="sbStatus" id="sbCompStatus"></p>
+<p aria-live="polite" class="sbStatus" id="sbCompStatus"></p><div id="sbCompLista" style="margin-top:12px;max-height:260px;overflow:auto"></div>
 </section>
 
 <p aria-live="polite" class="sbStatus" id="sbAnexoStatus">Anexo SISCOM: selecione uma SS para consultar.</p>
@@ -2207,7 +2207,8 @@ load();
   const headers={'Content-Type':'application/json'};
   const r=await fetch('/api/siscom-gateway/'+route,{method:'POST',headers,body:JSON.stringify(payload),cache:'no-store'});
   const j=await r.json();if(!r.ok){const e=new Error(j.error||'Não foi possível iniciar a consulta');e.httpStatus=r.status;e.antesDoEnvio=(route==='baixar-ss'&&[400,401,403].includes(r.status));throw e;}
-  for(let i=0;i<50;i++){
+  const compWrite=route==='complementar-criar',deadline=Date.now()+180000;
+  for(let i=0;i<(compWrite?150:50)&&(!compWrite||Date.now()<deadline);i++){
    if(g!==generation)throw Error('Consulta cancelada');
    await new Promise(resolve=>setTimeout(resolve,i===0?600:i===1?900:1200));
    const q=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),{cache:'no-store'});
@@ -2362,7 +2363,7 @@ load();
   options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
   $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
   $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbObservacoes').value='';sbAtualizarDuracao();
-  compAreas=[];compServicos=[];compExistentes=[];compConsultadaSS='';compConsultaEmAndamentoSS='';compEnvioIncertoSS='';$('sbCompDescricao').value='';compStatus('Abra a aba Complementar para consultar áreas e SS complementares.');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
+  compAreas=[];compServicos=[];compExistentes=[];compConsultadaSS='';compConsultaEmAndamentoSS='';compEnvioIncertoSS=compPendencias.has(current)?current:'';$('sbCompLista').replaceChildren();$('sbCompDescricao').value='';compStatus('Abra a aba Complementar para consultar áreas e SS complementares.');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
   status('Consultando SISCOM automaticamente...');
   $('siscomBaixaModal').classList.add('open');loadAll();
  };
@@ -2374,7 +2375,88 @@ load();
  };
  // Complementares: criação manual independente, sem disparar baixa automaticamente.
  let compAreas=[],compServicos=[],compExistentes=[],compConsultadaSS='',compConsultaEmAndamentoSS='';
+
  let compEnvioIncertoSS='';
+ const compPendencias=new Map();
+
+ const compNorm=v=>String(v??'')
+  .normalize('NFC').replace(/\s+/g,' ').trim();
+
+ function compMatches(rows,p){
+  if(!p)return [];
+  return rows.filter(x=>
+   Number(x.area)===p.area&&
+   Number(x.servico)===p.macro&&
+   compNorm(x.observacao)===compNorm(p.descricao)
+  );
+ }
+
+ function compRender(rows){
+  const el=$('sbCompLista');
+  el.replaceChildren();
+
+  const title=document.createElement('strong');
+  title.textContent='Complementares existentes: '+rows.length;
+  el.append(title);
+
+  for(const x of rows){
+   const div=document.createElement('div');
+   div.style.cssText=
+    'padding:10px;border-bottom:1px solid #dce6ef;'+
+    'white-space:normal;overflow-wrap:anywhere';
+
+   div.textContent=[
+    'Registro: '+(typeof x.id==='object'?'—':x.id??'—'),
+    'Area: '+(x.area??'—'),
+    'Macro: '+(x.servico??'—'),
+    x.observacao||'Sem descricao'
+   ].join(' | ');
+
+   el.append(div);
+  }
+ }
+
+ async function compReconsultar(ss,g){
+  const r=await job(
+   'complementar-consultar',{numero_ss:ss},g
+  );
+
+  if(g!==generation||ss!==current)return false;
+  if(!Array.isArray(r))throw Error('Lista oficial invalida');
+
+  compExistentes=r;
+  compRender(r);
+
+  const p=compPendencias.get(ss);
+  if(!p)return false;
+
+  const encontrados=compMatches(r,p);
+
+  if(encontrados.length===1&&
+     encontrados[0].id!=null&&
+     typeof encontrados[0].id!=='object'){
+
+   compPendencias.delete(ss);
+   compEnvioIncertoSS='';
+
+   compStatus(
+    'COMPLEMENTAR LOCALIZADA NO SISCOM. Registro: '+
+    encontrados[0].id+
+    '. Nao reenvie os mesmos dados.',
+    'success'
+   );
+
+   return true;
+  }
+
+  compStatus(
+   'Aguardando confirmacao oficial. Atualize a lista. Nao reenvie.',
+   'warning'
+  );
+
+  return false;
+ }
+
  const compStatus=(t,estado='info')=>{
   const el=$('sbCompStatus');el.textContent=t;el.dataset.estado=estado;
  };
@@ -2386,12 +2468,28 @@ load();
   try{
    const [a,c]=await Promise.all([job('complementar-areas',{numero_ss:ss},g),job('complementar-consultar',{numero_ss:ss},g)]);
    if(g!==generation||ss!==current)return;
-   compAreas=unwrap(a);compExistentes=unwrap(c);
+   compAreas=unwrap(a);if(!Array.isArray(c))throw Error('Lista oficial invalida');compExistentes=c;compRender(c);
    options('sbCompArea',compAreas,'Selecione a área',x=>x.codAraeExecutora,x=>x.codAraeExecutora+' — '+(x.descricaoAreaExecutora||''));
    options('sbCompServico',[],'Selecione uma área',x=>x.cdServico,x=>x.dcServico);
    compConsultadaSS=ss;
+
    if(compEnvioIncertoSS===ss){
-    compStatus('Reconsulta concluída: '+compExistentes.length+' complementar(es) retornadas. ATENÇÃO: há um envio anterior sem confirmação de identificação. Confira o SISCOM antes de qualquer novo envio.','warning');
+    const m=compMatches(compExistentes,compPendencias.get(ss));
+
+    if(m.length===1&&m[0].id!=null&&typeof m[0].id!=='object'){
+     compPendencias.delete(ss);
+     compEnvioIncertoSS='';
+     compStatus(
+      'COMPLEMENTAR LOCALIZADA. Registro: '+m[0].id,
+      'success'
+     );
+    }else{
+     compStatus(
+      'Aguardando confirmacao. Confira a lista. Nao reenvie.',
+      'warning'
+     );
+    }
+
    }else{
     compStatus('Áreas: '+compAreas.length+' | Complementares existentes: '+compExistentes.length+'.','info');
    }
@@ -2419,32 +2517,31 @@ load();
   }
   const resumo='SS original: '+ss+'\nÁrea: '+area+'\nMacro: '+macro+'\nDescrição: '+descricao;
   if(!window.confirm('CONFIRMAR A CRIAÇÃO DE UMA NOVA SS COMPLEMENTAR NO SISCOM?\n\n'+resumo+'\n\nÉ independente da baixa. Uma resposta de envio não garante o cadastro; não repita se houver dúvida.'))return;
-  const btn=$('sbCompCriar');btn.disabled=true;
+  const btn=$('sbCompCriar'),g=generation;btn.disabled=true;compPendencias.set(ss,{area,macro,descricao});compEnvioIncertoSS=ss;
   compStatus('Solicitação enviada. Aguardando resultado oficial da criação...','running');
   try{
-   const r=await job('complementar-criar',{numero_ss:ss,area,macro,descricao,confirmacao:'COMPLEMENTAR '+ss},generation);
-   if(ss!==current)return;
+   const r=await job('complementar-criar',{numero_ss:ss,area,macro,descricao,confirmacao:'COMPLEMENTAR '+ss},g);
+   if(g!==generation||ss!==current)return;
    const situacao=String(r?.status_complementar||'INCERTO').trim().toUpperCase();
    const tarefa=r?.__job_id?' | Tentativa: '+r.__job_id:'';
-   if(situacao==='CONFIRMADA'){
-    compEnvioIncertoSS='';
+   if(['CONFIRMADA','JA_EXISTE'].includes(situacao)){
+    compPendencias.delete(ss);compEnvioIncertoSS='';
     const numero=r?.numero_ss_complementar||r?.ss_complementar||r?.numero_complementar||'';
-    const texto='COMPLEMENTAR REALIZADA E CONFIRMADA NO SISCOM. SS original: '+ss+
-      (numero?' | SS complementar: '+String(numero):'')+tarefa+'. A baixa da SS original é independente.';
+    const texto=(situacao==='JA_EXISTE'?'COMPLEMENTAR JA EXISTENTE. Nenhum novo envio. ':'COMPLEMENTAR CONFIRMADA NO SISCOM. ')+'SS original: '+ss+
+      (numero?' | SS complementar: '+String(numero):r?.id_complementar?' | Registro: '+r.id_complementar:'')+tarefa+'. A baixa da SS original é independente.';
     compStatus(texto,'success');
-    window.alert(texto);
-    // O resultado permanece visivel; o usuario pode atualizar a lista sem reenviar.
+    try{await compReconsultar(ss,g);}catch(e){if(g===generation&&ss===current)compStatus(texto+' Lista indisponivel; use Atualizar.','success');}
    }else{
     compEnvioIncertoSS=ss;
     const texto='RESULTADO NÃO CONFIRMADO: '+(r?.mensagem||'A complementar não foi identificada')+tarefa+
       '. O SISCOM pode ter recebido a criação. NÃO REENVIE antes de conferir as complementares desta SS.';
-    compStatus(texto,'warning');
-    window.alert(texto);
+    compStatus(texto,'warning');try{await compReconsultar(ss,g);}catch(e){}
    }
   }catch(e){
+   if(g!==generation||ss!==current)return;
    compEnvioIncertoSS=ss;
    const texto='CRIAÇÃO SEM CONFIRMAÇÃO: '+String(e.message||e)+'. O envio pode ter sido processado. NÃO REENVIE sem conferir o histórico SISCOM.';
-   compStatus(texto,'warning');window.alert(texto);
+   compStatus(texto,'warning');try{await compReconsultar(ss,g);}catch(e){}
   }finally{btn.disabled=false;}
  };
  // A janela abre mesmo sem habilitação: nunca iniciar o POST antes de confirmação explícita.
