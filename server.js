@@ -956,6 +956,67 @@ function gatewayCanWrite(req) {
  return allow.length>0&&allow.includes(String(sessao.name||'').toLowerCase());
 }
 async function gatewayRest(route, options = {}) {
+ const tabela = String(route).split('?')[0];
+ const filaLocal = [
+  'siscom_gateway_jobs',
+  'siscom_worker_status'
+ ].includes(tabela);
+
+ const modo = process.env.CGM_QUEUE_BACKEND || 'supabase';
+
+ if (filaLocal && modo !== 'supabase') {
+  if (modo !== 'local') {
+   throw Error('Modo de fila invalido');
+  }
+
+  const url = process.env.CGM_GATEWAY_URL || '';
+  const secret = process.env.CGM_GATEWAY_SECRET || '';
+
+  if (!/^https:\/\/[a-z0-9-]+\.ngrok-free\.dev\/?$/i.test(url) ||
+      !/^[a-f0-9]{64}$/.test(secret)) {
+   throw Error('Gateway local nao configurado');
+  }
+
+  // CGM_LONG_POLL_V1
+  const metodo = String(options.method || 'GET').toUpperCase();
+
+  if (tabela === 'siscom_gateway_jobs' && metodo === 'GET') {
+   const consulta = new URL(route, 'https://local.invalid');
+
+   if (consulta.searchParams.has('id') &&
+       !consulta.searchParams.has('wait_ms')) {
+
+    const campos = (consulta.searchParams.get('select') || '').split(',');
+
+    if (campos.includes('status')) {
+     consulta.searchParams.set('wait_ms', '10000');
+     route = tabela + '?' + consulta.searchParams.toString();
+    }
+   }
+  }
+
+  const response = await fetch(
+   url.replace(/\/$/, '') + '/v2/' + route,
+   {
+    ...options,
+    headers: {
+     ...(options.headers || {}),
+     Authorization: 'Bearer ' + secret,
+     'Content-Type': 'application/json',
+     'ngrok-skip-browser-warning': 'true'
+    },
+    redirect: 'error',
+    signal: AbortSignal.timeout(15000)
+   }
+  );
+
+  if (!response.ok) {
+   throw Error('Gateway local HTTP ' + response.status);
+  }
+
+  return response.json();
+ }
+
  const url = process.env.SUPABASE_URL;
  const key = process.env.SUPABASE_SECRET_KEY;
  if (!url || !/^https:\/\//.test(url) || !key) throw Error('Supabase nÃ£o configurado no servidor');
@@ -995,7 +1056,7 @@ app.get('/api/siscom-worker/status', async (req, res) => {
     const conectado =
       registro?.status === 'online' &&
       idade !== null &&
-      idade <= 45;
+      idade <= (process.env.CGM_QUEUE_BACKEND === 'local' ? 150 : 45);
 
     return res.json({
       ok: true,

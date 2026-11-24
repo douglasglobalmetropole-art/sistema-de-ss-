@@ -18,7 +18,7 @@ module.exports.registrar=function(app,{gatewayRest,gatewayAuthorized,individualJ
       if(!id)throw Error('Fila GIS nao retornou ID');
       for(let n=0;n<8;n++){
         await sleep(850);
-        const rows=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,error_message&id=eq.'+encodeURIComponent(id)+'&limit=1');
+        const rows=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,error_message&id=eq.'+encodeURIComponent(id)+'&limit=1'+(process.env.CGM_QUEUE_BACKEND==='local'?'&wait_ms=1000':''));
         const job=rows?.[0];
         if(!job||job.operation!=='gis_localizar_ss')throw Error('Resposta da fila GIS invalida');
         if(job.status==='erro')throw Error(String(job.error_message||'Falha no worker GIS'));
