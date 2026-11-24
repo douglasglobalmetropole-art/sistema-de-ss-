@@ -1589,165 +1589,11 @@ function screenMatch(x){
 
   return true;
 }
-
-
-/* CGM_ENCERRAMENTOS_RAPIDOS_V1 */
-
-window.CGM_Encerramentos=(()=>{
- const registros=new Map();
-
- const chave=(ss,tarefa)=>
-  String(ss||'').trim()+'|'+String(tarefa);
-
- const normal=v=>String(v||'').trim().toLowerCase();
-
- function registrar(status,resultados,numero=''){
-
-  if(!['Baixada','Rejeitada','Duplicada'].includes(status))
-   return 0;
-
-  const aceitos=[];
-
-  for(const r of resultados||[]){
-
-   if(r.ok!==true)continue;
-
-   const ss=String(r.ss||numero||'').trim();
-   const tarefa=Number(r.tarefa);
-
-   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)||
-      !Number.isSafeInteger(tarefa)||tarefa<1)continue;
-
-   const key=chave(ss,tarefa);
-
-   registros.set(key,{
-    ss,tarefa,status,
-    confirmado:r.ja_aplicado===true,
-    em:Date.now()
-   });
-
-   aceitos.push(key);
-
-   if(selected[tarefa]&&
-      String(selected[tarefa].ss).trim()===ss){
-    delete selected[tarefa];
-   }
-  }
-
-  const detalhe=window.__detailSS;
-
-  if(detalhe&&aceitos.includes(
-    chave(detalhe.ss,detalhe.tarefa))){
-
-   window.__detailSS=null;
-   document.body.classList.remove('panel-open');
-   document.getElementById('lower')?.classList.remove('open');
-  }
-
-  if(aceitos.length)apply();
-
-  return aceitos.length;
- }
-
- function ocultar(x,tela){
-
-  if(!['baixar','recepcao'].includes(tela))return false;
-
-  const r=registros.get(chave(x.ss,x.tarefa));
-
-  if(!r)return false;
-
-  if(Date.now()-r.em>600000){
-   registros.delete(chave(x.ss,x.tarefa));
-   return false;
-  }
-
-  return true;
- }
-
- function observar(rows){
-
-  for(const x of rows||[]){
-
-   const key=chave(x.ss,x.tarefa);
-   const r=registros.get(key);
-
-   if(!r)continue;
-
-   const atual=normal(x.status_integracao);
-
-   if(!atual)continue;
-
-   if(atual.startsWith(normal(r.status))){
-    r.confirmado=true;
-   }else{
-    registros.delete(key);
-    console.warn('[CGM] Status divergente:',r.ss,atual);
-   }
-  }
- }
-
- function aviso(){
-
-  let box=document.getElementById('cgmEncerramentosAviso');
-
-  const pendentes=[...registros.values()]
-   .filter(x=>!x.confirmado);
-
-  if(!pendentes.length||
-     !['baixar','encerradas','recepcao'].includes(currentScreen)){
-
-   if(box)box.hidden=true;
-   return;
-  }
-
-  if(!box){
-
-   box=document.createElement('div');
-   box.id='cgmEncerramentosAviso';
-
-   box.style.cssText=
-    'flex:0 0 auto;padding:6px 10px;'+
-    'background:#edf5fc;color:#24577d;'+
-    'font-size:11px;border-bottom:1px solid #d3e3f0';
-
-   const tabela=document.querySelector('main > .box > .tableScroll');
-
-   if(!tabela)return;
-
-   tabela.before(box);
-  }
-
-  box.hidden=false;
-  box.replaceChildren();
-
-  const resumo=document.createElement('span');
-
-  resumo.textContent=pendentes.length+
-   ' atualizacao(oes) enviada(s) ao uMov. '+
-   'Aguardando reflexo na listagem. ';
-
-  box.append(resumo);
-
-  const ultima=pendentes[pendentes.length-1];
-
-  const ss=document.createElement('strong');
-  ss.textContent=ultima.ss+' - '+ultima.status;
-
-  box.append(ss);
- }
-
- return {registrar,ocultar,observar,aviso};
-
-})();
-
-
 function apply(){
   const q=Object.fromEntries([...document.querySelectorAll('.filter input')].map(i=>[i.dataset.col,i.value.toLowerCase()]));if(window.__globalSSSearch||window.__buscaSSAtiva)Object.keys(q).forEach(k=>q[k]='');
-  view=raw.filter(x=>!window.CGM_Encerramentos.ocultar(x,currentScreen)&&(window.__buscaSSAtiva||screenMatch(x))&&(window.__globalSSSearch||window.__buscaSSAtiva||!cities.length||cities.includes(val(x,'cidade')))&&(window.__globalSSSearch||window.__buscaSSAtiva||!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
+  view=raw.filter(x=>(window.__buscaSSAtiva||screenMatch(x))&&(window.__globalSSSearch||window.__buscaSSAtiva||!cities.length||cities.includes(val(x,'cidade')))&&(window.__globalSSSearch||window.__buscaSSAtiva||!macros.length||macros.includes(val(x,'servico')))&&currentCols().every(k=>!q[k]||val(x,k).toLowerCase().includes(q[k])));
   if(sort)view.sort((a,b)=>val(a,sort).localeCompare(val(b,sort),'pt-BR',{numeric:true})*dir);
-  render();
-  window.CGM_Encerramentos.aviso();
+  render()
 }
 function render(){let a=view.slice(0,page);$('rows').innerHTML=a.map(x=>'<tr class="'+(selected[x.tarefa]?'selected':'')+'"><td class="check"><input class="pick" type="checkbox" '+(selected[x.tarefa]?'checked':'')+'></td>'+currentCols().map((k,i)=>'<td class="'+(i?'':'ss')+'">'+esc(k==='data_finalizacao'?(val(x,'periodo_execucao')||val(x,k)):val(x,k))+'</td>').join('')+'</tr>').join('');[...document.querySelectorAll('.pick')].forEach((c,i)=>c.onchange=()=>{c.checked?selected[a[i].tarefa]=a[i]:delete selected[a[i].tarefa];if(c.checked&&currentScreen==='baixar'&&Object.keys(selected).length===1)window.CGM_Fotos_precarregar?.(a[i]);fill(a[i]);render()});$('all').checked=!!a.length&&a.every(x=>selected[x.tarefa]);let n=Object.keys(selected).length;$('selectedInfo').style.display=n?'inline-block':'none';$('selectedInfo').textContent=n===1?'1 SS selecionada':n+' SS selecionadas';$('countInfo').textContent='Exibindo '+a.length+' de '+view.length+' SS'+(window.ms?' • consulta '+window.ms+' ms':'')}
 function fill(x){if(!x)return;window.__detailSS=x;document.body.classList.add('panel-open');$('lower').classList.add('open');$('titleSS').textContent=$('dss').textContent=val(x,'ss');[['ddata','criado_em'],['drua','logradouro'],['dnumero','numero'],['dbairro','bairro'],['dcidade','cidade'],['dsetor','setor'],['dreferencia','referencia_localizacao'],['dmacro','servico'],['dtag','tags'],['dsituacao','situacao_campo'],['dhidrometro','hidrometro']].forEach(([a,b])=>$(a).textContent=val(x,b));const paraBaixar=currentScreen==='baixar';$('detailInfoTitle').innerHTML=paraBaixar?'▰ &nbsp; EXECUÇÃO DA ATIVIDADE':'▰ &nbsp; INFORMAÇÕES COMPLEMENTARES';$('executionInfo').hidden=!paraBaixar;$('note').hidden=paraBaixar;if(paraBaixar){$('dInicioAtividade').textContent=val(x,'inicio_atividade')||'Não informado';$('dFimAtividade').textContent=val(x,'fim_atividade')||'Não informado';$('dInfoExecucao').textContent=val(x,'info_execucao_siscom')||val(x,'informacao_solicitante')||'Não informado';$('dMateriais').textContent=val(x,'materiais_lancados')||'Não informado'}else $('note').value=x.informacao_solicitante||x.esclarecimento_solicitante||x.info_execucao_siscom||''}
@@ -2011,7 +1857,6 @@ async function load(forcarAtualizacao=false){
     const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),municipios:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!(somenteEquipe&&currentScreen!=='recepcao');if(forcarAtualizacao)p.set('_refresh',String(Date.now()));if(ssBusca&&ssBusca.length<4){$('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return;}const direta=ssBusca.length>=4&&filtros.length===1;const caminho=direta?'/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page}):(global?'/api/pesquisa-global?':'/api/recepcao?')+p;let r=await fetch(caminho,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
     if(direta&&filtros.length>1){j.rows=(j.rows||[]).filter(item=>filtros.every(f=>f.dataset.col==='ss'||String(f.dataset.col==='data_finalizacao'?(item.periodo_execucao||item.data_finalizacao||''):(item[f.dataset.col]??'')).toLocaleLowerCase('pt-BR').includes(f.value.trim().toLocaleLowerCase('pt-BR'))));j.total=j.rows.length;}
-    window.CGM_Encerramentos.observar(j.rows||[]);
     raw=reconciliarEquipes(
   (j.rows||[]).filter(item=>{
     if(currentScreen!=='baixar')return true;
@@ -2023,7 +1868,7 @@ async function load(forcarAtualizacao=false){
   })
 );window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
     // CGM_NOTAS_BAIXAR_TOTAL_CLIENTE_V1: total real, buscado sem bloquear a pagina.
-    if(currentScreen==='baixar'&&!global&&!direta&&!Number.isSafeInteger(j.total)){
+    if(currentScreen==='baixar'&&!global&&!direta){
       const consulta=p.toString();
       fetch('/api/recepcao-total-baixar?'+consulta,{cache:'no-store',signal:consultaListaAtual.signal})
        .then(r=>r.ok?r.json():null)
@@ -2072,7 +1917,6 @@ document.querySelectorAll('.tab[data-screen]').forEach(btn=>btn.addEventListener
   try{
    const r=await fetch('/api/localizar-ss-rapida?ss='+encodeURIComponent(ss)+'&tela='+encodeURIComponent(currentScreen)+'&limit=30',{cache:'no-store',signal:controller.signal});const j=await r.json();if(id!==seq)return;
    if(!r.ok||!j.ok)throw Error(j.error||'Erro na consulta');
-   window.CGM_Encerramentos.observar(j.rows||[]);
    raw=j.rows||[];selected={};window.__pageOffset=0;window.__totalSS=raw.length;window.__hasMore=false;window.ms=null;apply();
    if(!raw.length)$('countInfo').textContent=j.encontrados_fora_da_aba?'SS encontrada no uMov, mas não pertence à aba '+currentScreen+'.':'Nenhuma SS encontrada para '+ss+'.';else if(j.aviso)$('countInfo').textContent=j.aviso;
   }catch(e){if(e.name!=='AbortError'&&id===seq)$('countInfo').textContent='Erro na pesquisa: '+e.message}
@@ -2312,9 +2156,6 @@ load();
   status('Baixa confirmada no SISCOM. Sincronizando status no uMov, sem repetir a baixa...');
   const r=await fetch('/api/siscom-gateway/sincronizar-baixa',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:ssBaixada,job_id:jobConfirmadoId}),cache:'no-store'});
   let dados={};try{dados=await r.json()}catch(_e){}
-   window.CGM_Encerramentos.registrar(
-    'Baixada',dados.resultados||[],ssBaixada
-   );
   if(!r.ok||!dados.ok)throw Error(dados.error||'Sincronização não confirmada pelo servidor.');
   sincronizacaoConfirmada=true;
   atualizarBotoesFluxo();
@@ -2329,7 +2170,7 @@ load();
   window.__siscomBaixaSelecionada=null;
   // Procura a própria SS na aba Baixadas, independente do intervalo de datas.
   // O status é persistido exclusivamente pela rota validada do servidor.
-
+  if(typeof raw!=='undefined')raw=raw.filter(x=>String(x.ss||'').trim()!==numero);
   if(typeof selected!=='undefined')selected={};
   const filtros=[...document.querySelectorAll('.filter input[data-col]')];
   for(const campo of filtros)campo.value='';
@@ -2339,14 +2180,7 @@ load();
   if(typeof macros!=='undefined')macros=[];
   if(typeof window.__pageOffset!=='undefined')window.__pageOffset=0;
   const aba=document.querySelector('.tab[data-screen="encerradas"]');
-  if(aba&&typeof setScreen==='function'){
-    setScreen('encerradas',aba);
-    raw=[];
-    view=[];
-    window.__totalSS=null;
-    window.__hasMore=false;
-    apply();
-   }
+  if(aba&&typeof setScreen==='function')setScreen('encerradas',aba);
   else if(typeof load==='function')load(true);
   if(typeof window.notify==='function')window.notify('SS '+numero+' baixada. Abra/atualize Notas Baixadas para confirmar a sincronização.','success');
  }
@@ -3477,67 +3311,16 @@ load();
    setStatus('SS validada. Confira a equipe, datas e observação antes de confirmar.');
   }catch(e){setStatus('Validação não concluída: '+e.message)}finally{$('rejConsultar').disabled=false;atualizarBotao()}
  };
-
-
  async function sincronizarConfirmada(){
-
-   if(!ultimoConfirmado)return false;
-
-   const alvo=ultimoConfirmado;
-
-   $('rejSincronizar').disabled=true;
-
-   try{
-
-    const r=await fetch(
-     '/api/siscom-gateway/sincronizar-rejeicao',{
-      method:'POST',
-      credentials:'same-origin',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-       numero_ss:alvo.numero,
-       job_id:alvo.id
-      }),
-      cache:'no-store'
-     }
-    );
-
-    const j=await r.json().catch(()=>({}));
-
-    window.CGM_Encerramentos.registrar(
-     'Rejeitada',j.resultados||[],alvo.numero
-    );
-
-    if(!r.ok||!j.ok)
-     throw Error(j.error||'Atualizacao nao concluida');
-
-    if(ultimoConfirmado===alvo){
-     modal.classList.remove('open');
-    }
-
-    window.notify?.(
-     'Rejeicao SISCOM confirmada. Atualizacao enviada ao uMov.',
-     'success'
-    );
-
-    return true;
-
-   }catch(e){
-
-    console.warn('[CGM Rejeicao]',e.message);
-
-    setStatus(
-     'Rejeicao confirmada no SISCOM. '+
-     'Atualizacao uMov pendente. Nao repetir a rejeicao.'
-    );
-
-    return false;
-
-   }finally{
-    $('rejSincronizar').disabled=false;
-   }
-  }
-
+  if(!ultimoConfirmado)return setStatus('Nenhuma rejeição confirmada para sincronizar.');
+  $('rejSincronizar').disabled=true;
+  try{
+   const sync=await api('/api/siscom-gateway/sincronizar-rejeicao',{numero_ss:ultimoConfirmado.numero,job_id:ultimoConfirmado.id});
+   setStatus(sync.ok?'Rejeição CONFIRMADA no SISCOM. Envio da atualização uMov aceito; acompanhe a sincronização.':'Rejeição confirmada no SISCOM, mas sincronização uMov pendente.');
+   return !!sync.ok;
+  }catch(e){setStatus('Rejeição CONFIRMADA no SISCOM; sincronização uMov pendente: '+e.message+'. NÃO reenviar rejeição.');return false;}
+  finally{$('rejSincronizar').disabled=false}
+ }
  $('rejSincronizar').onclick=sincronizarConfirmada;
  $('rejTentativa').onclick=async()=>{
   const numero=$('rejNumero').value.trim();if(!ssValida(numero))return setStatus('Informe a SS para consultar a tentativa.');
@@ -3596,7 +3379,12 @@ if(!Number.isSafeInteger(motivoId)||motivoId<1)
    }
    setStatus('Rejeição confirmada no SISCOM. Sincronizando status com o uMov...');
    ultimoConfirmado={id:job.id,numero};$('rejSincronizar').hidden=false;
-   await sincronizarConfirmada();
+   const sincronizada=await sincronizarConfirmada();
+   if(sincronizada){
+    window.alert('REJEIÇÃO OFICIAL REALIZADA E CONFIRMADA NO SISCOM: '+numero+'. Envio da atualização ao uMov aceito; confira a sincronização.');
+   }else{
+    window.alert('REJEIÇÃO OFICIAL CONFIRMADA NO SISCOM: '+numero+'. A atualização ao uMov ainda não foi confirmada. NÃO envie a rejeição novamente.');
+   }
   }catch(e){const msg='Não foi possível confirmar o resultado: '+e.message+'. Se o envio foi iniciado, NÃO tente novamente sem verificar a tentativa oficial.';setStatus(msg);if(envioRejeicaoPendente)window.alert(msg);}
   finally{ocupado=false;$('rejConsultar').disabled=false;atualizarBotao()}
  };
@@ -4226,29 +4014,9 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
    if(!confirm('Encerramento confirmado no SISCOM para '+x.ss+'. Marcar esta SS como Baixada no uMov?'))return;
    const r=await fetch('/api/siscom-gateway/sincronizar-baixa-existente',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_ss:x.ss,tarefa:x.tarefa,job_id:first.id}),cache:'no-store'});
    const j=await r.json();if(!r.ok||!j.ok)throw Error(j.error||'O uMov não confirmou a atualização');
-
-
-    window.CGM_Encerramentos.registrar(
-     'Baixada',
-     [{
-      ss:x.ss,
-      tarefa:x.tarefa,
-      ok:true,
-      ja_aplicado:j.ja_baixada===true
-     }]
-    );
-
-    if(el('siscomBaixaModal').classList.contains('open')&&
-       window.__siscomBaixaSelecionada?.ss===x.ss){
-     el('sbFechar').click();
-    }
-
-    window.notify?.(
-     'Atualizacao enviada ao uMov.',
-     'success'
-    );
-
-
+   // API uMov aceita solicitação; a confirmação final depende da sincronização de volta ao banco.
+   window.notify?.('Atualização enviada ao uMov. Aguarde a sincronização e recarregue para confirmar o status.','success');
+   if(typeof load==='function')Promise.resolve().then(()=>load()).catch(e=>console.warn('Atualizar lista uMov:',e));
   }catch(e){window.notify?.('Não foi possível marcar Baixada: '+e.message,'error');alert('Sincronização não confirmada: '+e.message)}
   finally{btn.disabled=false}
  };
@@ -4693,6 +4461,6 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  };
 })();
 </script>
-<script defer src="/umov-manual-cgm-v1.js?v=baixa-rapida-20261124-v1"></script>
+<script defer src="/umov-manual-cgm-v1.js?v=manual-20261123-v1"></script>
 <script src="/cgm-layout-responsivo-v1.js?v=20261124-v4" defer></script>
 </body></html>

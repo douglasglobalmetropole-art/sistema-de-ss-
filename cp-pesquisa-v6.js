@@ -42,140 +42,6 @@ async function loadFieldIds(pool,base='principal'){
  fieldCache.set(base,{timestamp:Date.now(),fields});return fields;
 }
 function fieldIds(pool,base='principal'){return metadataFlight(base,()=>loadFieldIds(pool,base));}
-function pendingStatement(ctx){
-
- const {
-  baseSql,tags,setor,final,
-  limitParam,offsetParam,val
- }=ctx;
-
- // CGM_PENDENCIAS_V8
- // Status oficial do uMov, sem deduzir campo personalizado.
-
- let base=baseSql;
-
- const origem=
-  'FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id';
-
- if(!base.includes(origem))
-  throw Error('Origem SQL divergente');
-
- base=base.replace(
-  origem,
-  origem+
-  ' JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id'
- );
-
- const condicao=
-  "LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'";
-
- if(!base.includes(condicao))
-  throw Error('Condicao de campo nao encontrada');
-
- base=base.replace(
-  condicao,
-  "LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo'"+
-  " AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL"
- );
-
- base=base
-  .replaceAll(
-   't.tsk_lastexecutiondatehour',
-   'd.tsk_lastexecutiondatehour'
-  )
-  .replaceAll('t.tsk_situation','d.tsk_situation');
-
- // Preservar filtros existentes de TAG e setor.
-
- const extras=final
-  .filter(x=>!x.includes('p.status_integracao'))
-  .map(x=>x.replace(
-   /p\.(tags|setor)/g,
-   (_,campo)=>campo==='tags'?tags:setor
-  ));
-
- const onPage=expr=>expr
-  .replaceAll('b.tsk_id','p.tsk_id')
-  .replaceAll('b.loc_id','p.loc_id');
-
- const sql=`
- WITH b AS NOT MATERIALIZED (
-  ${base}
- ),
-
- pendentes AS MATERIALIZED (
-  SELECT DISTINCT
-   b.tsk_id,
-   b.tsk_lastexecutiondatehour
-  FROM b
-  ${extras.length?'WHERE '+extras.join(' AND '):''}
- ),
-
- totais AS (
-  SELECT COUNT(*)::bigint AS total_pendentes
-  FROM pendentes
- ),
-
- pagina AS MATERIALIZED (
-  SELECT *
-  FROM pendentes
-  ORDER BY tsk_lastexecutiondatehour DESC NULLS LAST,
-           tsk_id DESC
-  LIMIT ${limitParam}
-  OFFSET ${offsetParam}
- )
-
- SELECT
-  p.tsk_id,
-  p.loc_id,
-  p.age_id,
-  p.tty_id,
-  p.tss_id,
-  p.tsk_insertdatehour,
-  p.tsk_realinitialdatehour,
-  p.tsk_realfinaldatehour,
-
-  pagina.tsk_lastexecutiondatehour,
-  'Retornada de Campo'::text AS tsk_situation,
-
-  l.loc_integrationid AS ss,
-  l.loc_city AS cidade,
-  l.loc_neighborhood AS bairro,
-  l.loc_street AS logradouro,
-  l.loc_streetnumber AS numero,
-
-  totais.total_pendentes,
-  ''::text AS status_integracao,
-
-  ${onPage(tags)} AS tags,
-  ${onPage(setor)} AS setor,
-
-  a.age_name AS tecnico,
-  tt.tty_description AS servico,
-  to_jsonb(p)->>'tsk_accesstoken' AS token
-
- FROM totais
- LEFT JOIN pagina ON TRUE
-
- LEFT JOIN u45468.task p
-  ON p.tsk_id=pagina.tsk_id
-
- LEFT JOIN u45468.local l
-  ON l.loc_id=p.loc_id
-
- LEFT JOIN u45468.agent a
-  ON a.age_id=p.age_id
-
- LEFT JOIN u45468.tasktype tt
-  ON tt.tty_id=p.tty_id
-
- ORDER BY pagina.tsk_lastexecutiondatehour DESC NULLS LAST,
-          pagina.tsk_id DESC
- `;
-
- return {text:sql,values:val};
-}
-
 function statement(params, ids){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
@@ -209,7 +75,7 @@ function statement(params, ids){
   base.push(`${normCity('l.loc_city')}=ANY(${cityParam}::text[])`);
  }
  if(equipe)like('a.age_name',equipe);
- const statusParam=tela==='baixar'?null:add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
+ const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
  const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
@@ -239,13 +105,6 @@ function statement(params, ids){
     ${base.length?'WHERE '+base.join(' AND '):''}`;
   // Filtra/classifica antes do LIMIT, mas enriquece apenas a pagina.
   // A base pode ser integrada ao plano: nao materializar todas as tarefas.
-  if(tela==='baixar'){
-   return pendingStatement({
-    baseSql,statusParam,tags,setor,final,
-    limitParam,offsetParam,val
-   });
-  }
-
   const expressions={status_integracao:status,tags,setor};
   // Com filtros personalizados combinados, uma classificacao intermediaria
   // evita que o otimizador repita subconsultas correlacionadas em nested loops.
@@ -318,28 +177,13 @@ async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'})
   if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   const stmt=statement(params,ids);
   const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
-  const totalPendentes=params.tela==='baixar'
-   ?Number(q.rows[0]?.total_pendentes)
-   :null;
-
-  if(params.tela==='baixar'&&
-     (!Number.isSafeInteger(totalPendentes)||
-      totalPendentes<0)){
-   throw Error('Contagem de pendencias invalida.');
-  }
-
-  const page=q.rows
-   .filter(x=>x.tsk_id!=null)
-   .slice(0,params.limit);
+  const page=q.rows.slice(0,params.limit);
   // Dados auxiliares são opcionais e não devem deixar a LISTAGEM refém de uma view.
   const t1=Date.now();let details=new Map(),detalhesParciais=false;
   try{details=await extraFields(pool,page,ids)}catch(e){detalhesParciais=true;console.warn('[CP V6] metadados locais indisponíveis:',e.message)}
   const rows=transform(page,details,hostRelatorioUmov);
 
-  const data={ok:true,rows,count:rows.length,total:totalPendentes,
-   hasMore:params.tela==='baixar'
-    ?params.offset+rows.length<totalPendentes
-    :q.rows.length>params.limit,
+  const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
    tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
   if(perf.getGeneration()===version)C.set(key,{ts:Date.now(),data});
