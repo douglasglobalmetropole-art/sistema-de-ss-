@@ -42,6 +42,107 @@ async function loadFieldIds(pool,base='principal'){
  fieldCache.set(base,{timestamp:Date.now(),fields});return fields;
 }
 function fieldIds(pool,base='principal'){return metadataFlight(base,()=>loadFieldIds(pool,base));}
+function pendingStatement(ctx){
+
+ const {
+  baseSql,statusParam,tags,setor,final,
+  limitParam,offsetParam,val
+ }=ctx;
+
+ // Uma tarefa com status de integracao preenchido
+ // nao pode permanecer na lista de pendencias.
+
+ const statusNaoVazio=`
+ NOT EXISTS (
+  SELECT 1
+  FROM u45468.customfieldvalue v
+  LEFT JOIN u45468.customentityvalue ce
+   ON ce.cev_id=CASE
+    WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$'
+    THEN v.cfv_internalvalue::bigint
+    ELSE NULL
+   END
+  WHERE v.cfv_registerid=b.tsk_id
+    AND v.cfd_id=ANY(${statusParam}::bpchar[])
+    AND NULLIF(TRIM(COALESCE(
+      NULLIF(ce.cev_description::text,''),
+      NULLIF(v.cfv_externalvalue::text,''),
+      NULLIF(v.cfv_internalvalue::text,''),
+      ''
+    )),'') IS NOT NULL
+ )`;
+
+ // Preservar filtros de TAG e setor.
+
+ const extras=final
+  .filter(x=>!x.includes('p.status_integracao'))
+  .map(x=>x.replace(
+   /p\.(tags|setor)/g,
+   (_,campo)=>campo==='tags'?tags:setor
+  ));
+
+ const filtros=[
+  statusNaoVazio,
+  ...extras
+ ].join(' AND ');
+
+ const onPage=expr=>expr
+  .replaceAll('b.tsk_id','p.tsk_id')
+  .replaceAll('b.loc_id','p.loc_id');
+
+ const sql=`
+ WITH b AS MATERIALIZED (
+  ${baseSql}
+ ),
+
+ pendentes AS MATERIALIZED (
+  SELECT b.*
+  FROM b
+  WHERE ${filtros}
+ ),
+
+ totais AS (
+  SELECT COUNT(*)::bigint AS total_pendentes
+  FROM pendentes
+ ),
+
+ pagina AS MATERIALIZED (
+  SELECT *
+  FROM pendentes
+  ORDER BY tsk_lastexecutiondatehour DESC NULLS LAST,
+           tsk_id DESC
+  LIMIT ${limitParam}
+  OFFSET ${offsetParam}
+ )
+
+ SELECT
+  p.*,
+  totais.total_pendentes,
+  ''::text AS status_integracao,
+  ${onPage(tags)} AS tags,
+  ${onPage(setor)} AS setor,
+  a.age_name AS tecnico,
+  tt.tty_description AS servico,
+
+  (
+   SELECT to_jsonb(token_task)->>'tsk_accesstoken'
+   FROM u45468.task token_task
+   WHERE token_task.tsk_id=p.tsk_id
+   LIMIT 1
+  ) AS token
+
+ FROM totais
+ LEFT JOIN pagina p ON TRUE
+ LEFT JOIN u45468.agent a ON a.age_id=p.age_id
+ LEFT JOIN u45468.tasktype tt ON tt.tty_id=p.tty_id
+
+ ORDER BY p.tsk_lastexecutiondatehour DESC NULLS LAST,
+          p.tsk_id DESC
+ `;
+
+ return {text:sql,values:val};
+}
+
 function statement(params, ids){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
@@ -105,6 +206,13 @@ function statement(params, ids){
     ${base.length?'WHERE '+base.join(' AND '):''}`;
   // Filtra/classifica antes do LIMIT, mas enriquece apenas a pagina.
   // A base pode ser integrada ao plano: nao materializar todas as tarefas.
+  if(tela==='baixar'){
+   return pendingStatement({
+    baseSql,statusParam,tags,setor,final,
+    limitParam,offsetParam,val
+   });
+  }
+
   const expressions={status_integracao:status,tags,setor};
   // Com filtros personalizados combinados, uma classificacao intermediaria
   // evita que o otimizador repita subconsultas correlacionadas em nested loops.
@@ -177,13 +285,28 @@ async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'})
   if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   const stmt=statement(params,ids);
   const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
-  const page=q.rows.slice(0,params.limit);
+  const totalPendentes=params.tela==='baixar'
+   ?Number(q.rows[0]?.total_pendentes)
+   :null;
+
+  if(params.tela==='baixar'&&
+     (!Number.isSafeInteger(totalPendentes)||
+      totalPendentes<0)){
+   throw Error('Contagem de pendencias invalida.');
+  }
+
+  const page=q.rows
+   .filter(x=>x.tsk_id!=null)
+   .slice(0,params.limit);
   // Dados auxiliares são opcionais e não devem deixar a LISTAGEM refém de uma view.
   const t1=Date.now();let details=new Map(),detalhesParciais=false;
   try{details=await extraFields(pool,page,ids)}catch(e){detalhesParciais=true;console.warn('[CP V6] metadados locais indisponíveis:',e.message)}
   const rows=transform(page,details,hostRelatorioUmov);
 
-  const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
+  const data={ok:true,rows,count:rows.length,total:totalPendentes,
+   hasMore:params.tela==='baixar'
+    ?params.offset+rows.length<totalPendentes
+    :q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
    tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
   if(perf.getGeneration()===version)C.set(key,{ts:Date.now(),data});

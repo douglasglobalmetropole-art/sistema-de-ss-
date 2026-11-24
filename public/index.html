@@ -2023,7 +2023,7 @@ async function load(forcarAtualizacao=false){
   })
 );window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
     // CGM_NOTAS_BAIXAR_TOTAL_CLIENTE_V1: total real, buscado sem bloquear a pagina.
-    if(currentScreen==='baixar'&&!global&&!direta){
+    if(currentScreen==='baixar'&&!global&&!direta&&!Number.isSafeInteger(j.total)){
       const consulta=p.toString();
       fetch('/api/recepcao-total-baixar?'+consulta,{cache:'no-store',signal:consultaListaAtual.signal})
        .then(r=>r.ok?r.json():null)
