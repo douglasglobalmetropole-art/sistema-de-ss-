@@ -129,6 +129,7 @@ req.divisaoSS={
     '/api/siscom-worker/status',
    '/api/gis/localizar-ss',
    '/api/recepcao',
+   '/api/recepcao-total-baixar',
    '/api/pesquisa-global',
    '/api/macros',
    '/api/cidades',
@@ -656,7 +657,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
    });
   }
 
-  if(rota==='/api/recepcao'||rota==='/api/pesquisa-global'){
+  if(rota==='/api/recepcao'||rota==='/api/pesquisa-global'||rota==='/api/recepcao-total-baixar'){
 
    const u=new URL(req.url,'http://local');
 
