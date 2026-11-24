@@ -114,6 +114,29 @@
     .dup-indicator.error {background:#fff3dc;color:#a66a0b}
     .dup-indicator:hover {outline:2px solid #8ab7df}
   `;
+  css.textContent += `
+    /* CGM_HISTORICO_DUP_V1 */
+    #dupGlobalModal .dgm-box{width:97vw;max-width:1800px;max-height:94vh}
+    #dupGlobalModal main{padding:14px!important}
+    #dupGlobalModal .dgm-historico{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    #dupGlobalModal .dgm-historico-table{table-layout:fixed!important;min-width:1100px!important;width:100%!important;font-size:12px!important;line-height:1.45!important}
+    #dupGlobalModal .dgm-historico-table th,#dupGlobalModal .dgm-historico-table td{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere!important;word-break:normal!important;max-width:none!important;min-width:0!important;vertical-align:top!important;text-align:left!important;padding:10px 9px!important;height:auto!important;font-size:12px!important;line-height:1.45!important}
+    #dupGlobalModal .dgm-historico-table th{background:#e6eff8!important;position:static!important}
+    #dupGlobalModal .dgm-historico-table td>*{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important}
+    #dupGlobalModal .dgm-scroll{overflow-x:auto!important;max-width:100%}
+    #dupGlobalModal .dgm-historico-table .dgm-tag{white-space:normal!important;line-height:1.3!important;font-size:10px!important;max-width:100%!important}
+    #dupGlobalModal .dgm-historico-table .dgm-alvo td{background:#e8f3fc!important;border-top:2px solid #237fc1;border-bottom:2px solid #237fc1}
+    #dupGlobalModal .dgm-muted{font-size:11px;color:#536c84;margin:3px 0}
+    #dupGlobalModal .dgm-data{font-weight:700;color:#07599a;margin-bottom:5px}
+    #dupGlobalModal .dgm-evidencias{display:block!important;list-style:disc outside!important;margin:5px 0!important;padding-left:15px!important;white-space:normal!important}
+    #dupGlobalModal .dgm-evidencias li{display:list-item!important;margin:3px 0!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.45!important}
+    #dupGlobalModal .dgm-alertas{color:#94580b}
+    #dupGlobalModal .dgm-indicios{color:#17613e}
+    #dupGlobalModal .dgm-acao{margin-top:6px;font-size:12px;line-height:1.5}
+    #dupGlobalModal .dgm-spacer{margin-top:9px}
+    #dupGlobalModal .dgm-matriz-alerta{background:#fff4e4;border-color:#d99028;color:#854c10}
+    @media(max-width:700px){#dupGlobalModal{padding:5px}#dupGlobalModal .dgm-box{width:99vw;max-height:96vh}#dupGlobalModal main{padding:8px!important}}
+  `;
   document.head.append(css);
 
   css.textContent += `
@@ -169,145 +192,82 @@
     const resultados = Array.isArray(d.resultados) ? d.resultados : [];
     const duplicatas = Array.isArray(d.duplicatas) ? d.duplicatas : [];
     const matriz = d.matriz || null;
-
-    const matrizSS = ssVal(matriz);
-    const duplicataSet = new Set(duplicatas.map(ssVal));
-
-    const relacionados = [...resultados];
-    const vistos = new Set(resultados.map(ssVal).filter(Boolean));
-
-    duplicatas.forEach(r => {
-      if (!r || typeof r !== 'object') return;
-      const numero = ssVal(r);
-      if (numero && !vistos.has(numero)) {
-        relacionados.push(r);
-        vistos.add(numero);
-      }
+    const chave = r => String(r?.origem || '') + '|' + ssVal(r);
+    const normal = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    const status = v => v == null || !String(v).trim() ? 'Não informado' : String(v);
+    const integracao = r => status(r.status_integracao ?? r.statusIntegracao ?? r.status_dashboard ?? r.statusDashboard ?? r.status_siscom ?? r.statusSiscom);
+    const campo = r => status(r.situacao_campo ?? r.situacaoCampo ?? r.status_campo ?? r.statusCampo);
+    const dataMs = r => { const n = r?.registro_em ? Date.parse(r.registro_em) : NaN; return Number.isFinite(n) ? n : Infinity; };
+    const dados = new Map();
+    for (const r of [...duplicatas,...resultados,matriz,alvo]) {
+      if (!r || !ssVal(r)) continue;
+      const k = chave(r);
+      dados.set(k,{...dados.get(k),...r});
+    }
+    const matrizAtual = matriz ? (dados.get(chave(matriz)) || matriz) : null;
+    const dupSet = new Set(duplicatas.map(chave));
+    const linhaAlvo = r => chave(r) === chave(alvo);
+    const fortes = r => !linhaAlvo(r) && (dupSet.has(chave(r)) || r.categoria === 'provavel');
+    const cancelada = r => /cancelad/.test(normal(campo(r))) || /cancelad/.test(normal(integracao(r))) || /cancelad/.test(normal(r.situacao));
+    const encerrada = r => /baixad|rejeitad|encerrad|finalizad|concluid/.test(normal(integracao(r)));
+    const matrizRestrita = matrizAtual && (cancelada(matrizAtual) || encerrada(matrizAtual));
+    const parcial = !d.cobertura?.completa || d.truncado || d.origem_alvo !== 'indice';
+    const completa = !parcial && d.pode_selecionar === true && !matrizRestrita;
+    const lista = [...dados.values()].sort((a,b) => {
+      const x=dataMs(a),y=dataMs(b);
+      return (x===y?0:x<y?-1:1) || (Number(a.tsk_id)||0)-(Number(b.tsk_id)||0) || ssVal(a).localeCompare(ssVal(b));
     });
-
-
-  // CGM_DUPLICIDADES_NATIVO_V2
-  function dgmStatusIntegracao(r) {
-    const valor = r.status_integracao ??
-      r.statusIntegracao ??
-      r.status_dashboard ??
-      r.statusDashboard ??
-      r.status_siscom ??
-      r.statusSiscom;
-
-    if (valor == null || String(valor).trim() === '') {
-      return 'Não informado';
+    const relacionadas = lista.filter(r=>!linhaAlvo(r));
+    const semData = lista.filter(r=>!Number.isFinite(dataMs(r))).length;
+    const anterior = r => Number.isFinite(dataMs(r)) && Number.isFinite(dataMs(alvo)) && dataMs(r)<dataMs(alvo);
+    const posterior = r => Number.isFinite(dataMs(r)) && Number.isFinite(dataMs(alvo)) && dataMs(r)>dataMs(alvo);
+    const listaHtml = (items,cls='') => items.length ? '<ul class="dgm-evidencias '+cls+'">'+items.map(t=>'<li>'+safe(t)+'</li>').join('')+'</ul>' : '';
+    const arr = x=>Array.isArray(x)?x:[];
+    function acao(r) {
+      if(linhaAlvo(r))return ['SS em análise','Compare o histórico abaixo antes de decidir sobre programação, TAG ou baixa.','dgm-blue'];
+      const x=r.analise_complementar||{};
+      const numeroDiferente = !!(alvo.chave_rua && alvo.chave_rua===r.chave_rua && alvo.numero && r.numero && String(alvo.numero)!==String(r.numero));
+      const divergencia = !!((alvo.matricula && r.matricula && String(alvo.matricula)!==String(r.matricula)) || (alvo.hidrometro && r.hidrometro && String(alvo.hidrometro)!==String(r.hidrometro)));
+      if(cancelada(r))return ['Conferir cancelamento','Consultar o motivo do cancelamento. Não usar esta SS automaticamente como matriz nem rejeitar a atual com base nela.','dgm-orange'];
+      if(encerrada(r))return ['Avaliar histórico encerrado','Conferir execução, baixa ou motivo da rejeição. Pode ser reincidência ou nova ocorrência; não rejeitar automaticamente.','dgm-blue'];
+      if(numeroDiferente || divergencia)return ['Conferir identificação','Há diferença de número, matrícula ou hidrômetro. Validar o imóvel e o serviço; não confirmar duplicidade só pela proximidade.','dgm-orange'];
+      if(Number(x.dias_entre_registros)>180)return ['Avaliar reincidência','O intervalo é superior a 180 dias. Conferir se o problema voltou a ocorrer.','dgm-orange'];
+      if(x.relacao_macro==='diferente' || x.relacao_macro==='relacionado' || r.categoria==='relacionado')return ['Conferir serviço relacionado','As macros ou serviços podem representar etapas distintas. Verificar a necessidade de cada SS.','dgm-blue'];
+      if(r.categoria==='referencia' || x.referencia_direta)return ['Conferir referência','Ler a SS citada e verificar o vínculo com a ocorrência atual. Citação não confirma duplicidade.','dgm-blue'];
+      if(fortes(r)){
+        if(/nao informado|indisponivel/.test(normal(campo(r))))return ['Consultar situação atual','O status de campo não está confirmado. Conferir no uMov antes de decidir.','dgm-orange'];
+        if(!/pendente de envio para campo/.test(normal(campo(r))))return ['Conferir andamento','Verificar se a equipe já executou ou está atendendo a ocorrência antes de agrupar.','dgm-orange'];
+        if(!anterior(r)&&!posterior(r))return ['Conferir datas','Validar a data de abertura e a identidade da ocorrência antes de definir a matriz.','dgm-orange'];
+        return ['Avaliar agrupamento',completa?'Há critérios fortes. Conferir a mesma ocorrência e a situação das duas SS antes de qualquer marcação.':'Há critérios fortes, mas a matriz não está validada. Conferir a ocorrência e aguardar ou revisar a cobertura.','dgm-orange'];
+      }
+      return ['Revisão manual','Conferir endereço, matrícula, hidrômetro e serviço. Correspondência não significa duplicidade.','dgm-blue'];
     }
-
-    return String(valor);
-  }
-
-  function dgmSituacaoCampo(r) {
-    const valor = r.situacao_campo ??
-      r.situacaoCampo ??
-      r.status_campo ??
-      r.statusCampo;
-
-    if (valor == null || String(valor).trim() === '') {
-      return 'Não informado';
-    }
-
-    return String(valor);
-  }
-
-    const lista = relacionados.map(r => {
-      const isDuplicata = duplicataSet.has(ssVal(r));
-      const categoria = r.categoria || 'proximidade';
-      // Indicios fracos (mesma rua ou citacao) nao devem ser tratados como duplicata.
-      const provavelmente = isDuplicata || categoria === 'provavel';
-      const classificacao = provavelmente ? 'POSSÍVEL DUPLICATA' :
-        categoria === 'referencia' ? 'SS CITADA' :
-        categoria === 'relacionado' ? 'SERVIÇO RELACIONADO' : 'REVISAR';
-      const classe = provavelmente ? 'dgm-red' : 'dgm-blue';
-      const extra = r.analise_complementar;
-      const detalhesExtra = extra ? [
-        ...(extra.indicios || []),
-        ...(extra.alertas || []).map(m => 'ATENÇÃO: ' + m),
-        ...(extra.contexto || [])
-      ].join(' · ') : '';
-
-      return `
-        <tr>
-          <td><strong>${safe(r.ss)}</strong></td>
-<td class="dgm-rua">${safe(
-  [
-    r.logradouro || r.rua || r.endereco,
-    r.numero
-  ].filter(v => v !== null && v !== undefined && String(v).trim() !== '').join(', ') || 'Não informado'
-)}</td>
-          <td><span class="dgm-tag ${classe}">
-            ${classificacao}
-          </span></td>
-          <td>${safe(r.matricula || '—')}</td>
-          <td>${safe(r.hidrometro || '—')}</td>
-          <td>${safe(r.pontos ?? '—')}</td>
-          <td>${safe((r.motivos || []).join(' · ') || 'Conferir dados')}</td>
-          <td>${safe(detalhesExtra || 'Sem dados adicionais disponíveis')}</td>
-          <td class="dgm-status-integracao">${safe(dgmStatusIntegracao(r))}</td>
-          <td class="dgm-status-campo">${safe(dgmSituacaoCampo(r))}</td>
-        </tr>`;
+    const linhas = lista.map((r,i)=>{
+      const self=linhaAlvo(r), x=r.analise_complementar||{}, cand=fortes(r);
+      const isMatriz=matrizAtual && chave(r)===chave(matrizAtual);
+      const rotulo=self?'SS CONSULTADA':cand?'POSSÍVEL DUPLICATA':r.categoria==='referencia'?'SS CITADA':r.categoria==='relacionado'?'SERVIÇO RELACIONADO':'REVISAR';
+      const recomendacao=acao(r);
+      const momentos = self ? 'Referência da análise' : anterior(r)?'Anterior à consultada':posterior(r)?'Posterior à consultada':Number.isFinite(dataMs(r))?'Mesma data/hora ou data da consultada indisponível':'Data não informada';
+      return `<tr class="${self?'dgm-alvo':''}">
+        <td><div class="dgm-data">${safe(data(r.registro_em))}</div><strong>${safe(r.ss)}</strong><div class="dgm-muted">${safe(momentos)}</div>${isMatriz?'<div class="dgm-muted"><strong>'+safe(matrizRestrita?'Matriz histórica — revisar':'Matriz indicada pelo índice')+'</strong></div>':''}<div class="dgm-muted">${safe(r.origem==='umov_lote1'?'Lote 1':r.origem==='umov'?'Lote 2':'Origem não informada')}</div></td>
+        <td><strong>${safe([r.logradouro||r.rua||r.endereco,r.numero].filter(v=>v!=null&&String(v).trim()).join(', ')||'Não informado')}</strong><div class="dgm-muted">${safe([r.bairro,r.cidade].filter(Boolean).join(' · '))}</div><div>Mat.: ${safe(r.matricula||'—')}</div><div>Hidr.: ${safe(r.hidrometro||'—')}</div><div class="dgm-muted">${safe(r.servico||'Serviço não informado')}</div></td>
+        <td><span class="dgm-tag ${self?'dgm-blue':cand?'dgm-red':'dgm-orange'}">${rotulo}</span><div class="dgm-muted">Pontos: ${safe(self?'—':r.pontos??'—')}</div>${listaHtml(self?[]:arr(r.motivos))}</td>
+        <td>${self?'<span class="dgm-muted">SS de referência da comparação.</span>':(listaHtml(arr(x.indicios),'dgm-indicios')+listaHtml(arr(x.alertas).map(m=>'ATENÇÃO: '+m),'dgm-alertas')+listaHtml(arr(x.contexto))||'<span class="dgm-muted">Sem dados adicionais disponíveis.</span>')}</td>
+        <td><div class="dgm-muted">Integração</div><strong>${safe(integracao(r))}</strong><div class="dgm-muted dgm-spacer">Campo</div><strong>${safe(campo(r))}</strong></td>
+        <td><span class="dgm-tag ${recomendacao[2]}">${safe(recomendacao[0])}</span><div class="dgm-acao">${safe(recomendacao[1])}</div></td>
+      </tr>`;
     }).join('');
-
     content.innerHTML = `
-      <div class="dgm-summary">
-        <strong>SS CONSULTADA:</strong> ${safe(alvo.ss || '—')}<br>
-        <strong>Matrícula:</strong> ${safe(alvo.matricula || '—')}
-        &nbsp; | &nbsp;
-        <strong>Hidrômetro:</strong> ${safe(alvo.hidrometro || '—')}<br>
-        <strong>Endereço:</strong>
-        ${safe([alvo.logradouro,alvo.numero,alvo.bairro,alvo.cidade].filter(Boolean).join(', ') || 'Não informado')}
-      </div>
-
-      <div class="dgm-section">
-        ${d.pode_selecionar ? 'SS MATRIZ:' : 'SS MATRIZ SUGERIDA (NÃO CONFIRMADA):'} ${safe(matrizSS || 'Não definida')}
-      </div>
-
-      <div class="dgm-section">
-        POSSÍVEIS DUPLICATAS E CORRESPONDÊNCIAS
-        (${relacionados.length})
-      </div>
-
-      ${relacionados.length ? `
-        <div class="dgm-scroll">
-          <table class="dgm-table">
-            <thead>
-              <tr>
-                <th>SS relacionada</th>
-                <th>RUA</th>
-                <th>Classificação</th>
-                <th>Matrícula</th>
-                <th>Hidrômetro</th>
-                <th>Pontos</th>
-                <th>Critérios encontrados</th>
-                <th>Análise complementar</th>
-                <th>Status da Integração</th>
-                <th>Situação de Campo</th>
-              </tr>
-            </thead>
-            <tbody>${lista}</tbody>
-          </table>
-        </div>
-      ` : `
-        <div class="dgm-empty">
-          Nenhuma SS correspondente encontrada no índice global.
-        </div>
-      `}
-
-      ${d.aviso ? `<div class="dgm-note">${safe(d.aviso)}</div>` : ''}
-      ${d.motivo_bloqueio && !d.pode_selecionar
-        ? `<div class="dgm-note">${safe(d.motivo_bloqueio)}</div>` : ''}
-
-      <div class="dgm-note">
-        <strong>Importante:</strong> correspondências são indícios para conferência.
-        A análise complementar não altera a seleção de Matriz nem autoriza TAG/rejeição automática.
-        Nenhuma SS foi alterada ou recebeu TAG nesta consulta.
-      </div>
-    `;
+      <div class="dgm-summary"><div><strong>SS CONSULTADA: ${safe(alvo.ss||'—')}</strong> · Abertura: ${safe(data(alvo.registro_em))}</div><div>${safe([alvo.logradouro,alvo.numero,alvo.bairro,alvo.cidade].filter(Boolean).join(', ')||'Endereço não informado')}</div><div>Matrícula: ${safe(alvo.matricula||'—')} · Hidrômetro: ${safe(alvo.hidrometro||'—')}</div></div>
+      <div class="dgm-note ${matrizRestrita?'dgm-matriz-alerta':''}"><strong>${completa?'Matriz indicada pelo índice':'Matriz histórica / sugerida (não validada operacionalmente)'}:</strong> ${safe(ssVal(matrizAtual)||'Não definida')}${matrizRestrita?' — A SS indicada está cancelada ou encerrada. Revise a ocorrência antes de usar como matriz.': ' — A data mais antiga não comprova duplicidade.'}</div>
+      <div class="dgm-section dgm-historico"><span>HISTÓRICO CRONOLÓGICO · MAIS ANTIGA → MAIS RECENTE</span><span>${relacionadas.length} correspondência(s) · ${relacionadas.filter(fortes).length} forte(s)${semData?' · '+semData+' sem data':''}</span></div>
+      <div class="dgm-scroll"><table class="dgm-table dgm-historico-table"><colgroup><col style="width:15%"><col style="width:17%"><col style="width:15%"><col style="width:22%"><col style="width:13%"><col style="width:18%"></colgroup><thead><tr><th>Abertura / SS</th><th>Endereço / imóvel</th><th>Classificação e critérios</th><th>Análise complementar</th><th>Situação atual</th><th>Ação recomendada</th></tr></thead><tbody>${linhas}</tbody></table></div>
+      ${!relacionadas.length?'<div class="dgm-note">Nenhuma correspondência encontrada entre os registros retornados.</div>':''}
+      ${d.truncado?'<div class="dgm-note">Busca limitada: podem existir mais correspondências não exibidas.</div>':''}
+      ${arr(d.resultados).length>=80?'<div class="dgm-note">A consulta detalhada retorna até 80 resultados principais, além das duplicatas indicadas. O histórico exibido pode não incluir todas as correspondências.</div>':''}
+      ${d.aviso?`<div class="dgm-note">${safe(d.aviso)}</div>`:''}
+      ${d.motivo_bloqueio&&!d.pode_selecionar?`<div class="dgm-note">${safe(d.motivo_bloqueio)}</div>`:''}
+      <div class="dgm-note"><strong>Importante:</strong> as ações são orientações de conferência. Nenhuma SS foi alterada, rejeitada ou recebeu TAG. A classificação e as regras de autorização existentes permanecem inalteradas.</div>`;
   }
 
   async function abrir(ss) {
