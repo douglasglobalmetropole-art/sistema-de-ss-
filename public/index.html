@@ -1578,7 +1578,7 @@ function screenMatch(x){
 
   // NOTAS PARA BAIXAR: Retornada de Campo e sem status de integração.
   if(currentScreen==='baixar'){
-    return situacao.includes('retornada de campo') && !statusIntegracao && !!ultima;
+    return situacao==='retornada de campo' && !statusIntegracao;
   }
 
   // NOTAS ENCERRADAS: qualquer nota já integrada (Baixada, Rejeitada, Duplicada etc.).
@@ -1854,8 +1854,12 @@ async function load(forcarAtualizacao=false){
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
-    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),municipios:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!(somenteEquipe&&currentScreen!=='recepcao');if(forcarAtualizacao)p.set('_refresh',String(Date.now()));if(ssBusca&&ssBusca.length<4){$('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return;}const direta=ssBusca.length>=4&&filtros.length===1;const caminho=direta?'/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page}):((currentScreen==='baixar'||global)?'/api/pesquisa-global?':'/api/recepcao?')+p;let r=await fetch(caminho,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),municipios:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!(somenteEquipe&&currentScreen!=='recepcao');if(forcarAtualizacao)p.set('_refresh',String(Date.now()));if(ssBusca&&ssBusca.length<4){$('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return;}const direta=ssBusca.length>=4&&filtros.length===1;const caminho=direta?'/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page}):((currentScreen==='baixar'||global)?'/api/pesquisa-global?':'/api/recepcao?')+p;let r=await fetch(
+ currentScreen==='baixar'?'/api/pesquisa-global?'+p:caminho,
+ {signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
+    if(currentScreen==='baixar'&&j.plano!=='UMOV-OFICIAL-V12')
+     throw Error('Versao antiga da consulta. V12 nao recebida.');
     if(direta&&filtros.length>1){j.rows=(j.rows||[]).filter(item=>filtros.every(f=>f.dataset.col==='ss'||String(f.dataset.col==='data_finalizacao'?(item.periodo_execucao||item.data_finalizacao||''):(item[f.dataset.col]??'')).toLocaleLowerCase('pt-BR').includes(f.value.trim().toLocaleLowerCase('pt-BR'))));j.total=j.rows.length;}
     raw=reconciliarEquipes(
   (j.rows||[]).filter(item=>{
@@ -1864,25 +1868,12 @@ async function load(forcarAtualizacao=false){
     const situacao=norm(item.situacao_campo);
     const status=norm(item.status_integracao);
 
-    return situacao==='retornada de campo' && status==='' && !!item.ultima_atividade;
+    return situacao==='retornada de campo' && status==='';
   })
 );window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
-    if(currentScreen==='baixar'&&Number.isSafeInteger(j.ss_unicas)){
-     $('countInfo').textContent+=' | '+j.ss_unicas+' SS unicas';
-    }
-    // CGM_NOTAS_BAIXAR_TOTAL_CLIENTE_V1: total real, buscado sem bloquear a pagina.
-    if(currentScreen==='baixar'&&!global&&!direta&&j.total==null){
-      const consulta=p.toString();
-      fetch('/api/recepcao-total-baixar?'+consulta,{cache:'no-store',signal:consultaListaAtual.signal})
-       .then(r=>r.ok?r.json():null)
-       .then(jc=>{
-        if(!jc?.ok||!Number.isSafeInteger(jc.total)||numero!==numeroConsultaLista||currentScreen!=='baixar')return;
-        window.__totalSS=jc.total;
-        const n=view.slice(0,page).length;
-        const a=n?window.__pageOffset+1:0,b=window.__pageOffset+n;
-        $('countInfo').textContent='Exibindo '+a+'–'+b+' de '+jc.total+(Number.isSafeInteger(jc.ss_unicas)?' tarefas | '+jc.ss_unicas+' SS unicas':' SS')+(window.ms?' • consulta '+window.ms+' ms':'');
-        renderPagination();
-       }).catch(e=>{if(e.name!=='AbortError')console.warn('[CGM] Contagem pendente:',e.message)});
+    if(currentScreen==='baixar'){
+     $('countInfo').textContent+=' | '+
+      j.ss_unicas+' SS unicas | UMOV-OFICIAL-V12';
     }
     if(direta&&!raw.length&&j.encontrados_fora_da_aba)$('countInfo').textContent='SS localizada no uMov, mas não pertence à aba '+currentScreen+'.';else if(direta&&j.aviso)$('countInfo').textContent=j.aviso;
   }catch(e){if(e.name!=='AbortError'&&numero===numeroConsultaLista)$('countInfo').textContent='Erro: '+e.message}

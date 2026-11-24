@@ -1548,6 +1548,16 @@ async function consultarPendenciasOficiais(stmt){
 }
 
 app.get('/api/pesquisa-global',async(req,res)=>{
+ if(String(req.query.tela)==='baixar'){
+  res.set('Cache-Control','private, no-store');
+  res.set('X-CGM-Version','UMOV-OFICIAL-V12');
+  return require('./cp-pesquisa-v6').handler(req,res,{
+   pool,
+   hostRelatorioUmov,
+   officialQuery:consultarPendenciasOficiais,
+   scope:cacheScope()
+  });
+ }
  if(process.env.CP_PESQUISA_V6 !== 'false') return require('./cp-pesquisa-v6').handler(req,res,{pool,hostRelatorioUmov,officialQuery:consultarPendenciasOficiais,scope:cacheScope()});
  if(process.env.CP_PESQUISA_V4 !== 'false') return require('./cp-pesquisa-v4').handler(req,res,{pool,extrasLocal,extrasTask,campo,hostRelatorioUmov});
  try{

@@ -53,7 +53,7 @@ function statement(params, ids, countOnly=false){
    if(tela==='baixar'&&dataInicial>dataFinal)throw Object.assign(new Error('Data Inicio maior que Data Fim.'),{status:400});
    base.push(`${col} >= ${add(dataInicial)}::date`,`${col} < (${add(dataFinal)}::date + INTERVAL '1 day')`);
  }
- const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo' AND t.tsk_lastexecutiondatehour IS NOT NULL"};
+ const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"TRUE"};
  if(conditions[tela])base.push(conditions[tela]);
  const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
  if(filters.ss)like('l.loc_integrationid',filters.ss);
@@ -94,6 +94,9 @@ function statement(params, ids, countOnly=false){
  // Filtros são avaliados antes da paginação. Inclui uma linha a mais para hasMore.
  const limitParam=add(limit+1), offsetParam=add(offset);
  const sort=tela==='recepcao'?'p.tsk_insertdatehour':'p.tsk_lastexecutiondatehour';
+  const baseWhere=tela==='baixar'
+   ?base.filter(x=>!/^t\.tsk_lastexecutiondatehour\s*[<>]/.test(x))
+   :base;
   const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
      t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
      t.tsk_situation,
@@ -102,7 +105,7 @@ function statement(params, ids, countOnly=false){
     FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
     ${filters.equipe_executou||equipe?'LEFT JOIN u45468.agent a ON a.age_id=t.age_id':''}
     ${filters.servico||macro.length?'LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id':''}
-    ${base.length?'WHERE '+base.join(' AND '):''}`;
+    ${baseWhere.length?'WHERE '+baseWhere.join(' AND '):''}`;
   // Filtra/classifica antes do LIMIT, mas enriquece apenas a pagina.
   // A base pode ser integrada ao plano: nao materializar todas as tarefas.
   // CGM_PENDENCIAS_OFICIAIS:
@@ -115,24 +118,18 @@ function statement(params, ids, countOnly=false){
     .filter(x=>/^t\.tsk_lastexecutiondatehour\s*[<>]/.test(x))
     .map(x=>x.replaceAll('t.tsk_lastexecutiondatehour',
      'd.tsk_lastexecutiondatehour'));
-   const cte=`WITH b AS MATERIALIZED (
+   const cte=`WITH b AS NOT MATERIALIZED (
      ${baseSql}
     ), oficiais AS MATERIALIZED (
      SELECT d.tsk_id,
       MAX(d.tsk_lastexecutiondatehour) AS data_oficial,
       MAX(COALESCE(d.e_tag::text,'')) AS tags
      FROM u45468.dbout_task d
-     WHERE d.tsk_id=ANY(ARRAY(
-      SELECT DISTINCT tsk_id FROM b
-     )::bigint[])
+     INNER JOIN b ON b.tsk_id=d.tsk_id
+     WHERE LOWER(TRIM(d.tsk_situation))='retornada de campo'
+       AND COALESCE(TRIM(d.e_situacao),'')=''
+       ${datasOficiais.length?'AND '+datasOficiais.join(' AND '):''}
      GROUP BY d.tsk_id
-     HAVING BOOL_AND(
-      LOWER(TRIM(COALESCE(d.tsk_situation,'')))
-       ='retornada de campo'
-      AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL
-      AND d.tsk_lastexecutiondatehour IS NOT NULL
-      ${datasOficiais.length?'AND '+datasOficiais.join(' AND '):''}
-     )
     ), pendentes AS MATERIALIZED (
      SELECT b.tsk_id,b.ss,o.data_oficial,o.tags
      FROM b JOIN oficiais o ON o.tsk_id=b.tsk_id
@@ -146,7 +143,7 @@ function statement(params, ids, countOnly=false){
     ?cte+' SELECT * FROM totais'
     :cte+`, pagina AS MATERIALIZED (
       SELECT * FROM pendentes
-      ORDER BY data_oficial DESC,tsk_id DESC
+      ORDER BY data_oficial DESC NULLS LAST,tsk_id DESC
       LIMIT ${limitParam} OFFSET ${offsetParam}
      )
      SELECT
@@ -305,7 +302,7 @@ async function handler(req,res,{pool,hostRelatorioUmov,officialQuery,scope='prin
     ?params.offset+page.length<total
     :q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
-   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
+   tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:oficial?'UMOV-OFICIAL-V12':'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
   if(perf.getGeneration()===version)C.set(key,{ts:Date.now(),data});
   return {data,msBanco,msDetalhes:Date.now()-t1};
   });
