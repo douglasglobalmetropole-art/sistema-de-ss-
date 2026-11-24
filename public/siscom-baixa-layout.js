@@ -59,7 +59,7 @@
   const anexoHead=node('div','sbV3SectionHead','Anexos da SS');
   const anexoDesc=node('p','sbV3Note','O relatório original do uMov pode ser anexado ao SISCOM. Consulte a aba Anexos oficial antes de repetir um envio.');
   const anexoToolbar=node('div','sbV3Toolbar sbV4AnexoToolbar');
-  const anexoBtn=node('button','btn primary','▣  Anexar relatório no SISCOM');anexoBtn.type='button';anexoBtn.disabled=false;
+  const anexoBtn=node('button','btn primary','▣  Anexar relatório no SISCOM');anexoBtn.type='button';anexoBtn.disabled=true;
   anexoBtn.addEventListener('click',()=>{if(!anexoBtn.disabled){const btn=id('sbAnexarSiscom');if(btn)btn.click();}});
   const anexoRefresh=node('button','btn','↻  Atualizar anexos do SISCOM');anexoRefresh.type='button';
   anexoToolbar.append(anexoBtn,anexoRefresh);
@@ -83,31 +83,38 @@
    for(const panel of [columns,complement,material,anexos]){panel.hidden=panel.dataset.sbpanel!==key;}
    if(key==='complementar')root.dispatchEvent(new CustomEvent('siscom:complementar-open'));
    if(key==='materiais'){loadMaterials().then(()=>suggestUmov()).catch(e=>{reviewLoaded=false;reviewConfirm.checked=false;matMessage(e.message,true);reviewMsg('Consulta falhou; tente novamente antes de conferir.',true);});}
-   if(key==='anexos')modoManualAnexos();
+   if(key==='anexos')abrirAnexos();
   };
   nav.addEventListener('click',e=>{const btn=e.target.closest('[data-sbtab]');if(btn)activate(btn.dataset.sbtab);});
   const openOriginal=window.openSiscomBaixa;
-  if(typeof openOriginal==='function')window.openSiscomBaixa=function(...args){anexoConsultaId++;anexoConsultadoSS='';anexoBtn.disabled=false;anexoList.replaceChildren();anexoInfo.textContent='Abra a aba Anexos para anexar; consulta automática suspensa.';activate('baixa');return openOriginal.apply(this,args);};
+  if(typeof openOriginal==='function')window.openSiscomBaixa=function(...args){anexoConsultaId++;anexoConsultadoSS='';anexoOcupado=false;anexoRefresh.disabled=false;anexoBtn.disabled=true;anexoList.replaceChildren();anexoInfo.className='sbV4AnexoInfo';anexoInfo.textContent='Abra a aba Anexos para consultar os documentos oficiais.';activate('baixa');return openOriginal.apply(this,args);};
   activate('baixa');
   const apiPrefix=location.pathname.startsWith('/lote1')?'/lote1/api':'/api';
   // Leitura oficial dos anexos da SS (Dados), usando o worker VPN e a sessão SISCOM individual.
   // Reutiliza a operação tram_anexos com origem=dados: nenhuma mudança no CHECK da fila Supabase.
   let anexoConsultaId=0,anexoConsultadoSS='',anexoOcupado=false,anexoUltimaConsulta=0,anexoResultadoIncertoSS='';
   const anexoSS=()=>{const campo=String(id('sbSS')?.value||'').trim();const resumo=String(id('sbResumoSS')?.textContent||'').trim();return /^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(campo)?campo:resumo;};
-  // GLOBAL_SS_ANEXOS_MANUAL_V9 — consulta automatica suspensa temporariamente.
-  function modoManualAnexos(){
-   anexoConsultaId++;
+  // CGM_ANEXOS_OFICIAIS_V11: leitura sob demanda, sem polling ocioso.
+  const anexoBloqueadas=new Set();
+  let anexoEnviandoSS='';
+  function abrirAnexos(){
    const ss=anexoSS();
-   anexoRefresh.disabled=true;
-   anexoRefresh.title='Consulta oficial temporariamente indisponível';
-   anexoRefresh.textContent='↻  Atualizar anexos (temporariamente indisponível)';
-   anexoBtn.disabled=!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss);
-   anexoList.replaceChildren();
-   anexoInfo.className='sbV4AnexoInfo warning';
-   anexoInfo.textContent=anexoBtn.disabled?'Aguardando identificação da SS para anexar.':'Consulta automática de anexos suspensa. Antes de enviar, confira manualmente a aba Anexos da SS '+ss+' no SISCOM para evitar duplicidade. O envio continua exigindo confirmação.';
-   if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consulta automática suspensa; envio manual disponível para SS válida.';
+   if(anexoOcupado)return;
+   if(anexoConsultadoSS===ss&&Date.now()-anexoUltimaConsulta<30000)return;
+   consultarAnexos();
   }
-  const anexoErro=mensagem=>{anexoBtn.disabled=false;anexoInfo.className='sbV4AnexoInfo error';anexoInfo.textContent='Consulta oficial não confirmada: '+mensagem+' Não reenvie sem verificar os anexos no SISCOM.';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consulta de anexos não confirmada para '+anexoSS()+'.';};
+  const anexoErro=mensagem=>{anexoBtn.disabled=true;anexoInfo.className='sbV4AnexoInfo error';anexoInfo.textContent='Nao foi possivel confirmar os anexos: '+mensagem+' Use Atualizar anexos para tentar novamente.';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Envio bloqueado ate confirmar a lista oficial.';};
+
+  function validarPaginaAnexos(result){
+   if(!result||!Array.isArray(result.content)||!Number.isSafeInteger(Number(result.totalElements))||result.totalElements==null||String(result.totalElements).trim()===''||Number(result.totalElements)<result.content.length)throw Error('Formato da lista oficial nao confirmado.');
+   if(result.content.some(a=>!a||typeof a!=='object'||Array.isArray(a)||!String(a.nomeArquivo||'').trim()))throw Error('Metadados incompletos na lista oficial.');
+   return {items:result.content,total:Number(result.totalElements)};
+  }
+  function relatorioOriginal(a,ss){
+   const norm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+   const n=norm(a.nomeArquivo),d=norm(a.descricao),stem='relatorio_original_ss_'+ss.replace(/[^a-zA-Z0-9_-]/g,'_').toLowerCase();
+   return n.includes(stem)||(d.includes('relatorio original')&&(d.includes('umov')||d.includes(ss.toLowerCase())));
+  }
   const anexoCelula=(tr,valor)=>{const td=node('td');td.textContent=String(valor??'—');tr.append(td);};
   const anexoData=valor=>{if(!valor)return '—';const d=new Date(valor);return Number.isNaN(d.getTime())?String(valor).slice(0,24):d.toLocaleString('pt-BR');};
   const anexoTabela=(items,total)=>{
@@ -124,44 +131,63 @@
    if(total>items.length)anexoList.append(node('p','sbV4AnexoMore','Exibindo '+items.length+' de '+total+' anexos. Consulte o SISCOM para visualizar os demais.'));
   };
   async function consultarAnexos(){
+   if(anexoOcupado)return;
    const ss=anexoSS(),token=++anexoConsultaId;
-   anexoConsultadoSS='';anexoBtn.disabled=false;
-   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){anexoInfo.textContent='Selecione uma SS válida antes de consultar anexos.';anexoList.replaceChildren();return;}
-   anexoInfo.className='sbV4AnexoInfo';anexoInfo.textContent='Consultando anexos da SS '+ss+' no SISCOM...';if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent='Consultando anexos da SS '+ss+'...';anexoRefresh.disabled=true;
+   anexoConsultadoSS='';anexoBtn.disabled=true;anexoList.replaceChildren();
+   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)){anexoErro('Selecione uma SS valida.');return;}
+   anexoOcupado=true;anexoRefresh.disabled=true;
+   anexoInfo.className='sbV4AnexoInfo';anexoInfo.textContent='Consultando anexos da SS '+ss+' no SISCOM...';
+   const atual=()=>token===anexoConsultaId&&ss===anexoSS();
    try{
-    const start=await fetch(apiPrefix+'/siscom-gateway/tramitacao',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:'tram_anexos',params:{ss,origem:'dados',page:0}}),cache:'no-store'});
-    const startData=await start.json().catch(()=>({}));if(!start.ok||!startData.id)throw Error(startData.error||'Falha ao iniciar consulta (HTTP '+start.status+')');
-    let result=null;
-    for(let i=0;i<45;i++){
-     if(token!==anexoConsultaId||ss!==anexoSS())return;
-     await new Promise(resolve=>setTimeout(resolve,1200));
-     const qr=await fetch(apiPrefix+'/siscom-gateway/jobs/'+encodeURIComponent(startData.id),{credentials:'same-origin',cache:'no-store'});
-     const q=await qr.json().catch(()=>({}));if(!qr.ok)throw Error(q.error||'Falha ao consultar worker');
-     if(q.status==='erro')throw Error(q.error_message||'Consulta recusada pelo SISCOM');
-     if(q.status==='concluido'){result=q.result;break;}
+    let items=[],total=null;const limite=Date.now()+90000;
+    for(let page=0;page<8;page++){
+     if(!atual())return;
+     const start=await fetch(apiPrefix+'/siscom-gateway/tramitacao',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({operation:'tram_anexos',params:{ss,origem:'dados',page}}),cache:'no-store',signal:AbortSignal.timeout(15000)});
+     const sj=await start.json().catch(()=>({}));if(!start.ok||!sj.id)throw Error(sj.error||'Falha ao iniciar consulta (HTTP '+start.status+')');
+     let result=null;
+     while(Date.now()<limite){
+      if(!atual())return;
+      const qr=await fetch(apiPrefix+'/siscom-gateway/jobs/'+encodeURIComponent(sj.id),{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(20000)});
+      const q=await qr.json().catch(()=>({}));if(!qr.ok)throw Error(q.error||'Falha ao consultar worker');
+      if(q.status==='erro')throw Error(q.error_message||'Consulta recusada pelo SISCOM');
+      if(q.status==='concluido'){result=q.result;break;}
+      await new Promise(resolve=>setTimeout(resolve,600));
+     }
+     if(!atual())return;
+     if(!result)throw Error('Tempo excedido na consulta oficial');
+     const p=validarPaginaAnexos(result);
+     if(total!==null&&p.total!==total)throw Error('A lista foi alterada durante a consulta. Atualize novamente.');
+     total=p.total;
+     if(page>0&&p.items.some(a=>a.id!=null&&items.some(b=>b.id!=null&&String(a.id)===String(b.id))))throw Error('Paginacao oficial retornou registros repetidos.');
+     items.push(...p.items);
+     if(items.length===total)break;
+     if(!p.items.length||items.length>total)throw Error('Lista oficial incompleta.');
     }
-    if(!result)throw Error('Tempo excedido ao consultar os anexos');
-    if(token!==anexoConsultaId||ss!==anexoSS())return;
-    if(!Array.isArray(result)&&!Array.isArray(result?.content)&&!Array.isArray(result?.data))throw Error('Formato da lista oficial de anexos não reconhecido');
-    const items=Array.isArray(result)?result:Array.isArray(result.content)?result.content:result.data;
-    const total=Number(result.totalElements??items.length);
-    const jaTemOriginal=items.some(a=>{const d=String(a.descricao||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();const n=String(a.nomeArquivo||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();return (d.includes('relatorio original')&&(d.includes('umov')||d.includes('ss '))&&d.includes(ss.toLowerCase()))||n.includes('relatorio_original_ss_'+ss.replace(/[^a-zA-Z0-9_-]/g,'_').toLowerCase());});
-    anexoConsultadoSS=ss;anexoUltimaConsulta=Date.now();anexoTabela(items,Number.isFinite(total)?total:items.length);
-    anexoInfo.className='sbV4AnexoInfo '+(jaTemOriginal?'warning':'ok');
-    anexoInfo.textContent=items.length+' anexo(s) localizado(s) no SISCOM para '+ss+(jaTemOriginal?'. Já existe um relatório original do uMov para esta SS. Não envie novamente.':total>items.length?'. Existem mais anexos do que os exibidos. Confira a lista completa no SISCOM antes de enviar.':'. Consulta oficial concluída; confira a lista antes de anexar.');
-    anexoBtn.disabled=jaTemOriginal||total>items.length||anexoResultadoIncertoSS===ss;
-    if(anexoResultadoIncertoSS===ss){anexoInfo.className='sbV4AnexoInfo warning';anexoInfo.textContent+=' Houve envio com resultado incerto: não reenvie sem conferência manual no SISCOM.';}
-    if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent=jaTemOriginal?'Relatório original já identificado no SISCOM. Evite duplicidade.':'Anexos consultados no SISCOM: '+items.length+'.';
-   }catch(e){if(token===anexoConsultaId&&ss===anexoSS())anexoErro(e.message);}
-   finally{if(token===anexoConsultaId)anexoRefresh.disabled=false;}
+    if(!atual())return;
+    anexoTabela(items,total);
+    const original=items.some(a=>relatorioOriginal(a,ss));
+    const completa=items.length===total;
+    anexoConsultadoSS=ss;anexoUltimaConsulta=Date.now();
+    anexoBtn.disabled=!completa||original||anexoBloqueadas.has(ss)||anexoEnviandoSS===ss;
+    anexoInfo.className='sbV4AnexoInfo '+(anexoBtn.disabled?'warning':'ok');
+    anexoInfo.textContent=total+' anexo(s) no SISCOM. '+(original?'Relatorio original ja localizado; novo envio bloqueado.':!completa?'Lista parcial; envio bloqueado.':anexoBloqueadas.has(ss)?'Resultado anterior incerto; confira no SISCOM antes de qualquer reenvio.':'Consulta oficial concluida.');
+    if(id('sbAnexoStatus'))id('sbAnexoStatus').textContent=anexoInfo.textContent;
+   }catch(e){if(atual())anexoErro(e.message);}
+   finally{if(token===anexoConsultaId){anexoOcupado=false;anexoRefresh.disabled=false;}}
   }
-  anexoRefresh.addEventListener('click',()=>modoManualAnexos());
-  // Ao concluir um envio, consultar novamente o SISCOM para confirmar a presença real do arquivo.
+  anexoRefresh.addEventListener('click',consultarAnexos);
+  // Protege tambem o botao original do rodape, sem alterar permissoes de escrita.
+  if(anexoFooter)anexoFooter.addEventListener('click',e=>{
+   if(anexoBtn.disabled||anexoConsultadoSS!==anexoSS()||Date.now()-anexoUltimaConsulta>=30000){e.preventDefault();e.stopImmediatePropagation();activate('anexos');}
+  },true);
   const andamento=id('anexoAndamento');
   if(andamento){let ultimo='';new MutationObserver(()=>{
    const texto=andamento.textContent.trim();if(texto===ultimo)return;ultimo=texto;
-   if(/SISCOM:\s*(?:CONFIRMADO|JA_EXISTE|INCERTO)/i.test(texto)||/Resultado incerto|Anexo não confirmado|NÃO reenvie|Não reenvie/i.test(texto)){
-    const ss=anexoSS();if(ss&&ss===anexoConsultadoSS){if(/INCERTO|Resultado incerto|Anexo não confirmado|NÃO reenvie|Não reenvie/i.test(texto))anexoResultadoIncertoSS=ss;anexoBtn.disabled=false;consultarAnexos();}
+   const ss=anexoSS();if(!ss||ss!==anexoConsultadoSS)return;
+   if(/Gerando PDF|Aguardando confirma/i.test(texto)){anexoEnviandoSS=ss;anexoBtn.disabled=true;return;}
+   if(/SISCOM:\s*(?:CONFIRMADO|JA_EXISTE|INCERTO)/i.test(texto)||/Resultado incerto|Envio sem confirm|Anexo n.o confirmado|N.O reenvie/i.test(texto)){
+    if(!/SISCOM:\s*(?:CONFIRMADO|JA_EXISTE)/i.test(texto))anexoBloqueadas.add(ss);
+    anexoEnviandoSS='';anexoBtn.disabled=true;consultarAnexos();
    }
   }).observe(andamento,{childList:true,characterData:true,subtree:true});}
   // Conferencia apenas local: nao altera quantidades ja gravadas na API.
