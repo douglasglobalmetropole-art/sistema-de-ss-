@@ -2460,41 +2460,150 @@ load();
  const compStatus=(t,estado='info')=>{
   const el=$('sbCompStatus');el.textContent=t;el.dataset.estado=estado;
  };
+
  async function compConsultar(force=false){
+
   const g=generation,ss=current;
-  if(!ss||(!force&&(compConsultadaSS===ss||compConsultaEmAndamentoSS===ss)))return;
+
+  if(!ss||compConsultaEmAndamentoSS===ss)return;
+  if(!force&&compConsultadaSS===ss)return;
+
   compConsultaEmAndamentoSS=ss;
-  compStatus('Consultando áreas e complementares no SISCOM...');
+  compConsultadaSS='';
+  compAreas=[];
+  compServicos=[];
+  compExistentes=[];
+
+  $('sbCompLista').replaceChildren();
+
+  options('sbCompArea',[],
+   'Carregando areas...',x=>x.codAraeExecutora,
+   x=>x.descricaoAreaExecutora);
+
+  options('sbCompServico',[],
+   'Selecione uma area',x=>x.cdServico,x=>x.dcServico);
+
+  compStatus('Consultando areas e complementares...','running');
+
+  let erroAreas='';
+  let erroLista='';
+
+  const vigente=()=>g===generation&&ss===current;
+
+  const areas=job('complementar-areas',{numero_ss:ss},g)
+   .then(a=>{
+
+    if(!vigente())return;
+
+    const dados=unwrap(a);
+
+    if(!dados.length)
+     throw Error('Nenhuma area retornada');
+
+    compAreas=dados;
+
+    options('sbCompArea',compAreas,
+     'Selecione a area',
+     x=>x.codAraeExecutora,
+     x=>x.codAraeExecutora+' - '+(x.descricaoAreaExecutora||''));
+
+   }).catch(e=>{
+
+    erroAreas=e.message;
+
+    if(vigente()){
+     compAreas=[];
+     options('sbCompArea',[],
+      'Falha ao consultar areas',
+      x=>x.codAraeExecutora,x=>x.descricaoAreaExecutora);
+    }
+
+   });
+
+  const lista=job('complementar-consultar',{numero_ss:ss},g)
+   .then(c=>{
+
+    if(!vigente())return;
+
+    if(!Array.isArray(c))
+     throw Error('Lista oficial invalida');
+
+    compExistentes=c;
+    compRender(c);
+
+   }).catch(e=>{
+
+    erroLista=e.message;
+
+    if(vigente()){
+     $('sbCompLista').textContent=
+      'Complementares existentes: consulta indisponivel. '+
+      erroLista;
+    }
+
+   });
+
   try{
-   const [a,c]=await Promise.all([job('complementar-areas',{numero_ss:ss},g),job('complementar-consultar',{numero_ss:ss},g)]);
-   if(g!==generation||ss!==current)return;
-   compAreas=unwrap(a);if(!Array.isArray(c))throw Error('Lista oficial invalida');compExistentes=c;compRender(c);
-   options('sbCompArea',compAreas,'Selecione a área',x=>x.codAraeExecutora,x=>x.codAraeExecutora+' — '+(x.descricaoAreaExecutora||''));
-   options('sbCompServico',[],'Selecione uma área',x=>x.cdServico,x=>x.dcServico);
+
+   await Promise.all([areas,lista]);
+
+   if(!vigente())return;
+
+   if(erroAreas||erroLista){
+
+    compStatus(
+     'Areas carregadas: '+compAreas.length+
+     ' | '+(erroAreas?'Erro nas areas: '+erroAreas+' | ':'')+
+     (erroLista?'Historico indisponivel: '+erroLista+
+      '. Criacao bloqueada ate confirmacao oficial.':''),
+     'warning'
+    );
+
+    return;
+   }
+
    compConsultadaSS=ss;
 
    if(compEnvioIncertoSS===ss){
-    const m=compMatches(compExistentes,compPendencias.get(ss));
 
-    if(m.length===1&&m[0].id!=null&&typeof m[0].id!=='object'){
+    const m=compMatches(
+     compExistentes,compPendencias.get(ss)
+    );
+
+    if(m.length===1&&m[0].id!=null&&
+       typeof m[0].id!=='object'){
+
      compPendencias.delete(ss);
      compEnvioIncertoSS='';
+
      compStatus(
       'COMPLEMENTAR LOCALIZADA. Registro: '+m[0].id,
       'success'
      );
+
     }else{
+
      compStatus(
-      'Aguardando confirmacao. Confira a lista. Nao reenvie.',
+      'Aguardando confirmacao. Nao reenvie.',
       'warning'
      );
     }
 
    }else{
-    compStatus('Áreas: '+compAreas.length+' | Complementares existentes: '+compExistentes.length+'.','info');
+
+    compStatus(
+     'Areas: '+compAreas.length+
+     ' | Complementares existentes: '+compExistentes.length,
+     'info'
+    );
    }
-  }catch(e){if(g===generation&&ss===current)compStatus('Falha na consulta: '+e.message);}
-  finally{if(compConsultaEmAndamentoSS===ss)compConsultaEmAndamentoSS='';}
+
+  }finally{
+
+   if(vigente()&&compConsultaEmAndamentoSS===ss)
+    compConsultaEmAndamentoSS='';
+
+  }
  }
  $('sbCompArea').onchange=async()=>{
   const g=generation,area=$('sbCompArea').value;
@@ -2503,13 +2612,27 @@ load();
   try{compServicos=unwrap(await job('complementar-servicos',{numero_ss:current,area:Number(area)},g));
    if(g!==generation)return;
    options('sbCompServico',compServicos,'Selecione o serviço macro',x=>x.cdServico,x=>x.cdServico+' — '+(x.dcServico||''));
-   compStatus(compServicos.length+' serviços disponíveis na área selecionada.');
+
+   compStatus(
+    compServicos.length+' servicos disponiveis.'+
+    (compConsultadaSS!==current?
+     ' Historico ainda nao confirmado. Criacao bloqueada.':''),
+    compConsultadaSS===current?'info':'warning'
+   );
+
   }catch(e){if(g===generation)compStatus('Falha ao consultar serviços: '+e.message);}
  };
  $('sbCompAtualizar').onclick=()=>compConsultar(true);
  $('siscomBaixaModal').addEventListener('siscom:complementar-open',()=>{void compConsultar(false);});
  $('sbCompCriar').onclick=async()=>{
   const ss=current,area=Number($('sbCompArea').value),macro=Number($('sbCompServico').value),descricao=$('sbCompDescricao').value.trim();
+
+  if(!ss||compConsultadaSS!==ss){
+   return compStatus(
+    'Consulte o historico oficial antes de criar a complementar.',
+    'warning'
+   );
+  }
   if(!compAreas.some(x=>Number(x.codAraeExecutora)===area)||!compServicos.some(x=>Number(x.cdServico)===macro)||!descricao)
    return compStatus('Preencha área, serviço macro e descrição antes de continuar.','warning');
   if(compEnvioIncertoSS===ss){
