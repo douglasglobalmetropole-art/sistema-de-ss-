@@ -1345,6 +1345,20 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 
 
 <style id="CGM_SISCOM_FEEDBACK_V2">
+#sbCompStatus:empty,
+#sbCompLista:empty{
+ display:none!important;
+}
+#sbCompStatus[data-estado="neutral"]{
+ background:#f0f5fa!important;
+ border-color:#d3e1ed!important;
+ color:#42627e!important;
+ font-weight:400!important;
+}
+#sbCompCriar:disabled{
+ opacity:.55;
+ cursor:not-allowed;
+}
 #sbCompStatus[data-estado] { display:block!important; padding:12px 14px; border-radius:7px; font-size:12px; line-height:1.6; white-space:pre-wrap; border:1px solid #d2e4f4; background:#f0f7fd; color:#194b73; }
 #sbCompStatus[data-estado="running"]{background:#eaf2ff;border-color:#a9c7e9;color:#175892;font-weight:600}
 #sbCompStatus[data-estado="success"]{background:#e2f5e9;border-color:#86cf9f;color:#12623c;font-weight:700}
@@ -2363,7 +2377,7 @@ load();
   options('sbCausa',[],'Selecione o serviço executado',c=>c.id,c=>c.descricao);
   $('sbCausaBox').hidden=true;$('sbInicio').value=x.inicio_atividade||'';
   $('sbFim').value=x.fim_atividade||x.data_finalizacao||'';$('sbDescricao').value=x.servico_executado||'';$('sbObservacoes').value='';sbAtualizarDuracao();
-  compAreas=[];compServicos=[];compExistentes=[];compConsultadaSS='';compConsultaEmAndamentoSS='';compEnvioIncertoSS=compPendencias.has(current)?current:'';$('sbCompLista').replaceChildren();$('sbCompDescricao').value='';compStatus('Abra a aba Complementar para consultar áreas e SS complementares.');historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
+  compAreas=[];compServicos=[];compExistentes=[];compConsultadaSS='';compConsultaEmAndamentoSS='';compEnvioIncertoSS=compPendencias.has(current)?current:'';$('sbCompLista').replaceChildren();$('sbCompDescricao').value='';compStatus('');$('sbCompCriar').disabled=true;historicoStatus('Aguardando consulta...');$('sbHistoricoLista').replaceChildren();
   status('Consultando SISCOM automaticamente...');
   $('siscomBaixaModal').classList.add('open');loadAll();
  };
@@ -2458,7 +2472,9 @@ load();
  }
 
  const compStatus=(t,estado='info')=>{
-  const el=$('sbCompStatus');el.textContent=t;el.dataset.estado=estado;
+  const el=$('sbCompStatus');
+   el.textContent=t;
+   el.dataset.estado=estado;
  };
 
  async function compConsultar(force=false){
@@ -2470,6 +2486,7 @@ load();
 
   compConsultaEmAndamentoSS=ss;
   compConsultadaSS='';
+  $('sbCompCriar').disabled=true;
   compAreas=[];
   compServicos=[];
   compExistentes=[];
@@ -2536,9 +2553,8 @@ load();
     erroLista=e.message;
 
     if(vigente()){
-     $('sbCompLista').textContent=
-      'Complementares existentes: consulta indisponivel. '+
-      erroLista;
+     console.warn('[CGM Complementar] Historico:',erroLista);
+     $('sbCompLista').replaceChildren();
     }
 
    });
@@ -2551,12 +2567,15 @@ load();
 
    if(erroAreas||erroLista){
 
+    console.warn('[CGM Complementar]',{
+     areas:erroAreas,
+     historico:erroLista
+    });
+
     compStatus(
-     'Areas carregadas: '+compAreas.length+
-     ' | '+(erroAreas?'Erro nas areas: '+erroAreas+' | ':'')+
-     (erroLista?'Historico indisponivel: '+erroLista+
-      '. Criacao bloqueada ate confirmacao oficial.':''),
-     'warning'
+     erroAreas?'Atualize as areas de servico.':
+     'Geracao temporariamente indisponivel.',
+     'neutral'
     );
 
     return;
@@ -2600,8 +2619,11 @@ load();
 
   }finally{
 
-   if(vigente()&&compConsultaEmAndamentoSS===ss)
+   if(vigente()&&compConsultaEmAndamentoSS===ss){
     compConsultaEmAndamentoSS='';
+    $('sbCompCriar').disabled=
+     compConsultadaSS!==ss||compPendencias.has(ss);
+   }
 
   }
  }
@@ -2614,10 +2636,9 @@ load();
    options('sbCompServico',compServicos,'Selecione o serviço macro',x=>x.cdServico,x=>x.cdServico+' — '+(x.dcServico||''));
 
    compStatus(
-    compServicos.length+' servicos disponiveis.'+
-    (compConsultadaSS!==current?
-     ' Historico ainda nao confirmado. Criacao bloqueada.':''),
-    compConsultadaSS===current?'info':'warning'
+    compConsultadaSS===current?'':
+     'Geracao temporariamente indisponivel.',
+    'neutral'
    );
 
   }catch(e){if(g===generation)compStatus('Falha ao consultar serviços: '+e.message);}
@@ -2665,7 +2686,12 @@ load();
    compEnvioIncertoSS=ss;
    const texto='CRIAÇÃO SEM CONFIRMAÇÃO: '+String(e.message||e)+'. O envio pode ter sido processado. NÃO REENVIE sem conferir o histórico SISCOM.';
    compStatus(texto,'warning');try{await compReconsultar(ss,g);}catch(e){}
-  }finally{btn.disabled=false;}
+  }finally{
+   if(g===generation&&ss===current){
+    btn.disabled=
+     compConsultadaSS!==ss||compPendencias.has(ss);
+   }
+  }
  };
  // A janela abre mesmo sem habilitação: nunca iniciar o POST antes de confirmação explícita.
  let anexoAtual=null,anexoEmEnvio=false;
