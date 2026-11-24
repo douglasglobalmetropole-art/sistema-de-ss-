@@ -3949,22 +3949,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
  document.querySelectorAll('.tab[data-screen]').forEach(tab=>tab.addEventListener('click',()=>{activeRequest++;panel.hidden=true;checkedSS=''}));
 })();
 </script>
-<script id="globalSSReceptionRowSelectionFix">
-(function(){
- const rows=document.getElementById('rows');
- if(!rows)return;
- rows.addEventListener('click',function(e){
-   if(typeof currentScreen==='undefined'||currentScreen!=='recepcao')return;
-   if(e.target.closest('input,button,a,label'))return;
-   const tr=e.target.closest('tr');if(!tr)return;
-   const index=Array.prototype.indexOf.call(rows.children,tr);
-   if(index<0||!Array.isArray(view)||!view[index])return;
-   const ss=view[index];
-   window.__detailSS=ss;
-   if(typeof fill==='function')fill(ss);
- });
-})();
-</script>
+
 <link rel="stylesheet" href="/siscom-baixa-layout.css?v=20261116-umov-layout-v1">
 <script src="/siscom-baixa-layout.js?v=cgm-anexos-oficiais-v11-20261124" defer></script>
 <!-- GLOBAL_SS_RELATORIO_AGRUPADO_V10_SCRIPT -->
@@ -4329,4 +4314,5 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 })();
 </script>
 <script defer src="/umov-manual-cgm-v1.js?v=manual-20261123-v1"></script>
+<script src="/cgm-layout-responsivo-v1.js?v=20261124-v1" defer></script>
 </body></html>
