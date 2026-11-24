@@ -688,12 +688,42 @@ if(materiaisDivisao && rota!=='/api/materiais'){
 
    // Todas as abas das divisoes, inclusive Recepcao, usam a pesquisa V6.
    // A rota antiga podia devolver pagina incompleta ou cidade divergente.
-   if(rota==='/api/recepcao'){
+
+
+   const abaSolicitada=u.searchParams.get('tela');
+
+   const filtroColunaBaixar=[
+    'ss','logradouro','bairro','cidade',
+    'setor','servico','tags',
+    'equipe_executou','data_finalizacao'
+   ].some(k=>String(
+    u.searchParams.get(k)||''
+   ).trim());
+
+   if(rota==='/api/recepcao-total-baixar'){
+    req.query.municipios=cidades.join('\u001f');
+   }
+
+   if(
+    rota==='/api/recepcao'&&
+    abaSolicitada==='baixar'&&
+    !filtroColunaBaixar
+   ){
+
+    req.query.municipios=cidades.join('\u001f');
+
+    res.set(
+     'X-SS-Consulta',
+     'pendencias-oficiais-original'
+    );
+
+   }else if(rota==='/api/recepcao'){
     if(process.env.CP_PESQUISA_V6==='false'){
+
      return res.status(503).json({ok:false,error:'Pesquisa V6 necessaria para consultar a divisao.'});
     }
     u.pathname='/api/pesquisa-global';
-    u.searchParams.set('tela','recepcao');
+    u.searchParams.set('tela',abaSolicitada==='baixar'?'baixar':'recepcao');
     u.searchParams.delete('cidade');
     res.set('X-SS-Consulta','v6-recepcao');
    }
