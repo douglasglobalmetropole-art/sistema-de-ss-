@@ -105,6 +105,81 @@ function statement(params, ids, countOnly=false){
     ${base.length?'WHERE '+base.join(' AND '):''}`;
   // Filtra/classifica antes do LIMIT, mas enriquece apenas a pagina.
   // A base pode ser integrada ao plano: nao materializar todas as tarefas.
+  // CGM_PENDENCIAS_OFICIAIS:
+  if(tela==='baixar'){
+   const filtrosOficiais=final
+    .filter(x=>!x.includes('p.status_integracao'))
+    .map(x=>x.replaceAll('p.tags','o.tags')
+     .replaceAll('p.setor',setor));
+   const datasOficiais=base
+    .filter(x=>/^t\.tsk_lastexecutiondatehour\s*[<>]/.test(x))
+    .map(x=>x.replaceAll('t.tsk_lastexecutiondatehour',
+     'd.tsk_lastexecutiondatehour'));
+   const cte=`WITH b AS MATERIALIZED (
+     ${baseSql}
+    ), oficiais AS MATERIALIZED (
+     SELECT d.tsk_id,
+      MAX(d.tsk_lastexecutiondatehour) AS data_oficial,
+      MAX(COALESCE(d.e_tag::text,'')) AS tags
+     FROM u45468.dbout_task d
+     WHERE d.tsk_id=ANY(ARRAY(
+      SELECT DISTINCT tsk_id FROM b
+     )::bigint[])
+     GROUP BY d.tsk_id
+     HAVING BOOL_AND(
+      LOWER(TRIM(COALESCE(d.tsk_situation,'')))
+       ='retornada de campo'
+      AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL
+      AND d.tsk_lastexecutiondatehour IS NOT NULL
+      ${datasOficiais.length?'AND '+datasOficiais.join(' AND '):''}
+     )
+    ), pendentes AS MATERIALIZED (
+     SELECT b.tsk_id,b.ss,o.data_oficial,o.tags
+     FROM b JOIN oficiais o ON o.tsk_id=b.tsk_id
+     ${filtrosOficiais.length?'WHERE '+filtrosOficiais.join(' AND '):''}
+    ), totais AS (
+     SELECT COUNT(*)::bigint AS total,
+      COUNT(DISTINCT NULLIF(TRIM(ss),''))::bigint AS ss_unicas
+     FROM pendentes
+    )`;
+   const sqlOficial=countOnly
+    ?cte+' SELECT * FROM totais'
+    :cte+`, pagina AS MATERIALIZED (
+      SELECT * FROM pendentes
+      ORDER BY data_oficial DESC,tsk_id DESC
+      LIMIT ${limitParam} OFFSET ${offsetParam}
+     )
+     SELECT
+      totais.total,totais.ss_unicas,
+      b.tsk_id,b.loc_id,b.age_id,b.tty_id,b.tss_id,
+      b.ss,b.cidade,b.bairro,b.logradouro,b.numero,
+      b.tsk_insertdatehour,b.tsk_realinitialdatehour,
+      b.tsk_realfinaldatehour,
+      p.data_oficial AS tsk_lastexecutiondatehour,
+      'Retornada de Campo' AS tsk_situation,
+      '' AS status_integracao,p.tags,
+      ${setor} AS setor,
+      a.age_name AS tecnico,tt.tty_description AS servico,
+      (SELECT to_jsonb(t0)->>'tsk_accesstoken'
+       FROM u45468.task t0
+       WHERE t0.tsk_id=b.tsk_id LIMIT 1) AS token
+     FROM totais
+     LEFT JOIN pagina p ON TRUE
+     LEFT JOIN b ON b.tsk_id=p.tsk_id
+     LEFT JOIN u45468.agent a ON a.age_id=b.age_id
+     LEFT JOIN u45468.tasktype tt ON tt.tty_id=b.tty_id
+     ORDER BY p.data_oficial DESC NULLS LAST,p.tsk_id DESC`;
+   const values=[],map=new Map();
+   const text=sqlOficial.replace(/\$(\d+)/g,(_,n)=>{
+    n=Number(n);
+    if(!map.has(n)){
+     values.push(val[n-1]);
+     map.set(n,values.length);
+    }
+    return '$'+map.get(n);
+   });
+   return {text,values};
+  }
   // CGM_TOTAL_V6: somente contagem, com os mesmos filtros da listagem.
   if(countOnly){
    if(tela!=='baixar')throw Error('Contagem restrita a Notas para Baixar.');
@@ -190,7 +265,7 @@ function transform(rows,extras,hostRelatorioUmov){
   };
  });
 }
-async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'}){
+async function handler(req,res,{pool,hostRelatorioUmov,officialQuery,scope='principal:geral'}){
  const started=Date.now();let params;
  try{params=parse(req)}catch(e){return res.status(e.status||400).json({ok:false,error:e.message})}
  const version=perf.getGeneration();
@@ -204,14 +279,31 @@ async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'})
   if(params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   const stmt=statement(params,ids);
-  const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
-  const page=q.rows.slice(0,params.limit);
+  const t0=Date.now();
+  const q=params.tela==='baixar'&&officialQuery
+   ?await officialQuery(stmt)
+   :await pool.query({...stmt,query_timeout:8500});
+  const msBanco=Date.now()-t0;
+  const oficial=params.tela==='baixar';
+  const total=oficial?Number(q.rows[0]?.total):null;
+  const ssUnicas=oficial?Number(q.rows[0]?.ss_unicas):null;
+  if(oficial&&(!Number.isSafeInteger(total)||total<0||
+   !Number.isSafeInteger(ssUnicas)||ssUnicas<0||
+   ssUnicas>total))throw Error('Total oficial invalido.');
+  const registros=oficial
+   ?q.rows.filter(x=>x.tsk_id!=null)
+   :q.rows;
+  const page=registros.slice(0,params.limit);
   // Dados auxiliares são opcionais e não devem deixar a LISTAGEM refém de uma view.
   const t1=Date.now();let details=new Map(),detalhesParciais=false;
   try{details=await extraFields(pool,page,ids)}catch(e){detalhesParciais=true;console.warn('[CP V6] metadados locais indisponíveis:',e.message)}
   const rows=transform(page,details,hostRelatorioUmov);
 
-  const data={ok:true,rows,count:rows.length,total:null,hasMore:q.rows.length>params.limit,
+  const data={ok:true,rows,count:rows.length,total,
+   ...(oficial?{ss_unicas:ssUnicas}:{}),
+   hasMore:oficial
+    ?params.offset+page.length<total
+    :q.rows.length>params.limit,
    limit:params.limit,offset:params.offset,ms:Date.now()-started,
    tempos:{banco_ms:msBanco,detalhes_ms:Date.now()-t1},plano:'fisica-campos-v6-otimizada',detalhes_parciais:detalhesParciais};
   if(perf.getGeneration()===version)C.set(key,{ts:Date.now(),data});

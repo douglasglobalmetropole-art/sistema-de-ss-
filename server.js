@@ -693,7 +693,9 @@ if(materiaisDivisao && rota!=='/api/materiais'){
      return res.status(503).json({ok:false,error:'Pesquisa V6 necessaria para consultar a divisao.'});
     }
     u.pathname='/api/pesquisa-global';
-    u.searchParams.set('tela','recepcao');
+    u.searchParams.set('tela',
+     u.searchParams.get('tela')==='baixar'
+      ?'baixar':'recepcao');
     u.searchParams.delete('cidade');
     res.set('X-SS-Consulta','v6-recepcao');
    }
@@ -1501,8 +1503,52 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
 // Evita JOIN permanente com dbout_local/agent/tasktype; consulta essas tabelas
 // somente quando o respectivo filtro estiver preenchido.
 const CP_PESQUISA_CACHE=new Map();
+async function consultarPendenciasOficiais(stmt){
+ const lote1=emLote1();
+
+ if(lote1&&(!nomeBancoLote1||
+    nomeBancoLote1===process.env.DB_NAME))
+  throw Error('Banco Lote 1 nao isolado');
+
+ const banco=lote1?poolLote1:poolPrincipal;
+ const cliente=await banco.connect();
+
+ let descartar=false;
+
+ try{
+  await cliente.query({
+   text:'BEGIN READ ONLY',
+   query_timeout:2000
+  });
+
+  await cliente.query({
+   text:"SET LOCAL statement_timeout='7000ms'",
+   query_timeout:2000
+  });
+
+  const text=lote1
+   ?stmt.text.replace(/\bu45468\./g,'"'+schemaLote1+'".')
+   :stmt.text;
+
+  return await cliente.query({
+   text,values:stmt.values,query_timeout:8500
+  });
+
+ }finally{
+  try{
+   await cliente.query({
+    text:'ROLLBACK',query_timeout:2000
+   });
+  }catch(e){
+   descartar=true;
+  }
+
+  cliente.release(descartar);
+ }
+}
+
 app.get('/api/pesquisa-global',async(req,res)=>{
- if(process.env.CP_PESQUISA_V6 !== 'false') return require('./cp-pesquisa-v6').handler(req,res,{pool,hostRelatorioUmov,scope:cacheScope()});
+ if(process.env.CP_PESQUISA_V6 !== 'false') return require('./cp-pesquisa-v6').handler(req,res,{pool,hostRelatorioUmov,officialQuery:consultarPendenciasOficiais,scope:cacheScope()});
  if(process.env.CP_PESQUISA_V4 !== 'false') return require('./cp-pesquisa-v4').handler(req,res,{pool,extrasLocal,extrasTask,campo,hostRelatorioUmov});
  try{
  const inicioConsulta=Date.now();
