@@ -1660,8 +1660,46 @@ app.get('/api/health',async(req,res)=>{try{res.json({ok:true,...(await pool.quer
 // Consulta rÃ¡pida: limita task primeiro e sÃ³ consulta dbout_local para atÃ© 100 SS.
 // CGM_NOTAS_BAIXAR_TOTAL_REAL_V1 - contagem independente, somente leitura.
 // Nao atrasa a listagem nem informa um total estimado como se fosse exato.
+// CGM_TOTAL_V6: consulta auxiliar, isolada da listagem e dos comandos de escrita.
+async function totalPendenciasV6(req,res){
+ const cp=require('./cp-pesquisa-v6');
+ let params;
+ try{params=cp.parse({...req,query:{...req.query,tela:'baixar'},divisaoSS:req.divisaoSS});}
+ catch(e){return res.status(e.status||400).json({ok:false,error:e.message});}
+ if(!params.municipios.length)return res.status(403).json({ok:false,error:'Divisao sem municipios permitidos.'});
+ const {limit,offset,...filtros}=params;
+ const key='ss:total-v6:'+cacheScope()+':'+JSON.stringify(filtros);
+ // Armazena inclusive falhas durante 60s, para evitar repeticao de consultas caras.
+ const resultado=await cachedRead(key,60000,async()=>{
+  let cliente,descartar=false;
+  try{
+   const ids=await cp.fieldIds(pool,emLote1()?'lote1':'principal');
+   if(params.filters.tags&&!ids.tags.length)throw Error('Campo TAG nao localizado.');
+   if(params.filters.setor&&!ids.setor.length)throw Error('Campo setor nao localizado.');
+   const stmt=cp.countStatement(params,ids);
+   if(emLote1()&&(!nomeBancoLote1||nomeBancoLote1===process.env.DB_NAME))throw Error('Banco Lote 1 nao isolado');
+   const banco=emLote1()?poolLote1:poolPrincipal;
+   cliente=await banco.connect();
+   await cliente.query({text:'BEGIN READ ONLY',query_timeout:2000});
+   await cliente.query({text:"SET LOCAL statement_timeout='5000ms'",query_timeout:2000});
+   const text=emLote1()?stmt.text.replace(/\bu45468\./g,'"'+schemaLote1+'".'):stmt.text;
+   const q=await cliente.query({text,values:stmt.values,query_timeout:6500});
+   const total=Number(q.rows[0]?.total),ss_unicas=Number(q.rows[0]?.ss_unicas);
+   if(!Number.isSafeInteger(total)||total<0||!Number.isSafeInteger(ss_unicas)||ss_unicas<0||ss_unicas>total)throw Error('Contagem invalida.');
+   return {ok:true,total,ss_unicas,criterio:'mesmo-filtro-fisico-v6'};
+  }catch(e){
+   console.warn('[CGM] contagem notas para baixar V6:',e.code||'',e.message);
+   return {ok:false,total:null,error:'Contagem da listagem temporariamente indisponivel.'};
+  }finally{
+   if(cliente){try{await cliente.query({text:'ROLLBACK',query_timeout:2000});}catch(e){descartar=true;}
+   cliente.release(descartar);}
+  }
+ });
+ return res.status(resultado.ok?200:503).json(resultado);
+}
 app.get('/api/recepcao-total-baixar',async(req,res)=>{
  res.set('Cache-Control','private, no-store');
+ if(req.divisaoSS&&process.env.CP_PESQUISA_V6!=='false')return totalPendenciasV6(req,res);
  const ini=String(req.query.inicio||'').trim(),fim=String(req.query.fim||'').trim();
  if((ini&&!/^\d{4}-\d{2}-\d{2}$/.test(ini))||(fim&&!/^\d{4}-\d{2}-\d{2}$/.test(fim)))
   return res.status(400).json({ok:false,error:'Periodo invalido.'});

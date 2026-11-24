@@ -1877,7 +1877,7 @@ async function load(forcarAtualizacao=false){
         window.__totalSS=jc.total;
         const n=view.slice(0,page).length;
         const a=n?window.__pageOffset+1:0,b=window.__pageOffset+n;
-        $('countInfo').textContent='Exibindo '+a+'–'+b+' de '+jc.total+' SS sem status de integração'+(window.ms?' • consulta '+window.ms+' ms':'');
+        $('countInfo').textContent='Exibindo '+a+'–'+b+' de '+jc.total+(Number.isSafeInteger(jc.ss_unicas)?' tarefas | '+jc.ss_unicas+' SS unicas':' SS')+(window.ms?' • consulta '+window.ms+' ms':'');
         renderPagination();
        }).catch(e=>{if(e.name!=='AbortError')console.warn('[CGM] Contagem pendente:',e.message)});
     }

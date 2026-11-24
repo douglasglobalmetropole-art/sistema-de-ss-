@@ -42,7 +42,7 @@ async function loadFieldIds(pool,base='principal'){
  fieldCache.set(base,{timestamp:Date.now(),fields});return fields;
 }
 function fieldIds(pool,base='principal'){return metadataFlight(base,()=>loadFieldIds(pool,base));}
-function statement(params, ids){
+function statement(params, ids, countOnly=false){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
  const base=[];
@@ -105,6 +105,34 @@ function statement(params, ids){
     ${base.length?'WHERE '+base.join(' AND '):''}`;
   // Filtra/classifica antes do LIMIT, mas enriquece apenas a pagina.
   // A base pode ser integrada ao plano: nao materializar todas as tarefas.
+  // CGM_TOTAL_V6: somente contagem, com os mesmos filtros da listagem.
+  if(countOnly){
+   if(tela!=='baixar')throw Error('Contagem restrita a Notas para Baixar.');
+   const predicates=final.map(condition=>condition.replace(/p\.(status_integracao|tags|setor)/g,(_,field)=>field==='status_integracao'?'b.status_integracao':field==='tags'?tags:setor));
+   const countSql=`WITH b AS MATERIALIZED (
+    ${baseSql}
+   ), valores AS MATERIALIZED (
+    SELECT v.cfv_registerid AS tsk_id, COUNT(*) AS n,
+     MAX(COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'')) AS valor
+    FROM (SELECT DISTINCT tsk_id FROM b) candidatos
+    JOIN u45468.customfieldvalue v ON v.cfv_registerid=candidatos.tsk_id
+    LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END
+    WHERE v.cfd_id=ANY(${statusParam}::bpchar[])
+    GROUP BY v.cfv_registerid
+   ), classificadas AS (
+    SELECT b.*,CASE WHEN v.n>1 THEN ${status} ELSE v.valor END AS status_integracao
+    FROM b LEFT JOIN valores v ON v.tsk_id=b.tsk_id
+   ) SELECT COUNT(*)::bigint AS total,
+    COUNT(DISTINCT NULLIF(TRIM(b.ss),''))::bigint AS ss_unicas
+    FROM classificadas b WHERE ${predicates.join(' AND ')}`;
+   // Elimina parametros de paginacao/enriquecimento nao usados na contagem.
+   const used=[],indexes=new Map();
+   const text=countSql.replace(/\$(\d+)/g,(_,n)=>{
+    n=Number(n);if(!indexes.has(n)){used.push(val[n-1]);indexes.set(n,used.length);}
+    return '$'+indexes.get(n);
+   });
+   return {text,values:used};
+  }
   const expressions={status_integracao:status,tags,setor};
   // Com filtros personalizados combinados, uma classificacao intermediaria
   // evita que o otimizador repita subconsultas correlacionadas em nested loops.
@@ -195,4 +223,4 @@ async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'})
   return res.json({...data,ms:Date.now()-started});
  }catch(e){console.error('[CP V6] pesquisa:',e.message);const timeout=/timeout|timed out|canceling statement|read timeout/i.test(e.message);return res.status(e.status|| (timeout?504:503)).json({ok:false,error:timeout?'A pesquisa excedeu o limite de resposta do uMov. Verifique o plano SQL físico.':e.message,plano:'fisica-campos-v6'});}
 }
-module.exports={handler,statement,parse,transform,fieldIds};
+module.exports={handler,statement,parse,transform,fieldIds,countStatement:(params,ids)=>statement(params,ids,true)};
