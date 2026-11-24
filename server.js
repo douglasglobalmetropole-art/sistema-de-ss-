@@ -956,6 +956,16 @@ function gatewayCanWrite(req) {
  return allow.length>0&&allow.includes(String(sessao.name||'').toLowerCase());
 }
 async function gatewayRest(route, options = {}) {
+ // CGM_DUPLICIDADES_LOCAL_V1: somente leitura, sem fallback silencioso.
+ if (['ss_duplicidades_indice','ss_duplicidades_controle'].includes(String(route).split('?')[0]) && process.env.CGM_DUPLICIDADES_BACKEND==='local') {
+  if (String(options.method||'GET').toUpperCase()!=='GET') throw Error('Indice local somente leitura via Gateway');
+  const url=String(process.env.CGM_GATEWAY_URL||'');
+  const secret=String(process.env.CGM_GATEWAY_SECRET||'');
+  if (!/^https:\/\/[a-z0-9-]+\.ngrok-free\.dev\/?$/i.test(url)||!/^[a-f0-9]{64}$/.test(secret)) throw Error('Gateway local nao configurado');
+  const response=await fetch(url.replace(/\/$/,'')+'/v2/'+route,{headers:{Authorization:'Bearer '+secret,'ngrok-skip-browser-warning':'true'},redirect:'error',signal:options.signal||AbortSignal.timeout(12000)});
+  if(!response.ok)throw Error('Duplicidades Gateway HTTP '+response.status);
+  return response.json();
+ }
  const tabela = String(route).split('?')[0];
  const filaLocal = [
   'siscom_gateway_jobs',
@@ -1445,7 +1455,8 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
  if(emLote1())return null; // O indice pertence somente ao banco principal.
  const url=String(process.env.SUPABASE_URL||'').replace(/\/$/,'');
  const key=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_SECRET_KEY||'';
- if(!url||!key)return null;
+ const dupLocal=process.env.CGM_DUPLICIDADES_BACKEND==='local';
+ if(!dupLocal&&(!url||!key))return null;
  const colunas={bairro:'bairro',logradouro:'logradouro',cidade:'cidade'};
  const criterios=Object.entries(colunas).filter(([k])=>filters[k]&&String(filters[k]).trim().length>=3);
  // A pesquisa de SS usa outra rota dedicada. Para pesquisas muito amplas, usar uMov.
@@ -1456,7 +1467,7 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),2300);
  try{
-  const estado=await fetch(url+'/rest/v1/ss_duplicidades_controle?select=varredura_concluida,atualizado_em&fonte=eq.umov&limit=1',{headers,signal:controller.signal}).then(r=>r.ok?r.json():[]);
+  const estado=dupLocal?await gatewayRest('ss_duplicidades_controle?select=varredura_concluida,atualizado_em&fonte=eq.umov&limit=1',{signal:controller.signal}):await fetch(url+'/rest/v1/ss_duplicidades_controle?select=varredura_concluida,atualizado_em&fonte=eq.umov&limit=1',{headers,signal:controller.signal}).then(r=>r.ok?r.json():[]);
   const controle=estado[0];
   if(!controle?.varredura_concluida||!controle.atualizado_em||Date.now()-Date.parse(controle.atualizado_em)>10*60*1000)return null;
   const qs=new URLSearchParams({select:'tsk_id',limit:'2001',order:'tsk_id.desc'});
@@ -1470,9 +1481,14 @@ async function cpCandidatosEndereco({tela,filters,cidades,offset}){
    if(lista.length!==cidades.length)return null;
    qs.set('cidade','in.('+lista.map(x=>'"'+x.replace(/"/g,'')+'"').join(',')+')');
   }
-  const resposta=await fetch(url+'/rest/v1/ss_duplicidades_indice?'+qs,{headers,signal:controller.signal});
-  if(!resposta.ok)return null;
-  const dados=await resposta.json();
+  if(dupLocal)qs.set('origem','eq.umov');
+  let dados;
+  if(dupLocal)dados=await gatewayRest('ss_duplicidades_indice?'+qs,{signal:controller.signal});
+  else {
+   const resposta=await fetch(url+'/rest/v1/ss_duplicidades_indice?'+qs,{headers,signal:controller.signal});
+   if(!resposta.ok)return null;
+   dados=await resposta.json();
+  }
   // Se vazio ou truncado, voltamos ao uMov para nao esconder SS.
   if(!Array.isArray(dados)||!dados.length||dados.length>2000)return null;
   const ids=[...new Set(dados.map(x=>Number(x.tsk_id)).filter(Number.isSafeInteger))];
@@ -2680,7 +2696,7 @@ require('./duplicidades-index').registrar(app,{
   cache.clear();
  }
 });
-require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal,poolLote1,schemaLote1:'u46915'});
+require('./duplicidades-cloud-sync').registrar(app,{pool:poolPrincipal,poolLote1,schemaLote1:'u46915',restLocal:gatewayRest});
 require('./busca-ss-fisica').registrar(app,{pool,hostRelatorioUmov});
 require('./gis-ss').registrar(app,{gatewayRest,gatewayAuthorized,individualJobPayload});
 // No computador local, mantenha o comportamento original: `npm start`.

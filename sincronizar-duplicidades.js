@@ -1,4 +1,8 @@
 'use strict';
+if(!process.argv.includes('--legado-supabase')){
+ console.error('Rotina antiga desativada. Utilize cgm-duplicidades.service no Linux.');
+ process.exit(1);
+}
 /* Executar SOMENTE no PC que já alcança o PostgreSQL uMov (VPN), com .env do Global SS.
    Usa varredura paginada por índice task_pk, e customfieldvalue_cfv_registerid_in.
    Não grava nada no uMov. Não expõe chaves no navegador. */

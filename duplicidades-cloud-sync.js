@@ -458,7 +458,7 @@ async function sincronizar({pool,rest,fonte="umov",schema="u45468",lockB=LOCK_B}
     db.release();
   }
 }
-function registrar(app,{pool,poolLote1,schemaLote1="u46915"}) {
+function registrar(app,{pool,poolLote1,schemaLote1="u46915",restLocal}) {
   if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schemaLote1))throw Error("Schema Lote 1 invalido");
   if (!pool || typeof pool.connect!=='function') throw Error('Pool PostgreSQL uMov nÃ£o configurado para sincronizaÃ§Ã£o.');
   const auth=(req,res,next)=>{
@@ -476,7 +476,7 @@ function registrar(app,{pool,poolLote1,schemaLote1="u46915"}) {
   app.get('/api/duplicidades/sync/status',auth,async(req,res)=>{
     res.set('Cache-Control','no-store');
     try{
-      const r=criarRest(config());
+      const r=process.env.CGM_DUPLICIDADES_BACKEND==='local'?restLocal:criarRest(config());
       const origem=selecionar(req);
       const status=(await r('ss_duplicidades_controle?select=fonte,ultimo_id_processado,maior_id_capturado,varredura_concluida,total_lidos,ultimo_id_enriquecimento,limite_id_enriquecimento,enriquecimento_concluido,total_enriquecidos,atualizado_em,ultimo_erro&fonte=eq.'+encodeURIComponent(origem.fonte)+'&limit=1'))?.[0]||null;
       res.json({ok:true,fonte:origem.fonte,lote:origem.fonte==='umov_lote1'?1:2,status});
@@ -485,6 +485,11 @@ function registrar(app,{pool,poolLote1,schemaLote1="u46915"}) {
   app.get('/api/duplicidades/sync',auth,async(req,res)=>{
     res.set('Cache-Control','no-store');
     try{
+      if(process.env.CGM_DUPLICIDADES_BACKEND==='local'){
+        const origem=selecionar(req);
+        const estado=(await restLocal('ss_duplicidades_controle?select=*&fonte=eq.'+encodeURIComponent(origem.fonte)+'&limit=1'))?.[0]||null;
+        return res.json({ok:true,fonte:origem.fonte,modo:'agendamento_local',executado:false,varredura_concluida:!!estado?.varredura_concluida,total_lidos:estado?.total_lidos||0,status:estado,mensagem:'Sincronizacao executada pelo timer Linux; esta rota apenas informa o estado.'});
+      }
       const r=criarRest(config());
       const saida=await sincronizar({...selecionar(req),rest:r});
       console.log('[dup-sync]',JSON.stringify(saida));
