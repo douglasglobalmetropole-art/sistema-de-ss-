@@ -94,45 +94,25 @@
     const ja=resultados.filter(x=>x.ok&&x.ja_aplicado);
     const falhas=resultados.filter(x=>!x.ok);
     if(!resultados.length)throw Error('O servidor nao confirmou nenhum registro. Verifique o uMov antes de tentar novamente.');
-    // Apos a resposta da API, a listagem ja e atualizada, sem manter modal aberto.
-    if(enviados.length||ja.length){
-      informar('uMov recebeu '+enviados.length+' solicitacao(oes). Atualizando lista e conferindo sincronizacao...','info');
-      await atualizarLista();
+
+
+    const aceitos=window.CGM_Encerramentos.registrar(
+     status,resultados
+    );
+
+    const texto='uMov '+status+': '+aceitos+
+     ' atualizacao(oes) aceita(s).'+
+     (falhas.length?
+      ' '+falhas.length+' nao atualizada(s).':'')+
+     ' Nenhuma operacao oficial no SISCOM foi executada.';
+
+    informar(texto,falhas.length?'warning':'success');
+
+    if(falhas.length){
+     console.warn('[CGM UMOV]',falhas);
     }
-    let confirmados=ja.map(x=>({ss:x.ss,tarefa:x.tarefa,status_integracao:status}));
-    let erroConsulta='';
-    if(enviados.length){
-      for(let tentativa=0;tentativa<8;tentativa++){
-        if(tentativa)await pausa(1500);
-        try{
-          const retorno=await fetchJson('/api/umov/manual-status/conferir',{
-            status,itens:enviados.map(x=>({ss:x.ss,tarefa:x.tarefa}))
-          });
-          const lidos=(retorno.resultados||[]).filter(x=>x.confirmado);
-          confirmados=[...ja.map(x=>({ss:x.ss,tarefa:x.tarefa,status_integracao:status})),...lidos];
-          if(lidos.length===enviados.length)break;
-        }catch(e){erroConsulta=e.message;break;}
-      }
-    }
-    const porId=new Map(confirmados.map(x=>[String(x.tarefa),x]));
-    const pendentes=enviados.filter(x=>!porId.has(String(x.tarefa)));
-    if(confirmados.length){
-      try{
-        if(typeof raw!=='undefined'&&Array.isArray(raw)){
-          raw.forEach(x=>{const item=porId.get(String(x.tarefa));if(item)x.status_integracao=item.status_integracao||status;});
-        }
-        if(typeof apply==='function')apply();
-      }catch(e){console.warn('[CGM UMOV] Atualizar tabela:',e.message);}
-    }
-    // Segunda leitura: registros que sincronizaram saem da aba Notas para Baixar.
-    await atualizarLista();
-    const resumo='uMov '+status+': '+confirmados.length+' confirmada(s), '+pendentes.length+
-      ' aguardando sincronizacao, '+falhas.length+' falha(s).'+
-      (falhas.length?' Falhas: '+falhas.slice(0,3).map(x=>x.ss+': '+(x.error||'erro')).join(' | '):'')+
-      (erroConsulta?' Conferencia: '+erroConsulta:'')+
-      (pendentes.length?' Nao reenvie sem conferir o status no uMov.':'')+
-      ' Nenhuma baixa/rejeicao oficial foi feita no SISCOM.';
-    informar(resumo, falhas.length||pendentes.length||erroConsulta?'warning':'success');
+
+
    }catch(e){
     // Nao apresentar operacao como concluida quando a API recusa a validacao.
     informar('Nao foi possivel concluir no uMov: '+e.message+'. Confira o status real antes de reenviar.','error');
