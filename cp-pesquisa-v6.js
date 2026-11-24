@@ -45,34 +45,47 @@ function fieldIds(pool,base='principal'){return metadataFlight(base,()=>loadFiel
 function pendingStatement(ctx){
 
  const {
-  baseSql,statusParam,tags,setor,final,
+  baseSql,tags,setor,final,
   limitParam,offsetParam,val
  }=ctx;
 
- // Uma tarefa com status de integracao preenchido
- // nao pode permanecer na lista de pendencias.
+ // CGM_PENDENCIAS_V8
+ // Status oficial do uMov, sem deduzir campo personalizado.
 
- const statusNaoVazio=`
- NOT EXISTS (
-  SELECT 1
-  FROM u45468.customfieldvalue v
-  LEFT JOIN u45468.customentityvalue ce
-   ON ce.cev_id=CASE
-    WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$'
-    THEN v.cfv_internalvalue::bigint
-    ELSE NULL
-   END
-  WHERE v.cfv_registerid=b.tsk_id
-    AND v.cfd_id=ANY(${statusParam}::bpchar[])
-    AND NULLIF(TRIM(COALESCE(
-      NULLIF(ce.cev_description::text,''),
-      NULLIF(v.cfv_externalvalue::text,''),
-      NULLIF(v.cfv_internalvalue::text,''),
-      ''
-    )),'') IS NOT NULL
- )`;
+ let base=baseSql;
 
- // Preservar filtros de TAG e setor.
+ const origem=
+  'FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id';
+
+ if(!base.includes(origem))
+  throw Error('Origem SQL divergente');
+
+ base=base.replace(
+  origem,
+  origem+
+  ' JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id'
+ );
+
+ const condicao=
+  "LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'";
+
+ if(!base.includes(condicao))
+  throw Error('Condicao de campo nao encontrada');
+
+ base=base.replace(
+  condicao,
+  "LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo'"+
+  " AND NULLIF(TRIM(COALESCE(d.e_situacao,'')),'') IS NULL"
+ );
+
+ base=base
+  .replaceAll(
+   't.tsk_lastexecutiondatehour',
+   'd.tsk_lastexecutiondatehour'
+  )
+  .replaceAll('t.tsk_situation','d.tsk_situation');
+
+ // Preservar filtros existentes de TAG e setor.
 
  const extras=final
   .filter(x=>!x.includes('p.status_integracao'))
@@ -81,24 +94,21 @@ function pendingStatement(ctx){
    (_,campo)=>campo==='tags'?tags:setor
   ));
 
- const filtros=[
-  statusNaoVazio,
-  ...extras
- ].join(' AND ');
-
  const onPage=expr=>expr
   .replaceAll('b.tsk_id','p.tsk_id')
   .replaceAll('b.loc_id','p.loc_id');
 
  const sql=`
- WITH b AS MATERIALIZED (
-  ${baseSql}
+ WITH b AS NOT MATERIALIZED (
+  ${base}
  ),
 
  pendentes AS MATERIALIZED (
-  SELECT b.*
+  SELECT DISTINCT
+   b.tsk_id,
+   b.tsk_lastexecutiondatehour
   FROM b
-  WHERE ${filtros}
+  ${extras.length?'WHERE '+extras.join(' AND '):''}
  ),
 
  totais AS (
@@ -116,28 +126,51 @@ function pendingStatement(ctx){
  )
 
  SELECT
-  p.*,
+  p.tsk_id,
+  p.loc_id,
+  p.age_id,
+  p.tty_id,
+  p.tss_id,
+  p.tsk_insertdatehour,
+  p.tsk_realinitialdatehour,
+  p.tsk_realfinaldatehour,
+
+  pagina.tsk_lastexecutiondatehour,
+  'Retornada de Campo'::text AS tsk_situation,
+
+  l.loc_integrationid AS ss,
+  l.loc_city AS cidade,
+  l.loc_neighborhood AS bairro,
+  l.loc_street AS logradouro,
+  l.loc_streetnumber AS numero,
+
   totais.total_pendentes,
   ''::text AS status_integracao,
+
   ${onPage(tags)} AS tags,
   ${onPage(setor)} AS setor,
+
   a.age_name AS tecnico,
   tt.tty_description AS servico,
-
-  (
-   SELECT to_jsonb(token_task)->>'tsk_accesstoken'
-   FROM u45468.task token_task
-   WHERE token_task.tsk_id=p.tsk_id
-   LIMIT 1
-  ) AS token
+  to_jsonb(p)->>'tsk_accesstoken' AS token
 
  FROM totais
- LEFT JOIN pagina p ON TRUE
- LEFT JOIN u45468.agent a ON a.age_id=p.age_id
- LEFT JOIN u45468.tasktype tt ON tt.tty_id=p.tty_id
+ LEFT JOIN pagina ON TRUE
 
- ORDER BY p.tsk_lastexecutiondatehour DESC NULLS LAST,
-          p.tsk_id DESC
+ LEFT JOIN u45468.task p
+  ON p.tsk_id=pagina.tsk_id
+
+ LEFT JOIN u45468.local l
+  ON l.loc_id=p.loc_id
+
+ LEFT JOIN u45468.agent a
+  ON a.age_id=p.age_id
+
+ LEFT JOIN u45468.tasktype tt
+  ON tt.tty_id=p.tty_id
+
+ ORDER BY pagina.tsk_lastexecutiondatehour DESC NULLS LAST,
+          pagina.tsk_id DESC
  `;
 
  return {text:sql,values:val};
@@ -176,7 +209,7 @@ function statement(params, ids){
   base.push(`${normCity('l.loc_city')}=ANY(${cityParam}::text[])`);
  }
  if(equipe)like('a.age_name',equipe);
- const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
+ const statusParam=tela==='baixar'?null:add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
  const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
