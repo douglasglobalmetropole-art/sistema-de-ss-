@@ -129,6 +129,7 @@ req.divisaoSS={
     '/api/siscom-worker/status',
    '/api/gis/localizar-ss',
    '/api/recepcao',
+   '/api/recepcao-total-baixar',
    '/api/pesquisa-global',
    '/api/macros',
    '/api/cidades',
@@ -656,7 +657,7 @@ if(materiaisDivisao && rota!=='/api/materiais'){
    });
   }
 
-  if(rota==='/api/recepcao'||rota==='/api/pesquisa-global'){
+  if(rota==='/api/recepcao'||rota==='/api/pesquisa-global'||rota==='/api/recepcao-total-baixar'){
 
    const u=new URL(req.url,'http://local');
 
@@ -1666,10 +1667,15 @@ app.get('/api/recepcao-total-baixar',async(req,res)=>{
   return res.status(400).json({ok:false,error:'Periodo invalido.'});
  const equipe=String(req.query.equipe||'').trim().slice(0,100);
  const macros=String(req.query.macro||'').split('\u001f').map(v=>v.trim()).filter(Boolean).slice(0,30);
- const cidades=String(req.query.municipios||req.query.cidade||'').split('\u001f').map(v=>v.trim().toUpperCase()).filter(Boolean).slice(0,30);
+
+ const cidades=(
+  Array.isArray(req.divisaoSS?.cidades)
+   ?req.divisaoSS.cidades
+   :String(req.query.municipios||req.query.cidade||'')
+     .split('\u001f')
+ ).map(normalizarCidade).filter(Boolean).slice(0,30);
  const cacheKey='ss:contagem:baixar:'+String(req.divisaoSS?.codigo||'geral')+':'+JSON.stringify([ini,fim,equipe,macros,cidades]);
- const hit=req.query._refresh?null:getCache(cacheKey,60000);
- if(hit)return res.json(hit);
+
  const values=[];
  const param=v=>{values.push(v);return '$'+values.length};
  const where=["LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo'",
@@ -1680,18 +1686,59 @@ app.get('/api/recepcao-total-baixar',async(req,res)=>{
   where.push(`d.tsk_lastexecutiondatehour >= ${a}::date AND d.tsk_lastexecutiondatehour < (${b}::date + INTERVAL '1 day')`);
  }
  try{
+  const resultado=await cachedRead(cacheKey,60000,async()=>{
   if(equipe){
    const ag=await pool.query({text:'SELECT age_id FROM u45468.agent WHERE age_name ILIKE $1 OR CAST(age_id AS TEXT) ILIKE $1',values:['%'+equipe+'%'],query_timeout:3500});
-   if(!ag.rows.length)return res.json({ok:true,total:0});
+   if(!ag.rows.length)return {ok:true,total:0};
    where.push(`t.age_id=ANY(${param(ag.rows.map(r=>String(r.age_id)))}::bigint[])`);
   }
   if(macros.length)where.push(`EXISTS(SELECT 1 FROM u45468.tasktype mt WHERE mt.tty_id=t.tty_id AND TRIM(mt.tty_description)=ANY(${param(macros)}::text[]))`);
   if(cidades.length)where.push(`EXISTS(SELECT 1 FROM u45468.local cl LEFT JOIN u45468.dbout_local dl ON dl.loc_id=cl.loc_id WHERE cl.loc_id=t.loc_id AND translate(UPPER(TRIM(COALESCE(NULLIF(TRIM(dl.e_localidade),''),cl.loc_city))),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')=ANY(${param(cidades)}::text[]))`);
   const sql=`SELECT COUNT(*)::bigint AS total FROM u45468.task t INNER JOIN u45468.dbout_task d ON d.tsk_id=t.tsk_id WHERE ${where.join(' AND ')}`;
-  const q=await pool.query({text:sql,values,query_timeout:6500});
+  const banco=emLote1()?poolLote1:poolPrincipal;
+
+  if(emLote1()&&nomeBancoLote1===process.env.DB_NAME)
+   throw Error('Banco Lote 1 nao isolado');
+
+  const cliente=await banco.connect();
+
+  let descartar=false,q;
+
+  try{
+   await cliente.query({
+    text:'BEGIN READ ONLY',query_timeout:2000
+   });
+
+   await cliente.query({
+    text:"SET LOCAL statement_timeout='5000ms'",
+    query_timeout:2000
+   });
+
+   const texto=emLote1()
+    ?sql.replace(/\bu45468\./g,'"'+schemaLote1+'".')
+    :sql;
+
+   q=await cliente.query({
+    text:texto,values,query_timeout:6500
+   });
+
+  }finally{
+   try{
+    await cliente.query({
+     text:'ROLLBACK',query_timeout:2000
+    });
+   }catch(e){
+    descartar=true;
+   }
+
+   cliente.release(descartar);
+  }
   const total=Number(q.rows[0]?.total);
   if(!Number.isSafeInteger(total)||total<0)throw Error('Contagem invalida.');
-  const out={ok:true,total};setCache(cacheKey,out);return res.json(out);
+  return {ok:true,total};
+  });
+
+  return res.json(resultado);
  }catch(e){console.warn('[CGM] contagem notas para baixar:',e.message);
   return res.status(503).json({ok:false,total:null,error:'Contagem exata temporariamente indisponivel.'});}
 });

@@ -1611,7 +1611,7 @@ $('sendTeamBtn').onclick=async()=>{if(!Object.keys(selected).length&&window.__de
   selected={};apply();
   // A atualização visual é imediata. Uma nova consulta não deve bloquear o botão
   // nem apagar o nome antes de o uMov sincronizar a atribuição.
-}else{selected={};apply()}}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();load();
+}else{selected={};apply()}}catch(e){alert('Não foi possível enviar: '+e.message)}finally{btn.disabled=false;btn.textContent='Enviar para equipe'}};loadMenus();
 $('closeDetail').addEventListener('click',()=>{document.body.classList.remove('panel-open');window.__detailSS=null});
 document.addEventListener('change',e=>{if(e.target.classList.contains('pick')&&!document.querySelector('.pick:checked')){document.body.classList.remove('panel-open');$('lower').classList.remove('open')}});
 ['macroBtn','cityBtn'].forEach(id=>$(id).addEventListener('click',()=>setTimeout(()=>{const box=id==='macroBtn'?'macroMenu':'cityMenu';$(box).querySelector('.menuFind')?.focus()},0)));
