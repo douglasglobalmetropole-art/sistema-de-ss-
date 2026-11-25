@@ -2924,7 +2924,27 @@ load();
         return originalFetch(input,init);
     }
 
+    // CGM_ESTABILIDADE_V53
     const generation=window.cgmSessionGeneration?.();
+
+    const caminho=new URL(url,location.href).pathname;
+    const consultaJob=/^\/api\/siscom-gateway\/jobs\/[^/]+$/.test(caminho);
+    const metodo=String(init?.method ||
+        (input instanceof Request ? input.method : 'GET')).toUpperCase();
+
+    if(window.cgmSiscomReauthRequired?.() &&
+       !(consultaJob && metodo==='GET')){
+
+        return new Response(JSON.stringify({
+            ok:false,
+            error:'Sessao SISCOM expirada. Faca login novamente.',
+            code:'SISCOM_REAUTH_REQUIRED'
+        }),{
+            status:401,
+            headers:{'Content-Type':'application/json'}
+        });
+    }
+
     const response=await originalFetch(input,init);
 
     try{
@@ -2969,6 +2989,7 @@ load();
      let sessionGeneration=0;
 
      window.cgmSessionGeneration=()=>sessionGeneration;
+     window.cgmSiscomReauthRequired=()=>reauthRequired;
 
      window.cgmSiscomRelogin=function(generation){
         if(generation!==undefined && generation!==sessionGeneration)return;
@@ -3009,6 +3030,8 @@ load();
    return;
   }
 
+  const generation=sessionGeneration;
+
   try{
    const r=await fetch('/api/siscom-worker/status',{
     credentials:'same-origin',
@@ -3016,6 +3039,8 @@ load();
    });
 
    const x=await r.json();
+
+   if(generation!==sessionGeneration)return;
 
    workerConnected=!!(
     r.ok &&
@@ -3032,6 +3057,7 @@ load();
  async function refresh(){
   if(refreshBusy)return;
   refreshBusy=true;
+  const generation=sessionGeneration;
 
   try{
    const r=await fetch('/api/siscom-individual/me',{
@@ -3040,6 +3066,9 @@ load();
    });
 
    const x=await r.json();
+
+     if(generation!==sessionGeneration)return;
+
      if(r.ok && x.authenticated===false && active){
         window.cgmSiscomRelogin();
         return;
@@ -3060,7 +3089,7 @@ load();
  form.addEventListener('submit',async ev=>{
   ev.preventDefault();const submit=$('siscomLoginSubmit');submit.disabled=true;
   const login=$('siscomLoginUser').value.trim(),password=$('siscomLoginPassword').value;
-  feedback.style.color='#24527a';feedback.textContent='Autenticando pelo worker Windows...';
+  feedback.style.color='#24527a';feedback.textContent='Autenticando pelo Worker SISCOM...';
   try{
    const r=await fetch('/api/siscom-individual/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({login,password}),cache:'no-store'});
    $('siscomLoginPassword').value='';
@@ -3073,7 +3102,7 @@ load();
     if(!rr.ok)throw Error(x.error||'Erro de autenticação');
     done=true;sessionGeneration++;reauthRequired=false;paint({authenticated:true,user:x.user});await refreshWorker();modal.classList.remove('open');break;
    }
-   if(!done)throw Error('Tempo excedido. Confira o worker Windows conectado à VPN.');
+   if(!done)throw Error('Tempo excedido. Confira a disponibilidade do Worker SISCOM e da VPN.');
   }catch(e){feedback.style.color='#a52828';feedback.textContent=e.message}
   finally{submit.disabled=false;$('siscomLoginPassword').value=''}
  });
