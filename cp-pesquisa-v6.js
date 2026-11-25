@@ -46,6 +46,7 @@ function statement(params, ids, countOnly=false){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
  const base=[];
+ const localOficial=tela==='baixar'||tela==='encerradas';
  if(tela==='baixar'?(isoDate(inicio)||isoDate(fim)):(!filters.ss&&isoDate(inicio)&&isoDate(fim))){
   const col=tela==='baixar'?'t.tsk_lastexecutiondatehour':'t.tsk_insertdatehour';
   const dataInicial=tela==='baixar'?(inicio||fim):inicio;
@@ -56,13 +57,13 @@ function statement(params, ids, countOnly=false){
  const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"t.tsk_situation='Retornada de Campo'"};
  if(conditions[tela])base.push(conditions[tela]);
  if(tela==='baixar'){
-  base.push("COALESCE(ls.e_situacao,NULLIF(TRIM(l.e_situacao),'')) IS NULL");
+  base.push("COALESCE(NULLIF(TRIM(ls.e_situacao),''),NULLIF(TRIM(l.e_situacao),'')) IS NULL");
  }
  const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
  if(filters.ss)like('l.loc_integrationid',filters.ss);
- if(filters.logradouro)like(tela==='baixar'?'lf.loc_street':'l.loc_street',filters.logradouro);
- if(filters.bairro)like(tela==='baixar'?'l.e_bairro':'l.loc_neighborhood',filters.bairro);
- if(filters.cidade)like(tela==='baixar'?'l.e_localidade':'l.loc_city',filters.cidade);
+ if(filters.logradouro)like(localOficial?'lf.loc_street':'l.loc_street',filters.logradouro);
+ if(filters.bairro)like(localOficial?'l.e_bairro':'l.loc_neighborhood',filters.bairro);
+ if(filters.cidade)like(localOficial?'l.e_localidade':'l.loc_city',filters.cidade);
  if(filters.servico)like('tt.tty_description',filters.servico);
  if(filters.equipe_executou)like('a.age_name',filters.equipe_executou);
  if(filters.criado_em)like("TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')",filters.criado_em);
@@ -75,13 +76,21 @@ function statement(params, ids, countOnly=false){
   const cityParam=add(municipios);
   // Filtragem direta pela tabela fisica antes da paginacao.
   const normCity=expr=>`translate(UPPER(TRIM(${expr})),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')`;
-  base.push(`${normCity(tela==='baixar'?'l.e_localidade':'l.loc_city')}=ANY(${cityParam}::text[])`);
+  base.push(`${normCity(localOficial?'l.e_localidade':'l.loc_city')}=ANY(${cityParam}::text[])`);
  }
  if(equipe)like('a.age_name',equipe);
  const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
+ if(tela==='baixar'){
+  base.push(`NOT EXISTS (SELECT 1 FROM u45468.customfieldvalue cfv WHERE cfv.cfv_registerid=t.tsk_id AND cfv.cfd_id=ANY(${statusParam}::bpchar[]) AND NULLIF(TRIM(cfv.cfv_internalvalue::text),'') IS NOT NULL)`);
+ }
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
- const status=valueExpr('b','tsk_id',statusParam),tags=tela==='baixar'?'b.tags_oficial':valueExpr('b','tsk_id',tagsParam),setor=tela==='baixar'?'b.setor_oficial':valueExpr('b','loc_id',setorParam);
+ const status=valueExpr('b','tsk_id',statusParam),tags=localOficial?'b.tags_oficial':valueExpr('b','tsk_id',tagsParam),setor=localOficial?'b.setor_oficial':valueExpr('b','loc_id',setorParam);
+ if(tela==='encerradas'){
+  const taskStatus=`EXISTS (SELECT 1 FROM u45468.customfieldvalue v WHERE v.cfv_registerid=t.tsk_id AND v.cfd_id=ANY(${statusParam}::bpchar[]) AND NULLIF(TRIM(v.cfv_internalvalue::text),'') IS NOT NULL)`;
+  const taskBaixada=`EXISTS (SELECT 1 FROM u45468.customfieldvalue v JOIN u45468.customentityvalue ce ON ce.cev_id::text=v.cfv_internalvalue::text JOIN u45468.customfield cf ON cf.cfd_id=v.cfd_id AND ce.cet_id=cf.cfd_sourceid WHERE v.cfv_registerid=t.tsk_id AND v.cfd_id=ANY(${statusParam}::bpchar[]) AND ce.cev_description='Baixada no Siscom')`;
+  base.push(`(${taskBaixada} OR (NOT ${taskStatus} AND COALESCE(NULLIF(TRIM(ls.e_situacao),''),NULLIF(TRIM(l.e_situacao),''))='Baixada no Siscom'))`);
+ }
  const final=[];
   // Recepcao: excluir SS cujo status de integracao no uMov ja e Rejeitada.
  // A classificacao acontece no SQL, antes de LIMIT/OFFSET.
@@ -89,7 +98,7 @@ function statement(params, ids, countOnly=false){
   "LOWER(TRIM(COALESCE(p.status_integracao,''))) NOT LIKE 'rejeitad%'"
  );
  if(tela==='baixar'){ /* Status oficial filtrado na origem. */ }
- else if(tela==='encerradas')final.push("NULLIF(TRIM(p.status_integracao),'') IS NOT NULL");
+ else if(tela==='encerradas'){ /* Classificacao na origem V18. */ }
  else if(tela==='tramitacao')final.push("LOWER(TRIM(COALESCE(p.status_integracao,''))) LIKE 'baixad%'");
  if(filters.tags)final.push(`p.tags ILIKE ${add('%'+filters.tags+'%')}`);
  if(filters.setor)final.push(`p.setor ILIKE ${add('%'+filters.setor+'%')}`);
@@ -100,12 +109,12 @@ function statement(params, ids, countOnly=false){
   const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
      t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
      t.tsk_situation,
-     l.loc_integrationid AS ss,${tela==='baixar'?'l.e_localidade':'l.loc_city'} AS cidade,${tela==='baixar'?'l.e_bairro':'l.loc_neighborhood'} AS bairro,
-     ${tela==='baixar'?'lf.loc_street':'l.loc_street'} AS logradouro,${tela==='baixar'?'lf.loc_streetnumber':'l.loc_streetnumber'} AS numero
-     ${tela==='baixar'?",l.e_setor AS setor_oficial,COALESCE(ls.e_tag,NULLIF(TRIM(l.e_tag),'')) AS tags_oficial":''}
+     l.loc_integrationid AS ss,${localOficial?'l.e_localidade':'l.loc_city'} AS cidade,${localOficial?'l.e_bairro':'l.loc_neighborhood'} AS bairro,
+     ${localOficial?'lf.loc_street':'l.loc_street'} AS logradouro,${localOficial?'lf.loc_streetnumber':'l.loc_streetnumber'} AS numero
+     ${localOficial?",l.e_setor AS setor_oficial,COALESCE(ls.e_tag,NULLIF(TRIM(l.e_tag),'')) AS tags_oficial":''}
     FROM u45468.task t
-    JOIN ${tela==='baixar'?'u45468.mv_local':'u45468.local'} l ON l.loc_id=t.loc_id
-    ${tela==='baixar'?'LEFT JOIN u45468.local_status ls ON ls.loc_id=l.loc_id LEFT JOIN u45468.local lf ON lf.loc_id=t.loc_id':''}
+    JOIN ${localOficial?'u45468.mv_local':'u45468.local'} l ON l.loc_id=t.loc_id
+    ${localOficial?'LEFT JOIN u45468.local_status ls ON ls.loc_id=l.loc_id LEFT JOIN u45468.local lf ON lf.loc_id=t.loc_id':''}
     ${filters.equipe_executou||equipe?'LEFT JOIN u45468.agent a ON a.age_id=t.age_id':''}
     ${filters.servico||macro.length?'LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id':''}
     ${base.length?'WHERE '+base.join(' AND '):''}`;
@@ -129,7 +138,7 @@ function statement(params, ids, countOnly=false){
    });
    return {text,values:used};
   }
-  const expressions={status_integracao:tela==='baixar'?"''::text":status,tags,setor};
+  const expressions={status_integracao:tela==='baixar'?"''::text":tela==='encerradas'?"'Baixada no Siscom'::text":status,tags,setor};
   // Com filtros personalizados combinados, uma classificacao intermediaria
   // evita que o otimizador repita subconsultas correlacionadas em nested loops.
   const classify=!!(filters.tags||filters.setor||filters.status_integracao);
@@ -206,8 +215,8 @@ async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'})
  try{
   const result=await searchFlight(flightKey,async()=>{
   const ids=await fieldIds(pool,scope.startsWith('lote1:')?'lote1':'principal');
-  if(params.tela!=='baixar'&&params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
-  if(params.tela!=='baixar'&&params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
+  if(params.tela!=='baixar'&&params.tela!=='encerradas'&&params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
+  if(params.tela!=='baixar'&&params.tela!=='encerradas'&&params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   const stmt=statement(params,ids);
   const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
   const page=q.rows.slice(0,params.limit);
