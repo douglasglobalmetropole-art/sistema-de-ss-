@@ -1854,12 +1854,29 @@ function reconciliarEquipes(rows){
   }
   return rows;
 }
-let consultaListaAtual=null,numeroConsultaLista=0;
+let consultaListaAtual=null,numeroConsultaLista=0,telaUltimaConsulta=null;
 async function load(forcarAtualizacao=false){
 
   if(window.__buscaSSAtiva)return;
   if(consultaListaAtual)consultaListaAtual.abort();
-  consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
+  consultaListaAtual=new AbortController();
+  const numero=++numeroConsultaLista;
+
+  if(currentScreen==='baixar'||telaUltimaConsulta==='baixar'){
+   raw=[];
+   view=[];
+   selected={};
+   window.__detailSS=null;
+   window.__totalSS=null;
+   window.__hasMore=false;
+   window.ms=null;
+   $('rows').replaceChildren();
+   $('all').checked=false;
+   $('selectedInfo').style.display='none';
+   renderPagination();
+  }
+
+  telaUltimaConsulta=currentScreen;
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;

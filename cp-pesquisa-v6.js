@@ -46,29 +46,29 @@ function statement(params, ids, countOnly=false){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
  const base=[];
- if(tela==='baixar'?(isoDate(inicio)||isoDate(fim)):(!filters.ss&&isoDate(inicio)&&isoDate(fim))){
-  const col=tela==='baixar'?'t.tsk_lastexecutiondatehour':'t.tsk_insertdatehour';
-  const dataInicial=tela==='baixar'?(inicio||fim):inicio;
-   const dataFinal=tela==='baixar'?(fim||inicio):fim;
-   if(tela==='baixar'&&dataInicial>dataFinal)throw Object.assign(new Error('Data Inicio maior que Data Fim.'),{status:400});
-   base.push(`${col} >= ${add(dataInicial)}::date`,`${col} < (${add(dataFinal)}::date + INTERVAL '1 day')`);
+
+ if(tela==='baixar'){
+  if(inicio&&fim&&inicio>fim)
+   throw Object.assign(new Error('Periodo invalido'),{status:400});
+
+  if(isoDate(inicio))
+   base.push(`t.tsk_lastexecutiondatehour >= ${add(inicio)}::date`);
+
+  if(isoDate(fim))
+   base.push(`t.tsk_lastexecutiondatehour < (${add(fim)}::date + INTERVAL '1 day')`);
+
+ }else if(!filters.ss&&isoDate(inicio)&&isoDate(fim)){
+  base.push(
+   `t.tsk_insertdatehour >= ${add(inicio)}::date`,
+   `t.tsk_insertdatehour < (${add(fim)}::date + INTERVAL '1 day')`
+  );
  }
  const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo' AND t.tsk_lastexecutiondatehour IS NOT NULL"};
- if(tela==='baixar'){
-   base.push(`EXISTS (
-     SELECT 1 FROM u45468.dbout_task d
-     WHERE d.tsk_id=t.tsk_id
-       AND LOWER(TRIM(COALESCE(d.tsk_situation,'')))='retornada de campo'
-       AND NULLIF(TRIM(d.e_situacao),'') IS NULL
-   )`);
 
-   base.push(`NOT EXISTS (
-     SELECT 1 FROM u45468.dbout_task d
-     WHERE d.tsk_id=t.tsk_id
-       AND NULLIF(TRIM(d.e_situacao),'') IS NOT NULL
-   )`);
+ if(tela==='baixar'){
+  base.push("LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'");
  }else if(conditions[tela]){
-   base.push(conditions[tela]);
+  base.push(conditions[tela]);
  }
  const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
  if(filters.ss)like('l.loc_integrationid',filters.ss);
@@ -91,6 +91,23 @@ function statement(params, ids, countOnly=false){
  }
  if(equipe)like('a.age_name',equipe);
  const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
+
+ if(tela==='baixar'){
+  if(!ids.status.length)
+   throw Error('Campo situacao nao localizado');
+
+  base.push(`NOT EXISTS (
+   SELECT 1
+   FROM u45468.customfieldvalue v
+   WHERE v.cfv_registerid=t.tsk_id
+     AND v.cfd_id=ANY(${statusParam}::bpchar[])
+     AND (
+       NULLIF(TRIM(v.cfv_externalvalue::text),'') IS NOT NULL
+       OR
+       NULLIF(TRIM(v.cfv_internalvalue::text),'') IS NOT NULL
+     )
+  )`);
+ }
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
  const status=tela==='baixar'?"''::text":valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
