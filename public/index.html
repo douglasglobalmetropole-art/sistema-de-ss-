@@ -2414,30 +2414,86 @@ load();
   );
  }
 
- function compRender(rows){
-  const el=$('sbCompLista');
-  el.replaceChildren();
 
-  const title=document.createElement('strong');
-  title.textContent='Complementares existentes: '+rows.length;
-  el.append(title);
+  function compRender(rows){
+   const el=$('sbCompLista');
+   el.replaceChildren();
 
-  for(const x of rows){
-   const div=document.createElement('div');
-   div.style.cssText=
-    'padding:10px;border-bottom:1px solid #dce6ef;'+
-    'white-space:normal;overflow-wrap:anywhere';
+   const title=document.createElement('strong');
+   title.textContent='Complementares existentes: '+rows.length;
+   el.append(title);
 
-   div.textContent=[
-    'Registro: '+(typeof x.id==='object'?'—':x.id??'—'),
-    'Area: '+(x.area??'—'),
-    'Macro: '+(x.servico??'—'),
-    x.observacao||'Sem descricao'
-   ].join(' | ');
+   for(const x of rows){
+    const div=document.createElement('div');
+    div.style.cssText=
+     'padding:10px 12px;margin-top:6px;'+
+     'border:1px solid #dce6ef;border-radius:7px;'+
+     'background:#fff;white-space:normal;overflow-wrap:anywhere';
 
-   el.append(div);
+    const header=document.createElement('div');
+    header.style.cssText=
+     'display:flex;justify-content:space-between;'+
+     'align-items:center;gap:8px;flex-wrap:wrap';
+
+    const numero=document.createElement('strong');
+    numero.style.cssText='color:#123b60;font-size:13px';
+    numero.textContent=x.ssFormatada||
+     x.numero_ss_complementar||
+     ('Registro: '+(x.id??'Nao informado'));
+
+    header.append(numero);
+
+    if(x.fase){
+     const fase=document.createElement('span');
+     const encerrada=String(x.fase).trim().toLowerCase()==='encerrada';
+
+     fase.style.cssText=
+      'padding:3px 8px;border-radius:5px;font-size:11px;'+
+      'font-weight:600;'+
+      (encerrada
+       ?'background:#e5f5eb;color:#166534'
+       :'background:#e7eff9;color:#245780');
+
+     fase.textContent=x.fase;
+     header.append(fase);
+    }
+
+    div.append(header);
+
+    const linha=(texto,estilo)=>{
+     const n=document.createElement('div');
+     n.textContent=texto;
+     n.style.cssText=estilo;
+     div.append(n);
+    };
+
+    linha(
+     'Macro: '+(x.servico??'Nao informado'),
+     'font-size:12px;font-weight:600;margin-top:6px;color:#243b53'
+    );
+
+    linha(
+     'Area: '+(x.areaProcesso??x.area??'Nao informada'),
+     'font-size:12px;margin-top:3px;color:#526579'
+    );
+
+    if(x.id!=null){
+     linha(
+      'Registro SISCOM: '+x.id,
+      'font-size:11px;margin-top:3px;color:#64748b'
+     );
+    }
+
+    if(String(x.observacao??'').trim()){
+     linha(
+      x.observacao,
+      'font-size:12px;margin-top:5px;color:#334155'
+     );
+    }
+
+    el.append(div);
+   }
   }
- }
 
  async function compReconsultar(ss,g){
   const r=await job(
