@@ -46,30 +46,15 @@ function statement(params, ids, countOnly=false){
  const val=[];const add=x=>{val.push(x);return '$'+val.length};
  const {tela,filters,inicio,fim,macro,municipios,equipe,limit,offset}=params;
  const base=[];
-
- if(tela==='baixar'){
-  if(inicio&&fim&&inicio>fim)
-   throw Object.assign(new Error('Periodo invalido'),{status:400});
-
-  if(isoDate(inicio))
-   base.push(`t.tsk_lastexecutiondatehour >= ${add(inicio)}::date`);
-
-  if(isoDate(fim))
-   base.push(`t.tsk_lastexecutiondatehour < (${add(fim)}::date + INTERVAL '1 day')`);
-
- }else if(!filters.ss&&isoDate(inicio)&&isoDate(fim)){
-  base.push(
-   `t.tsk_insertdatehour >= ${add(inicio)}::date`,
-   `t.tsk_insertdatehour < (${add(fim)}::date + INTERVAL '1 day')`
-  );
+ if(tela==='baixar'?(isoDate(inicio)||isoDate(fim)):(!filters.ss&&isoDate(inicio)&&isoDate(fim))){
+  const col=tela==='baixar'?'t.tsk_lastexecutiondatehour':'t.tsk_insertdatehour';
+  const dataInicial=tela==='baixar'?(inicio||fim):inicio;
+   const dataFinal=tela==='baixar'?(fim||inicio):fim;
+   if(tela==='baixar'&&dataInicial>dataFinal)throw Object.assign(new Error('Data Inicio maior que Data Fim.'),{status:400});
+   base.push(`${col} >= ${add(dataInicial)}::date`,`${col} < (${add(dataFinal)}::date + INTERVAL '1 day')`);
  }
  const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo' AND t.tsk_lastexecutiondatehour IS NOT NULL"};
-
- if(tela==='baixar'){
-  base.push("LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo'");
- }else if(conditions[tela]){
-  base.push(conditions[tela]);
- }
+ if(conditions[tela])base.push(conditions[tela]);
  const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
  if(filters.ss)like('l.loc_integrationid',filters.ss);
  if(filters.logradouro)like('l.loc_street',filters.logradouro);
@@ -91,26 +76,9 @@ function statement(params, ids, countOnly=false){
  }
  if(equipe)like('a.age_name',equipe);
  const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
-
- if(tela==='baixar'){
-  if(!ids.status.length)
-   throw Error('Campo situacao nao localizado');
-
-  base.push(`(SELECT 1
-   FROM u45468.customfieldvalue v
-   WHERE v.cfv_registerid=t.tsk_id
-     AND v.cfd_id=ANY(${statusParam}::bpchar[])
-     AND (
-       NULLIF(TRIM(v.cfv_externalvalue::text),'') IS NOT NULL
-       OR
-       NULLIF(TRIM(v.cfv_internalvalue::text),'') IS NOT NULL
-     )
-     LIMIT 1
-  ) IS NULL`);
- }
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
- const status=tela==='baixar'?"''::text":valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
+ const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
  const final=[];
   // Recepcao: excluir SS cujo status de integracao no uMov ja e Rejeitada.
  // A classificacao acontece no SQL, antes de LIMIT/OFFSET.
@@ -138,46 +106,33 @@ function statement(params, ids, countOnly=false){
   // Filtra/classifica antes do LIMIT, mas enriquece apenas a pagina.
   // A base pode ser integrada ao plano: nao materializar todas as tarefas.
   // CGM_TOTAL_V6: somente contagem, com os mesmos filtros da listagem.
-
-  function compactar(sql){
-   const values=[],indices=new Map();
-   const text=sql.replace(/\$(\d+)/g,(_,n)=>{
-    n=Number(n);
-    if(!indices.has(n)){
-     values.push(val[n-1]);
-     indices.set(n,values.length);
-    }
-    return '$'+indices.get(n);
-   });
-   return {text,values};
-  }
-
   if(countOnly){
-   if(tela!=='baixar')throw Error('Aba invalida');
-
-   const expressions={
-    status_integracao:status,tags,setor
-   };
-
-   const predicates=final.map(condition=>
-    condition.replace(
-     /p\.(status_integracao|tags|setor)/g,
-     (_,field)=>expressions[field]
-    )
-   );
-
-   return compactar(`
-    WITH b AS NOT MATERIALIZED (
-      ${baseSql}
-    )
-    SELECT COUNT(*)::bigint AS total,
-      COUNT(DISTINCT NULLIF(TRIM(b.ss),''))::bigint
-        AS ss_unicas
-    FROM b
-    WHERE ${predicates.join(' AND ')}
-   `);
+   if(tela!=='baixar')throw Error('Contagem restrita a Notas para Baixar.');
+   const predicates=final.map(condition=>condition.replace(/p\.(status_integracao|tags|setor)/g,(_,field)=>field==='status_integracao'?'b.status_integracao':field==='tags'?tags:setor));
+   const countSql=`WITH b AS MATERIALIZED (
+    ${baseSql}
+   ), valores AS MATERIALIZED (
+    SELECT v.cfv_registerid AS tsk_id, COUNT(*) AS n,
+     MAX(COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'')) AS valor
+    FROM (SELECT DISTINCT tsk_id FROM b) candidatos
+    JOIN u45468.customfieldvalue v ON v.cfv_registerid=candidatos.tsk_id
+    LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END
+    WHERE v.cfd_id=ANY(${statusParam}::bpchar[])
+    GROUP BY v.cfv_registerid
+   ), classificadas AS (
+    SELECT b.*,CASE WHEN v.n>1 THEN ${status} ELSE v.valor END AS status_integracao
+    FROM b LEFT JOIN valores v ON v.tsk_id=b.tsk_id
+   ) SELECT COUNT(*)::bigint AS total,
+    COUNT(DISTINCT NULLIF(TRIM(b.ss),''))::bigint AS ss_unicas
+    FROM classificadas b WHERE ${predicates.join(' AND ')}`;
+   // Elimina parametros de paginacao/enriquecimento nao usados na contagem.
+   const used=[],indexes=new Map();
+   const text=countSql.replace(/\$(\d+)/g,(_,n)=>{
+    n=Number(n);if(!indexes.has(n)){used.push(val[n-1]);indexes.set(n,used.length);}
+    return '$'+indexes.get(n);
+   });
+   return {text,values:used};
   }
-
   const expressions={status_integracao:status,tags,setor};
   // Com filtros personalizados combinados, uma classificacao intermediaria
   // evita que o otimizador repita subconsultas correlacionadas em nested loops.
@@ -204,7 +159,7 @@ function statement(params, ids, countOnly=false){
     LEFT JOIN u45468.agent a ON a.age_id=p.age_id
     LEFT JOIN u45468.tasktype tt ON tt.tty_id=p.tty_id
     ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC`;
- return tela==='baixar'?compactar(sql):{text:sql,values:val};
+ return {text:sql,values:val};
 }
 async function extraFields(pool,rows,ids){
  const locals=[...new Set(rows.map(x=>String(x.loc_id)).filter(Boolean))];

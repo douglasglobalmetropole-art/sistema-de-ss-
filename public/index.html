@@ -1578,7 +1578,7 @@ function screenMatch(x){
 
   // NOTAS PARA BAIXAR: Retornada de Campo e sem status de integração.
   if(currentScreen==='baixar'){
-    return situacao==='retornada de campo' && !statusIntegracao;
+    return situacao.includes('retornada de campo') && !statusIntegracao && !!ultima;
   }
 
   // NOTAS ENCERRADAS: qualquer nota já integrada (Baixada, Rejeitada, Duplicada etc.).
@@ -1826,12 +1826,12 @@ function render(){
   $('countInfo').textContent=(!a.length&&!window.__hasMore?'Nenhuma SS encontrada com os filtros e o período selecionados.':'Exibindo '+inicioPagina+'–'+fimPagina+' de '+(Number.isFinite(window.__totalSS)?window.__totalSS:'mais SS'))+(window.ms?' • consulta '+window.ms+' ms':'');
   if(currentScreen==='baixar'&&
       !$('dateIni').value&&!$('dateFim').value&&
-      !window.__buscaSSAtiva&&!Number.isFinite(window.__totalSS)){
+      !window.__buscaSSAtiva){
     $('countInfo').textContent=
      a.length+' SS nesta pagina'+
      (window.__hasMore?' | Mais registros disponiveis':'')+
      (window.ms?' | Consulta '+window.ms+' ms':'')+
-     '';
+     ' | Consulta direta V13';
   }
   renderPagination();
   if(currentScreen==='tramitacao'){
@@ -1854,115 +1854,16 @@ function reconciliarEquipes(rows){
   }
   return rows;
 }
-let consultaListaAtual=null,numeroConsultaLista=0,telaUltimaConsulta=null;
-
-async function cgmCarregarNotasV16(caminho,quantidade,opcoes,numero){
- const url=new URL(caminho,location.href);
- const offset=Number(url.searchParams.get('offset')||0);
- const inicio=Date.now();
- const rows=[];
- const ids=new Set();
-
- let mais=true;
-
- while(rows.length<quantidade && mais){
-
-  if(opcoes.signal?.aborted)
-   throw new DOMException('Consulta cancelada','AbortError');
-
-  const limite=Math.min(25,quantidade-rows.length);
-
-  url.searchParams.set('limit',String(limite));
-  url.searchParams.set('offset',String(offset+rows.length));
-
-  const r=await fetch(url.pathname+url.search,opcoes);
-  const d=await r.json();
-
-  if(!r.ok||!d.ok)
-   throw Error(d.error||'Falha ao consultar lote');
-
-  if(!Array.isArray(d.rows))
-   throw Error('Resposta invalida do uMov');
-
-  for(const x of d.rows){
-
-   if(norm(x.situacao_campo)!=='retornada de campo' ||
-      norm(x.status_integracao)!=='')
-    throw Error('Registro fora dos criterios de baixa');
-
-   const id=String(x.tarefa);
-
-   if(ids.has(id))
-    throw Error('Lista alterada durante a consulta. Atualize novamente.');
-
-   ids.add(id);
-   rows.push(x);
-  }
-
-  mais=!!d.hasMore;
-
-  if(mais && d.rows.length!==limite)
-   throw Error('Paginacao inconsistente. Atualize novamente.');
-
-  if(numero===numeroConsultaLista){
-   $('countInfo').textContent=
-    'Carregando '+rows.length+' de '+quantidade+' SS...';
-  }
- }
-
- return {
-  ok:true,
-  rows,
-  count:rows.length,
-  hasMore:mais,
-  total:mais?null:offset+rows.length,
-  ms:Date.now()-inicio
- };
-}
-
+let consultaListaAtual=null,numeroConsultaLista=0;
 async function load(forcarAtualizacao=false){
 
   if(window.__buscaSSAtiva)return;
   if(consultaListaAtual)consultaListaAtual.abort();
-  consultaListaAtual=new AbortController();
-  const numero=++numeroConsultaLista;
-
-  if(currentScreen==='baixar'||telaUltimaConsulta==='baixar'){
-   raw=[];
-   view=[];
-   selected={};
-   window.__detailSS=null;
-   window.__totalSS=null;
-   window.__hasMore=false;
-   window.ms=null;
-   $('rows').replaceChildren();
-   $('all').checked=false;
-   $('selectedInfo').style.display='none';
-   renderPagination();
-  }
-
-  telaUltimaConsulta=currentScreen;
+  consultaListaAtual=new AbortController();const numero=++numeroConsultaLista;
   try{
     $('countInfo').textContent='Carregando SS...';
     const equipeFiltro=currentScreen==='campo'?$('lastFilter').value:$('teamFilter').value;
-    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),municipios:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!(somenteEquipe&&currentScreen!=='recepcao');if(forcarAtualizacao)p.set('_refresh',String(Date.now()));if(ssBusca&&ssBusca.length<4){$('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return;}const direta=currentScreen!=='baixar'&&ssBusca.length>=4&&filtros.length===1;const caminho=direta?'/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page}):((global||(currentScreen==='baixar'))?'/api/pesquisa-global?':'/api/recepcao?')+p;
-    const opcoes={
-     signal:consultaListaAtual.signal,
-     cache:forcarAtualizacao?'no-store':'default'
-    };
-
-    let r,j;
-
-    if(currentScreen==='baixar'&&page>25){
-     j=await cgmCarregarNotasV16(caminho,page,opcoes,numero);
-     r={ok:true};
-    }else{
-     r=await fetch(caminho,opcoes);
-     j=await r.json();
-    }
-
-    if(numero!==numeroConsultaLista)return;
-
+    const filtros=[...document.querySelectorAll('.filter input[data-col]')].filter(x=>x.value.trim()&&x.offsetParent!==null);const ssBusca=document.querySelector('.filter input[data-col="ss"]')?.value.trim()||'';let p=new URLSearchParams({inicio:$('dateIni').value,fim:$('dateFim').value,limit:page,offset:window.__pageOffset,tela:currentScreen,macro:macros.join('\u001f'),municipios:cities.join('\u001f'),equipe:equipeFiltro});filtros.forEach(x=>p.set(x.dataset.col,x.value.trim()));const somenteEquipe=filtros.length===1&&filtros[0].dataset.col==='equipe_executou';const global=filtros.length>0&&!(somenteEquipe&&currentScreen!=='recepcao');if(forcarAtualizacao)p.set('_refresh',String(Date.now()));if(ssBusca&&ssBusca.length<4){$('countInfo').textContent='Digite pelo menos 4 caracteres da SS.';return;}const direta=ssBusca.length>=4&&filtros.length===1;const caminho=direta?'/api/localizar-ss-rapida?'+new URLSearchParams({ss:ssBusca,tela:currentScreen,limit:page}):((global||(currentScreen==='baixar'&&!$('dateIni').value&&!$('dateFim').value))?'/api/pesquisa-global?':'/api/recepcao?')+p;let r=await fetch(caminho,{signal:consultaListaAtual.signal,cache:forcarAtualizacao?'no-store':'default'}),j=await r.json();if(numero!==numeroConsultaLista)return;
     if(!r.ok)throw Error(j.error);
     if(direta&&filtros.length>1){j.rows=(j.rows||[]).filter(item=>filtros.every(f=>f.dataset.col==='ss'||String(f.dataset.col==='data_finalizacao'?(item.periodo_execucao||item.data_finalizacao||''):(item[f.dataset.col]??'')).toLocaleLowerCase('pt-BR').includes(f.value.trim().toLocaleLowerCase('pt-BR'))));j.total=j.rows.length;}
     raw=reconciliarEquipes(
@@ -1972,11 +1873,11 @@ async function load(forcarAtualizacao=false){
     const situacao=norm(item.situacao_campo);
     const status=norm(item.status_integracao);
 
-    return situacao==='retornada de campo' && status==='';
+    return status==='';
   })
 );window.__hasMore=!!j.hasMore;window.__totalSS=typeof j.total==='number'?j.total:null;window.__globalSSSearch=global;window.ms=j.ms;selected={};apply();
     // CGM_NOTAS_BAIXAR_TOTAL_CLIENTE_V1: total real, buscado sem bloquear a pagina.
-    if(currentScreen==='baixar'&&!direta&&window.__totalSS===null){
+    if(currentScreen==='baixar'&&!global&&!direta&&($('dateIni').value||$('dateFim').value)){
       const consulta=p.toString();
       fetch('/api/recepcao-total-baixar?'+consulta,{cache:'no-store',signal:consultaListaAtual.signal})
        .then(r=>r.ok?r.json():null)

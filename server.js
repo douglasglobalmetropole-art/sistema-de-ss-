@@ -1727,9 +1727,9 @@ async function totalPendenciasV6(req,res){
  let params;
  try{params=cp.parse({...req,query:{...req.query,tela:'baixar'},divisaoSS:req.divisaoSS});}
  catch(e){return res.status(e.status||400).json({ok:false,error:e.message});}
- if(req.divisaoSS&&!params.municipios.length)return res.status(403).json({ok:false,error:'Divisao sem municipios permitidos.'});
+ if(!params.municipios.length)return res.status(403).json({ok:false,error:'Divisao sem municipios permitidos.'});
  const {limit,offset,...filtros}=params;
- const key='ss:total-v15:'+cacheScope()+':'+JSON.stringify(filtros);
+ const key='ss:total-v6:'+cacheScope()+':'+JSON.stringify(filtros);
  // Armazena inclusive falhas durante 60s, para evitar repeticao de consultas caras.
  const resultado=await cachedRead(key,60000,async()=>{
   let cliente,descartar=false;
@@ -1747,7 +1747,7 @@ async function totalPendenciasV6(req,res){
    const q=await cliente.query({text,values:stmt.values,query_timeout:6500});
    const total=Number(q.rows[0]?.total),ss_unicas=Number(q.rows[0]?.ss_unicas);
    if(!Number.isSafeInteger(total)||total<0||!Number.isSafeInteger(ss_unicas)||ss_unicas<0||ss_unicas>total)throw Error('Contagem invalida.');
-   return {ok:true,total,ss_unicas,criterio:'retornada-sem-integracao-v15'};
+   return {ok:true,total,ss_unicas,criterio:'mesmo-filtro-fisico-v6'};
   }catch(e){
    console.warn('[CGM] contagem notas para baixar V6:',e.code||'',e.message);
    return {ok:false,total:null,error:'Contagem da listagem temporariamente indisponivel.'};
@@ -1760,7 +1760,7 @@ async function totalPendenciasV6(req,res){
 }
 app.get('/api/recepcao-total-baixar',async(req,res)=>{
  res.set('Cache-Control','private, no-store');
- if(process.env.CP_PESQUISA_V6!=='false')return totalPendenciasV6(req,res);
+ if(req.divisaoSS&&process.env.CP_PESQUISA_V6!=='false')return totalPendenciasV6(req,res);
  const ini=String(req.query.inicio||'').trim(),fim=String(req.query.fim||'').trim();
  if((ini&&!/^\d{4}-\d{2}-\d{2}$/.test(ini))||(fim&&!/^\d{4}-\d{2}-\d{2}$/.test(fim)))
   return res.status(400).json({ok:false,error:'Periodo invalido.'});
