@@ -53,13 +53,16 @@ function statement(params, ids, countOnly=false){
    if(tela==='baixar'&&dataInicial>dataFinal)throw Object.assign(new Error('Data Inicio maior que Data Fim.'),{status:400});
    base.push(`${col} >= ${add(dataInicial)}::date`,`${col} < (${add(dataFinal)}::date + INTERVAL '1 day')`);
  }
- const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='retornada de campo' AND t.tsk_lastexecutiondatehour IS NOT NULL"};
+ const conditions={recepcao:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='pendente de envio para campo'",campo:"LOWER(TRIM(COALESCE(t.tsk_situation,'')))='em campo'",baixar:"t.tsk_situation='Retornada de Campo'"};
  if(conditions[tela])base.push(conditions[tela]);
+ if(tela==='baixar'){
+  base.push("COALESCE(ls.e_situacao,NULLIF(TRIM(l.e_situacao),'')) IS NULL");
+ }
  const like=(expression,value)=>base.push(`${expression} ILIKE ${add('%'+value+'%')}`);
  if(filters.ss)like('l.loc_integrationid',filters.ss);
- if(filters.logradouro)like('l.loc_street',filters.logradouro);
- if(filters.bairro)like('l.loc_neighborhood',filters.bairro);
- if(filters.cidade)like('l.loc_city',filters.cidade);
+ if(filters.logradouro)like(tela==='baixar'?'lf.loc_street':'l.loc_street',filters.logradouro);
+ if(filters.bairro)like(tela==='baixar'?'l.e_bairro':'l.loc_neighborhood',filters.bairro);
+ if(filters.cidade)like(tela==='baixar'?'l.e_localidade':'l.loc_city',filters.cidade);
  if(filters.servico)like('tt.tty_description',filters.servico);
  if(filters.equipe_executou)like('a.age_name',filters.equipe_executou);
  if(filters.criado_em)like("TO_CHAR(t.tsk_insertdatehour,'DD/MM/YYYY HH24:MI')",filters.criado_em);
@@ -72,20 +75,20 @@ function statement(params, ids, countOnly=false){
   const cityParam=add(municipios);
   // Filtragem direta pela tabela fisica antes da paginacao.
   const normCity=expr=>`translate(UPPER(TRIM(${expr})),'ÁÀÂÃÉÈÊÍÌÎÓÒÔÕÚÙÛÇ','AAAAEEEIIIOOOOUUUC')`;
-  base.push(`${normCity('l.loc_city')}=ANY(${cityParam}::text[])`);
+  base.push(`${normCity(tela==='baixar'?'l.e_localidade':'l.loc_city')}=ANY(${cityParam}::text[])`);
  }
  if(equipe)like('a.age_name',equipe);
  const statusParam=add(ids.status),tagsParam=add(ids.tags),setorParam=add(ids.setor);
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
- const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=valueExpr('b','loc_id',setorParam);
+ const status=valueExpr('b','tsk_id',statusParam),tags=tela==='baixar'?'b.tags_oficial':valueExpr('b','tsk_id',tagsParam),setor=tela==='baixar'?'b.setor_oficial':valueExpr('b','loc_id',setorParam);
  const final=[];
   // Recepcao: excluir SS cujo status de integracao no uMov ja e Rejeitada.
  // A classificacao acontece no SQL, antes de LIMIT/OFFSET.
  if(tela==='recepcao')final.push(
   "LOWER(TRIM(COALESCE(p.status_integracao,''))) NOT LIKE 'rejeitad%'"
  );
- if(tela==='baixar')final.push("COALESCE(NULLIF(TRIM(p.status_integracao),''),'')=''");
+ if(tela==='baixar'){ /* Status oficial filtrado na origem. */ }
  else if(tela==='encerradas')final.push("NULLIF(TRIM(p.status_integracao),'') IS NOT NULL");
  else if(tela==='tramitacao')final.push("LOWER(TRIM(COALESCE(p.status_integracao,''))) LIKE 'baixad%'");
  if(filters.tags)final.push(`p.tags ILIKE ${add('%'+filters.tags+'%')}`);
@@ -97,9 +100,12 @@ function statement(params, ids, countOnly=false){
   const baseSql=`SELECT t.tsk_id,t.loc_id,t.age_id,t.tty_id,t.tss_id,
      t.tsk_insertdatehour,t.tsk_lastexecutiondatehour,t.tsk_realinitialdatehour,t.tsk_realfinaldatehour,
      t.tsk_situation,
-     l.loc_integrationid AS ss,l.loc_city AS cidade,l.loc_neighborhood AS bairro,
-     l.loc_street AS logradouro,l.loc_streetnumber AS numero
-    FROM u45468.task t JOIN u45468.local l ON l.loc_id=t.loc_id
+     l.loc_integrationid AS ss,${tela==='baixar'?'l.e_localidade':'l.loc_city'} AS cidade,${tela==='baixar'?'l.e_bairro':'l.loc_neighborhood'} AS bairro,
+     ${tela==='baixar'?'lf.loc_street':'l.loc_street'} AS logradouro,${tela==='baixar'?'lf.loc_streetnumber':'l.loc_streetnumber'} AS numero
+     ${tela==='baixar'?",l.e_setor AS setor_oficial,COALESCE(ls.e_tag,NULLIF(TRIM(l.e_tag),'')) AS tags_oficial":''}
+    FROM u45468.task t
+    JOIN ${tela==='baixar'?'u45468.mv_local':'u45468.local'} l ON l.loc_id=t.loc_id
+    ${tela==='baixar'?'LEFT JOIN u45468.local_status ls ON ls.loc_id=l.loc_id LEFT JOIN u45468.local lf ON lf.loc_id=t.loc_id':''}
     ${filters.equipe_executou||equipe?'LEFT JOIN u45468.agent a ON a.age_id=t.age_id':''}
     ${filters.servico||macro.length?'LEFT JOIN u45468.tasktype tt ON tt.tty_id=t.tty_id':''}
     ${base.length?'WHERE '+base.join(' AND '):''}`;
@@ -108,23 +114,13 @@ function statement(params, ids, countOnly=false){
   // CGM_TOTAL_V6: somente contagem, com os mesmos filtros da listagem.
   if(countOnly){
    if(tela!=='baixar')throw Error('Contagem restrita a Notas para Baixar.');
-   const predicates=final.map(condition=>condition.replace(/p\.(status_integracao|tags|setor)/g,(_,field)=>field==='status_integracao'?'b.status_integracao':field==='tags'?tags:setor));
-   const countSql=`WITH b AS MATERIALIZED (
+
+   const predicates=final.map(condition=>condition.replace(/p\.(status_integracao|tags|setor)/g,(_,field)=>field==='status_integracao'?"''::text":field==='tags'?tags:setor));
+   const countSql=`WITH b AS NOT MATERIALIZED (
     ${baseSql}
-   ), valores AS MATERIALIZED (
-    SELECT v.cfv_registerid AS tsk_id, COUNT(*) AS n,
-     MAX(COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'')) AS valor
-    FROM (SELECT DISTINCT tsk_id FROM b) candidatos
-    JOIN u45468.customfieldvalue v ON v.cfv_registerid=candidatos.tsk_id
-    LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END
-    WHERE v.cfd_id=ANY(${statusParam}::bpchar[])
-    GROUP BY v.cfv_registerid
-   ), classificadas AS (
-    SELECT b.*,CASE WHEN v.n>1 THEN ${status} ELSE v.valor END AS status_integracao
-    FROM b LEFT JOIN valores v ON v.tsk_id=b.tsk_id
-   ) SELECT COUNT(*)::bigint AS total,
+   ) SELECT COUNT(DISTINCT b.tsk_id)::bigint AS total,
     COUNT(DISTINCT NULLIF(TRIM(b.ss),''))::bigint AS ss_unicas
-    FROM classificadas b WHERE ${predicates.join(' AND ')}`;
+    FROM b ${predicates.length?'WHERE '+predicates.join(' AND '):''}`;
    // Elimina parametros de paginacao/enriquecimento nao usados na contagem.
    const used=[],indexes=new Map();
    const text=countSql.replace(/\$(\d+)/g,(_,n)=>{
@@ -133,14 +129,14 @@ function statement(params, ids, countOnly=false){
    });
    return {text,values:used};
   }
-  const expressions={status_integracao:status,tags,setor};
+  const expressions={status_integracao:tela==='baixar'?"''::text":status,tags,setor};
   // Com filtros personalizados combinados, uma classificacao intermediaria
   // evita que o otimizador repita subconsultas correlacionadas em nested loops.
   const classify=!!(filters.tags||filters.setor||filters.status_integracao);
   const needed=new Set();
   if(classify)for(const condition of final)for(const match of condition.matchAll(/p\.(status_integracao|tags|setor)/g))needed.add(match[1]);
   const filtered=final.map(condition=>condition.replace(/p\.(status_integracao|tags|setor)/g,(_,field)=>classify?'b.'+field:expressions[field]).replace(/\bp\./g,'b.'));
-  const onPage=expression=>expression.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id');
+  const onPage=expression=>expression.replaceAll('b.tsk_id','p.tsk_id').replaceAll('b.loc_id','p.loc_id').replaceAll('b.tags_oficial','p.tags_oficial').replaceAll('b.setor_oficial','p.setor_oficial');
   const classified=classify?`, classificadas AS MATERIALIZED (
     SELECT b.*,${[...needed].map(field=>expressions[field]+' AS '+field).join(',')} FROM b
    )`:'';
@@ -159,7 +155,16 @@ function statement(params, ids, countOnly=false){
     LEFT JOIN u45468.agent a ON a.age_id=p.age_id
     LEFT JOIN u45468.tasktype tt ON tt.tty_id=p.tty_id
     ORDER BY ${sort} DESC NULLS LAST,p.tsk_id DESC`;
- return {text:sql,values:val};
+ const used=[],indexes=new Map();
+ const text=sql.replace(/\$(\d+)/g,(_,n)=>{
+  n=Number(n);
+  if(!indexes.has(n)){
+   used.push(val[n-1]);
+   indexes.set(n,used.length);
+  }
+  return '$'+indexes.get(n);
+ });
+ return {text,values:used};
 }
 async function extraFields(pool,rows,ids){
  const locals=[...new Set(rows.map(x=>String(x.loc_id)).filter(Boolean))];
@@ -201,8 +206,8 @@ async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'})
  try{
   const result=await searchFlight(flightKey,async()=>{
   const ids=await fieldIds(pool,scope.startsWith('lote1:')?'lote1':'principal');
-  if(params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
-  if(params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
+  if(params.tela!=='baixar'&&params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
+  if(params.tela!=='baixar'&&params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   const stmt=statement(params,ids);
   const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
   const page=q.rows.slice(0,params.limit);
