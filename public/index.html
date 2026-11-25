@@ -4528,4 +4528,67 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 </script>
 <script defer src="/umov-manual-cgm-v1.js?v=manual-20261123-v1"></script>
 <script src="/cgm-layout-responsivo-v1.js?v=20261124-v4" defer></script>
+<script>
+
+/* CGM_PRESENCA_V4 */
+(function(){
+    let ultima=null;
+    let ocupado=false;
+    let anterior=false;
+
+    function autenticado(){
+        return document.body.dataset.siscomAuthenticated==='true';
+    }
+
+    function interacao(e){
+        if(e.isTrusted && autenticado() && !document.hidden)
+            ultima=Date.now();
+    }
+
+    ['pointerdown','keydown','touchstart','wheel'].forEach(e=>{
+        document.addEventListener(e,interacao,{
+            passive:true,capture:true
+        });
+    });
+
+    async function heartbeat(){
+        if(!autenticado()||ocupado)return;
+
+        ocupado=true;
+
+        try{
+            await fetch('/api/siscom-individual/presenca',{
+                method:'POST',
+                credentials:'same-origin',
+                cache:'no-store',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    interagiu:ultima!==null,
+                    idade_interacao_ms:ultima===null
+                        ? 0 : Date.now()-ultima
+                })
+            });
+        }catch{}finally{
+            ocupado=false;
+        }
+    }
+
+    setInterval(()=>{
+        const atual=autenticado();
+
+        if(atual!==anterior){
+            anterior=atual;
+            ultima=null;
+            if(atual)heartbeat();
+        }
+    },1000);
+
+    setInterval(heartbeat,30000);
+
+    document.addEventListener('visibilitychange',()=>{
+        if(!document.hidden)heartbeat();
+    });
+})();
+
+</script>
 </body></html>

@@ -916,11 +916,72 @@ app.post('/api/siscom-individual/logout',async(req,res)=>{
  cookie(res,SISCOM_PENDING_COOKIE,'',0);
  cookie(res,SISCOM_USER_COOKIE,'',0);
  if(user){
-  try{await siscomCreateJob('siscom_logout_individual',signedTask('siscom_logout_individual',{},user.sid))}
+  try{await enviarPresenca(user,{evento:'logout'})}catch{}
+   try{await siscomCreateJob('siscom_logout_individual',signedTask('siscom_logout_individual',{},user.sid))}
   catch(e){console.error('Logout SISCOM: limpeza local; worker expira sessao automaticamente:',e.message)}
  }
  res.json({ok:true});
 });
+
+// CGM_PRESENCA_V4
+async function enviarPresenca(user,payload){
+    const url=String(process.env.CGM_GATEWAY_URL||'');
+    const secret=String(process.env.CGM_GATEWAY_SECRET||'');
+
+    if(!/^https:\/\/[a-z0-9-]+\.ngrok-free\.dev\/?$/i.test(url))
+        throw Error('Gateway invalido');
+
+    if(!/^[a-f0-9]{64}$/.test(secret))
+        throw Error('Gateway nao configurado');
+
+    const r=await fetch(url.replace(/\/$/,'')+'/v2/cgm_presenca',{
+        method:'POST',
+        headers:{
+            Authorization:'Bearer '+secret,
+            'Content-Type':'application/json',
+            'ngrok-skip-browser-warning':'true'
+        },
+        body:JSON.stringify({
+            operation:'siscom_presence',
+            payload:signedTask('siscom_presence',payload,user.sid)
+        }),
+        redirect:'error',
+        signal:AbortSignal.timeout(5000)
+    });
+
+    return r.status;
+}
+
+app.post('/api/siscom-individual/presenca',async(req,res)=>{
+    res.set('Cache-Control','no-store');
+
+    if(!siscomSameOrigin(req))
+        return res.status(403).json({ok:false});
+
+    const user=siscomIndividual(req);
+
+    if(!user)
+        return res.status(401).json({ok:false});
+
+    try{
+        const status=await enviarPresenca(user,{
+            evento:'heartbeat',
+            interagiu:req.body?.interagiu===true,
+            idade_interacao_ms:Math.min(
+                900000,
+                Math.max(0,Number(req.body?.idade_interacao_ms)||0)
+            )
+        });
+
+        return res.status(
+            status===200?200:status===401?401:503
+        ).json({ok:status===200});
+
+    }catch{
+        return res.status(503).json({ok:false});
+    }
+});
+
 // === FIM SISCOM INDIVIDUAL ===
 
 // SISCOM Gateway: healthcheck de integraÃ§Ã£o. NÃ£o encaminha requisiÃ§Ãµes arbitrÃ¡rias Ã  VPN.
