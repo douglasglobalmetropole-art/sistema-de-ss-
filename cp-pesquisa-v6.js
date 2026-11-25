@@ -96,8 +96,7 @@ function statement(params, ids, countOnly=false){
   if(!ids.status.length)
    throw Error('Campo situacao nao localizado');
 
-  base.push(`NOT EXISTS (
-   SELECT 1
+  base.push(`(SELECT 1
    FROM u45468.customfieldvalue v
    WHERE v.cfv_registerid=t.tsk_id
      AND v.cfd_id=ANY(${statusParam}::bpchar[])
@@ -106,7 +105,8 @@ function statement(params, ids, countOnly=false){
        OR
        NULLIF(TRIM(v.cfv_internalvalue::text),'') IS NOT NULL
      )
-  )`);
+     LIMIT 1
+  ) IS NULL`);
  }
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
