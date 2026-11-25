@@ -2914,27 +2914,48 @@ load();
 // Operacoes SISCOM: autenticacao pela sessao individual, sem senha administrativa.
 // Requisicoes que retornam 401 nao sao reenviadas automaticamente (evita escrita duplicada).
 (()=>{
+
  const originalFetch=window.fetch.bind(window);
- let opening=false;
+
  window.fetch=async(input,init)=>{
-  const url=typeof input==='string'?input:input instanceof Request?input.url:String(input);
-  if(!url.includes('/api/siscom-gateway/'))return originalFetch(input,init);
-  const response=await originalFetch(input,init);
-  if(response.status!==401)return response;
-  try{
-   const state=await originalFetch('/api/siscom-individual/me',{credentials:'same-origin',cache:'no-store'});
-   const data=state.ok?await state.json():null;
-   if(!data?.authenticated && !opening){
-    opening=true;
-    const btn=document.getElementById('siscomLoginTop');
-    const modal=document.getElementById('siscomLoginModal');
-    if(btn && modal && !modal.classList.contains('open'))btn.click();
-    opening=false;
-   }
-  }catch(e){opening=false;}
-  // Preserva o 401 original. Nenhuma consulta ou operacao de escrita e repetida.
-  return response;
+    const url=typeof input==='string'?input:input instanceof Request?input.url:String(input);
+
+    if(!url.includes('/api/siscom-gateway/')){
+        return originalFetch(input,init);
+    }
+
+    const generation=window.cgmSessionGeneration?.();
+    const response=await originalFetch(input,init);
+
+    try{
+        const data=await response.clone().json();
+        const msg=String(data.error_message||data.error||data.message||'')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g,'')
+            .toLowerCase();
+
+        const expired=/sessao.{0,40}expirad|worker reiniciado|faca login novamente/.test(msg);
+
+        if(expired){
+            window.cgmSiscomRelogin?.(generation);
+        }else if(response.status===401){
+            const state=await originalFetch('/api/siscom-individual/me',{
+                credentials:'same-origin',
+                cache:'no-store'
+            });
+
+            if(state.ok){
+                const x=await state.json();
+                if(x.authenticated===false){
+                    window.cgmSiscomRelogin?.(generation);
+                }
+            }
+        }
+    }catch{}
+
+    return response;
  };
+
 })();
 </script>
 <script>
@@ -2944,10 +2965,30 @@ load();
  const btn=$('siscomLoginTop'),modal=$('siscomLoginModal'),form=$('siscomLoginForm'),
   feedback=$('siscomLoginFeedback'),label=$('siscomIdentityLabel'),consult=$('siscomConsultaTop'),logout=$('siscomLogoutTop');
  let active=false,workerConnected=false,refreshBusy=false,currentUserName='Conectado';
+     let reauthRequired=false;
+     let sessionGeneration=0;
+
+     window.cgmSessionGeneration=()=>sessionGeneration;
+
+     window.cgmSiscomRelogin=function(generation){
+        if(generation!==undefined && generation!==sessionGeneration)return;
+        if(reauthRequired)return;
+
+        reauthRequired=true;
+        sessionGeneration++;
+        workerConnected=false;
+        paint(null);
+
+        if(!modal.classList.contains('open'))btn.click();
+
+        feedback.style.color='#a52828';
+        feedback.textContent='Sessao SISCOM expirada. Entre novamente para continuar. Seus dados preenchidos serao preservados.';
+        modal.style.zIndex='2147483647';
+     };
  const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  // SISCOM_WORKER_INDICATOR_V1
  function paint(data){
-  active=!!data?.authenticated;
+  active=!!data?.authenticated && !reauthRequired;
   currentUserName=data?.user?.nome||'Conectado';
 
   label.textContent=active
@@ -2999,12 +3040,18 @@ load();
    });
 
    const x=await r.json();
-   paint(x);
-   await refreshWorker();
+     if(r.ok && x.authenticated===false && active){
+        window.cgmSiscomRelogin();
+        return;
+     }
+     if(r.ok && !reauthRequired){
+        paint(x);
+        await refreshWorker();
+     }
 
   }catch{
    workerConnected=false;
-   paint(null);
+   paint({authenticated:active,user:{nome:currentUserName}});
   }finally{
    refreshBusy=false;
   }
@@ -3024,14 +3071,14 @@ load();
     const rr=await fetch('/api/siscom-individual/login-status',{cache:'no-store',credentials:'same-origin'});
     const x=await rr.json();if(rr.status===202)continue;
     if(!rr.ok)throw Error(x.error||'Erro de autenticação');
-    done=true;paint({authenticated:true,user:x.user});await refreshWorker();modal.classList.remove('open');break;
+    done=true;sessionGeneration++;reauthRequired=false;paint({authenticated:true,user:x.user});await refreshWorker();modal.classList.remove('open');break;
    }
    if(!done)throw Error('Tempo excedido. Confira o worker Windows conectado à VPN.');
   }catch(e){feedback.style.color='#a52828';feedback.textContent=e.message}
   finally{submit.disabled=false;$('siscomLoginPassword').value=''}
  });
  logout.addEventListener('click',async()=>{
-  logout.disabled=true;
+  logout.disabled=true;sessionGeneration++;reauthRequired=false;
   try{await fetch('/api/siscom-individual/logout',{method:'POST',credentials:'same-origin'});}finally{logout.disabled=false;paint(null)}
  });
  consult.addEventListener('click',async()=>{
@@ -4557,7 +4604,8 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
         ocupado=true;
 
         try{
-            await fetch('/api/siscom-individual/presenca',{
+            const generation=window.cgmSessionGeneration?.();
+            const resposta=await fetch('/api/siscom-individual/presenca',{
                 method:'POST',
                 credentials:'same-origin',
                 cache:'no-store',
@@ -4568,6 +4616,9 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
                         ? 0 : Date.now()-ultima
                 })
             });
+            if(resposta.status===401){
+                window.cgmSiscomRelogin?.(generation);
+            }
         }catch{}finally{
             ocupado=false;
         }
