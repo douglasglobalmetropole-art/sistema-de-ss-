@@ -85,7 +85,7 @@ function statement(params, ids, countOnly=false){
  }
  // Pesquisa valor do campo na tabela física, em vez de abrir toda a view dbout_task.
  const valueExpr=(tableAlias,idColumn,cfdParameter)=>`(SELECT COALESCE(NULLIF(ce.cev_description::text,''),NULLIF(v.cfv_externalvalue::text,''),NULLIF(v.cfv_internalvalue::text,''),'') FROM u45468.customfieldvalue v LEFT JOIN u45468.customentityvalue ce ON ce.cev_id=CASE WHEN v.cfv_internalvalue ~ '^[0-9]{1,18}$' THEN v.cfv_internalvalue::bigint ELSE NULL END WHERE v.cfv_registerid=${tableAlias}.${idColumn} AND v.cfd_id=ANY(${cfdParameter}::bpchar[]) LIMIT 1)`;
- const status=valueExpr('b','tsk_id',statusParam),tags=localOficial?'b.tags_oficial':valueExpr('b','tsk_id',tagsParam),setor=localOficial?'b.setor_oficial':valueExpr('b','loc_id',setorParam);
+ const status=valueExpr('b','tsk_id',statusParam),tags=valueExpr('b','tsk_id',tagsParam),setor=localOficial?'b.setor_oficial':valueExpr('b','loc_id',setorParam);
  if(tela==='encerradas'){
   const taskStatus=`EXISTS (SELECT 1 FROM u45468.customfieldvalue v WHERE v.cfv_registerid=t.tsk_id AND v.cfd_id=ANY(${statusParam}::bpchar[]) AND NULLIF(TRIM(v.cfv_internalvalue::text),'') IS NOT NULL)`;
   const taskBaixada=`EXISTS (SELECT 1 FROM u45468.customfieldvalue v JOIN u45468.customentityvalue ce ON ce.cev_id::text=v.cfv_internalvalue::text JOIN u45468.customfield cf ON cf.cfd_id=v.cfd_id AND ce.cet_id=cf.cfd_sourceid WHERE v.cfv_registerid=t.tsk_id AND v.cfd_id=ANY(${statusParam}::bpchar[]) AND ce.cev_description='Baixada no Siscom')`;
@@ -215,7 +215,7 @@ async function handler(req,res,{pool,hostRelatorioUmov,scope='principal:geral'})
  try{
   const result=await searchFlight(flightKey,async()=>{
   const ids=await fieldIds(pool,scope.startsWith('lote1:')?'lote1':'principal');
-  if(params.tela!=='baixar'&&params.tela!=='encerradas'&&params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
+  if(params.filters.tags&&!ids.tags.length)throw Object.assign(new Error('Campo TAG nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   if(params.tela!=='baixar'&&params.tela!=='encerradas'&&params.filters.setor&&!ids.setor.length)throw Object.assign(new Error('Campo setor nao localizado no cadastro fisico do uMov; consulte o mapeamento antes de pesquisar.'),{status:503});
   const stmt=statement(params,ids);
   const t0=Date.now();const q=await pool.query({...stmt,query_timeout:8500});const msBanco=Date.now()-t0;
