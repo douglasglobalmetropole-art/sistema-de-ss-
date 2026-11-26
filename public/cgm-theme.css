@@ -1,0 +1,125 @@
+﻿/* CGM_TEMA_V1 */
+
+#siscomConsultaTop {
+    display: none !important;
+}
+
+#cgmThemeToggle {
+    cursor: pointer;
+    min-width: 90px;
+    white-space: nowrap;
+}
+
+html[data-cgm-theme="dark"] {
+    color-scheme: dark;
+    --blue: #17649e;
+    --blue2: #0879f7;
+    --txt: #dce8f5;
+}
+
+html[data-cgm-theme="dark"] body {
+    background: #101923 !important;
+    color: #dce8f5 !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .toolbar,.box,.card,.lower,.details,
+    .field,.multiMenu,.modal,.modalBox,
+    .modalContent,.modalBody,.modalItem,
+    .pager,.pagination,.tableScroll,
+    dialog,#gisSSCard
+) {
+    background: #162330 !important;
+    color: #dce8f5 !important;
+    border-color: #304559 !important;
+}
+
+html[data-cgm-theme="dark"] table {
+    background: #162330 !important;
+    color: #dce8f5 !important;
+}
+
+html[data-cgm-theme="dark"] th {
+    background: #123f65 !important;
+    color: #eaf4ff !important;
+    border-color: #304e68 !important;
+}
+
+html[data-cgm-theme="dark"] td {
+    background: transparent !important;
+    color: #dce8f5 !important;
+    border-color: #2b3e50 !important;
+}
+
+html[data-cgm-theme="dark"] tbody tr {
+    background: #162330 !important;
+}
+
+html[data-cgm-theme="dark"] tbody tr:nth-child(even) {
+    background: #1b2a38 !important;
+}
+
+html[data-cgm-theme="dark"] tbody tr:hover {
+    background: #243d53 !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    input,select,textarea,.multiBtn
+) {
+    background: #101d29 !important;
+    color: #e2edf7 !important;
+    border-color: #385168 !important;
+}
+
+html[data-cgm-theme="dark"] input::placeholder {
+    color: #8fa6bb !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .btn,.tab,.pageBtn,.action
+):not(.active):not(.primary) {
+    background: #203449 !important;
+    color: #e2edf7 !important;
+    border-color: #3a566e !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .tab.active,.btn.primary,.pageBtn.active
+) {
+    background: #0879e8 !important;
+    color: white !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .val,.field span,.f label,.gisInfo
+) {
+    color: #c8dff3 !important;
+}
+
+html[data-cgm-theme="dark"] a {
+    color: #75bfff !important;
+}
+
+html[data-cgm-theme="dark"] #gisSSCard .gisHead {
+    background: #123f65 !important;
+}
+
+html[data-cgm-theme="dark"] #gisSSCopy {
+    background: #203449 !important;
+    color: #b8dcff !important;
+    border-color: #3a566e !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .multiMenu label:hover,.modalItem:hover
+) {
+    background: #243d53 !important;
+}
+
+html[data-cgm-theme="dark"] {
+    scrollbar-color: #49647c #162330;
+}
+
+@media print {
+    #cgmThemeToggle { display: none !important; }
+}
