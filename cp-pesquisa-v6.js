@@ -158,6 +158,9 @@ function statement(params, ids, countOnly=false){
     LIMIT ${limitParam} OFFSET ${offsetParam}
    ) SELECT p.*,${pageFields.length?pageFields.join(',')+',':''}
      a.age_name AS tecnico,tt.tty_description AS servico,
+      (SELECT NULLIF(TRIM(cl.e_cliente::text),'')
+       FROM u45468.dbout_local cl
+       WHERE cl.loc_id=p.loc_id LIMIT 1) AS nome_cliente,
      (SELECT to_jsonb(token_task)->>'tsk_accesstoken' FROM u45468.task token_task
       WHERE token_task.tsk_id=p.tsk_id LIMIT 1) AS token
     FROM pagina p
@@ -191,7 +194,8 @@ function transform(rows,extras,hostRelatorioUmov){
   const ext=extras.get(str(x.loc_id))||{};
   const ini=fmt(x.tsk_realinitialdatehour),fim=fmt(x.tsk_realfinaldatehour),ultima=fmt(x.tsk_lastexecutiondatehour);
   const token=str(x.token);
-  return {ss:x.ss||'',tarefa:x.tsk_id,local:x.loc_id,
+  // CGM_NOME_CLIENTE_V2
+   return {nome_cliente:x.nome_cliente||"",ss:x.ss||'',tarefa:x.tsk_id,local:x.loc_id,
    cidade:x.cidade||'',bairro:x.bairro||'',logradouro:x.logradouro||'',numero:x.numero||'',setor:x.setor||'',
    servico:x.servico||'',tecnico:x.tecnico||'',equipe_executou:x.tecnico||'',
    tags:x.tags||'',situacao_campo:x.tsk_situation||'',status_integracao:x.status_integracao||'',
