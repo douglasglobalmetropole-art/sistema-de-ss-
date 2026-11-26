@@ -123,3 +123,19 @@ html[data-cgm-theme="dark"] {
 @media print {
     #cgmThemeToggle { display: none !important; }
 }
+
+
+/* CGM_TEMA_V2 */
+#cgmThemeToggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    flex-shrink: 0 !important;
+    min-width: 105px !important;
+    height: 34px !important;
+    padding: 0 12px !important;
+    cursor: pointer !important;
+    font-weight: 700 !important;
+}

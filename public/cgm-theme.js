@@ -41,19 +41,14 @@
 
     apply(read(),false);
 
+
     function init(){
-        const old=document.getElementById('siscomConsultaTop');
+        const b=document.getElementById('cgmThemeToggle');
 
-        if(!old || document.getElementById('cgmThemeToggle'))
-            return;
+        if(!b)return;
+        if(b.dataset.themeReady==='1')return;
 
-        const b=document.createElement('button');
-
-        b.type='button';
-        b.id='cgmThemeToggle';
-        b.className='btn';
-
-        old.before(b);
+        b.dataset.themeReady='1';
 
         b.addEventListener('click',()=>{
             apply(
