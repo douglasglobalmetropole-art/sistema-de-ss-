@@ -139,3 +139,237 @@ html[data-cgm-theme="dark"] {
     cursor: pointer !important;
     font-weight: 700 !important;
 }
+
+/* CGM_TEMA_V3 - ACABAMENTO GRAFITE */
+
+html[data-cgm-theme="dark"] {
+    --txt: #d6dee9;
+    --blue: #17466c;
+    --blue2: #1769b0;
+    color-scheme: dark;
+}
+
+html[data-cgm-theme="dark"] body {
+    background: #11151c !important;
+    color: #d6dee9 !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .toolbar,.box,.card,.lower,.details,
+    .field,.pager,.tableScroll,.pagination,
+    .multiMenu,.modalBox,.modalContent,
+    .modalBody,dialog,#gisSSCard
+) {
+    background: #191f28 !important;
+    border-color: #303a47 !important;
+    color: #d6dee9 !important;
+}
+
+/* TABELA */
+
+html[data-cgm-theme="dark"] table {
+    background: #191f28 !important;
+}
+
+html[data-cgm-theme="dark"] th {
+    background: #17466c !important;
+    color: #edf5ff !important;
+    border-color: #31536e !important;
+}
+
+html[data-cgm-theme="dark"] tbody tr {
+    background: #191f28 !important;
+}
+
+html[data-cgm-theme="dark"] tbody tr:nth-child(even) {
+    background: #1e252f !important;
+}
+
+html[data-cgm-theme="dark"] td {
+    color: #d6dee9 !important;
+    border-color: #2d3642 !important;
+}
+
+html[data-cgm-theme="dark"] tbody tr:hover {
+    background: #263747 !important;
+}
+
+html[data-cgm-theme="dark"] tbody tr:has(
+    input[type="checkbox"]:checked
+) {
+    background: #193d58 !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .ss,td a,td .ss,a.ss,
+    button.ss,[data-tram-detail]
+) {
+    color: #8bc7ff !important;
+    text-decoration-color: #6296c5 !important;
+}
+
+html[data-cgm-theme="dark"] .ss:hover {
+    color: #c6e5ff !important;
+}
+
+/* INDICADORES */
+
+html[data-cgm-theme="dark"] body .dup-indicator {
+    background: #392e1d !important;
+    color: #f4c675 !important;
+    border: 1px solid #5c4828 !important;
+    box-shadow: none !important;
+}
+
+html[data-cgm-theme="dark"] body .dup-indicator.found {
+    background: #3d232a !important;
+    color: #ffa3a3 !important;
+    border-color: #69343d !important;
+}
+
+html[data-cgm-theme="dark"] body .dup-indicator.error {
+    background: #392e1d !important;
+    color: #f4c675 !important;
+    border-color: #5c4828 !important;
+}
+
+html[data-cgm-theme="dark"] body :is(
+    .dup-indicator.unique,.dup-indicator.clear,
+    .dup-indicator.none,.dup-indicator.ok
+) {
+    background: #17362e !important;
+    color: #81dcb1 !important;
+    border-color: #285747 !important;
+}
+
+/* FILTROS */
+
+html[data-cgm-theme="dark"] :is(
+    input,select,textarea,.multiBtn
+) {
+    background: #131922 !important;
+    color: #e0e7ef !important;
+    border-color: #3b4858 !important;
+}
+
+html[data-cgm-theme="dark"] input::placeholder {
+    color: #9ba9ba !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    input,select,textarea
+):focus {
+    outline: 1px solid #529de0 !important;
+    border-color: #529de0 !important;
+}
+
+html[data-cgm-theme="dark"] input[type="checkbox"] {
+    accent-color: #3188d8;
+}
+
+/* BOTOES */
+
+html[data-cgm-theme="dark"] :is(
+    .btn,.tab,.pageBtn,.action
+):not(.active):not(.primary) {
+    background: #232d39 !important;
+    color: #dce5ef !important;
+    border-color: #3b4858 !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .btn,.tab,.pageBtn,.action
+):not(:disabled):hover {
+    background: #30475d !important;
+    border-color: #53718e !important;
+}
+
+html[data-cgm-theme="dark"] :is(
+    .tab.active,.btn.primary,.pageBtn.active
+) {
+    background: #1769b0 !important;
+    color: #ffffff !important;
+    border-color: #438bc8 !important;
+}
+
+/* DETALHES */
+
+html[data-cgm-theme="dark"] #lower .field {
+    background: #202833 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] #lower .field span {
+    color: #91b9db !important;
+}
+
+html[data-cgm-theme="dark"] #lower .field .val {
+    color: #e0e7ef !important;
+}
+
+html[data-cgm-theme="dark"] #lower #dss,
+html[data-cgm-theme="dark"] #lower #dcliente {
+    color: #a3d1ff !important;
+    font-weight: 700 !important;
+}
+
+html[data-cgm-theme="dark"] #gisSSCard .gisHead {
+    background: #17466c !important;
+    color: #ffffff !important;
+}
+
+html[data-cgm-theme="dark"] #gisSSCard :is(
+    .gisInfo,.gisActions,#gisSSRef
+) {
+    color: #b9cddd !important;
+}
+
+/* JANELA DE DUPLICIDADES */
+
+html[data-cgm-theme="dark"] #dupGlobalModal :is(
+    .dgm-box,.dgm-summary,.dgm-note,
+    .dgm-scroll,.dgm-muted
+) {
+    background: #202833 !important;
+    color: #d6dee9 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] #dupGlobalModal .dgm-data {
+    color: #8bc7ff !important;
+}
+
+html[data-cgm-theme="dark"] #dupGlobalModal .dgm-red {
+    background: #3d232a !important;
+    color: #ffa3a3 !important;
+}
+
+html[data-cgm-theme="dark"] #dupGlobalModal .dgm-orange {
+    background: #392e1d !important;
+    color: #f4c675 !important;
+}
+
+html[data-cgm-theme="dark"] #dupGlobalModal .dgm-green {
+    background: #17362e !important;
+    color: #81dcb1 !important;
+}
+
+html[data-cgm-theme="dark"] #dupGlobalModal .dgm-blue {
+    background: #193d58 !important;
+    color: #a3d1ff !important;
+}
+
+html[data-cgm-theme="dark"] #dupGlobalModal
+.dgm-historico-table th {
+    background: #17466c !important;
+    color: #edf5ff !important;
+}
+
+html[data-cgm-theme="dark"] #dupGlobalModal
+.dgm-alvo td {
+    background: #193d58 !important;
+}
+
+html[data-cgm-theme="dark"] {
+    scrollbar-color: #48586b #191f28;
+}
