@@ -888,6 +888,34 @@ app.post('/api/siscom-individual/login',async(req,res)=>{
   res.status(202).json({status:'pendente'});
  }catch(e){console.error('SISCOM individual (sem dados sensiveis):',e.message);res.status(502).json({error:'Falha ao encaminhar login ao worker'});}
 });
+
+ // CGM_ESTABILIDADE_V11
+ function cgmClassificarLoginV11(message){
+    const m=String(message||'')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase();
+
+    if(/assinatura de tarefa expirada|token siscom ja expirado/.test(m))
+      return {status:401,code:'SISCOM_LOGIN_EXPIRED',
+        error:'A tentativa de login expirou. Tente novamente.'};
+
+    if(/autenticacao siscom recusada \(http 403\)/.test(m))
+      return {status:403,code:'SISCOM_ACCESS_DENIED',
+        error:'Acesso recusado pelo SISCOM. Verifique suas permissoes.'};
+
+    if(/autenticacao siscom recusada \(http (400|401)\)|credenciais siscom rejeitadas/.test(m))
+      return {status:401,code:'SISCOM_CREDENTIALS_REJECTED',
+        error:'Autenticacao recusada pelo SISCOM. Confira as credenciais.'};
+
+    if(/servico de autenticacao siscom indisponivel|timeout|fetch failed|econn|enotfound|abort/.test(m))
+      return {status:503,code:'SISCOM_UNAVAILABLE',
+        error:'Comunicacao com o SISCOM indisponivel. Tente novamente.'};
+
+    return {status:502,code:'SISCOM_LOGIN_FAILED',
+      error:'Nao foi possivel concluir a autenticacao SISCOM.'};
+ }
+
 app.get('/api/siscom-individual/login-status',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const pending=verified(cookies(req)[SISCOM_PENDING_COOKIE]);
@@ -896,16 +924,36 @@ app.get('/api/siscom-individual/login-status',async(req,res)=>{
   const rows=await gatewayRest('siscom_gateway_jobs?select=id,operation,status,result,error_message,payload&id=eq.'+pending.job_id+'&limit=1');
   const job=rows?.[0];
   if(!job||job.operation!=='siscom_login_individual'||job.payload?.__siscom_identity?.sid!==pending.sid)return res.status(403).json({error:'Login nÃ£o corresponde Ã  sessÃ£o'});
+
   if(job.status==='erro'){
    cookie(res,SISCOM_PENDING_COOKIE,'',0);
-   return res.status(401).json({error:'SISCOM nÃ£o autenticou esta conta. Confira as credenciais ou a permissÃ£o da rede.'});
+   const falha=cgmClassificarLoginV11(job.error_message);
+   return res.status(falha.status).json({
+    error:falha.error,code:falha.code
+   });
   }
+
   if(job.status!=='concluido')return res.status(202).json({status:'pendente'});
   const user=job.result;
   if(!user||!user.idUsuario||!user.nome)return res.status(502).json({error:'Resposta de identidade incompleta'});
-  const exp=Date.now()+SISCOM_SID_TTL;
+
+  const agora=Date.now();
+  const validadeWorker=Number(user.expiresAt);
+
+  if(!Number.isSafeInteger(validadeWorker) ||
+     validadeWorker<=agora+1000){
+    cookie(res,SISCOM_PENDING_COOKIE,'',0);
+    return res.status(401).json({
+      code:'SISCOM_LOGIN_EXPIRED',
+      error:'Sessao SISCOM expirada ou sem validade confirmada. Entre novamente.'
+    });
+  }
+
+  const exp=Math.min(validadeWorker,agora+SISCOM_SID_TTL);
+  const ttl=Math.floor((exp-agora)/1000);
+
   cookie(res,SISCOM_PENDING_COOKIE,'',0);
-  cookie(res,SISCOM_USER_COOKIE,signed({role:'siscom_individual',sid:pending.sid,uid:user.idUsuario,name:String(user.nome).slice(0,120),login:String(user.login||'').slice(0,80),exp}),Math.floor(SISCOM_SID_TTL/1000));
+  cookie(res,SISCOM_USER_COOKIE,signed({role:'siscom_individual',sid:pending.sid,uid:user.idUsuario,name:String(user.nome).slice(0,120),login:String(user.login||'').slice(0,80),exp}),ttl);
   res.json({status:'autenticado',user:{idUsuario:user.idUsuario,nome:user.nome,login:user.login},writeEnabled:individualWriteAllowed({uid:user.idUsuario})});
  }catch(e){console.error('SISCOM login status:',e.message);res.status(502).json({error:'Falha ao conferir autenticaÃ§Ã£o'});}
 });
