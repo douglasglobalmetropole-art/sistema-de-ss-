@@ -442,3 +442,21 @@ html body #rows td.dup-indicator-cell button.dup-indicator[data-cgm-checking="1"
 html[data-cgm-theme="dark"] body #rows td.dup-indicator-cell button.dup-indicator[data-cgm-checking="1"] {
     color: #94a3b8 !important;
 }
+
+/* CGM_TEMA_V5 - NUMEROS SS BRANCOS */
+
+html[data-cgm-theme="dark"] body #rows td .ss,
+html[data-cgm-theme="dark"] body #rows td a.ss,
+html[data-cgm-theme="dark"] body #rows td button.ss,
+html[data-cgm-theme="dark"] body td [data-tram-detail] {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-decoration-color: #a0aab8 !important;
+    text-underline-offset: 2px;
+}
+
+html[data-cgm-theme="dark"] body #rows td .ss:hover,
+html[data-cgm-theme="dark"] body td [data-tram-detail]:hover {
+    color: #ffffff !important;
+    text-decoration-color: #ffffff !important;
+}
