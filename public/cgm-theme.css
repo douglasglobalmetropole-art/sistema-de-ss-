@@ -489,3 +489,177 @@ html[data-cgm-theme="dark"] body #rows tr:hover td.ss,
 html[data-cgm-theme="dark"] body #rows tr:hover td:nth-child(2) {
     color: #ffffff !important;
 }
+
+/* CGM_TEMA_V7 - LAYOUT RESPONSIVO */
+
+/* NUMEROS DAS SS */
+
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr td.ss,
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr td.ss *,
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr td.ss:hover {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-decoration-color: #b5bec9 !important;
+}
+
+/* REMOVER SOMBREADO DO MOUSE */
+
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr,
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr:hover {
+    background: #191f28 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr:nth-child(even),
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr:nth-child(even):hover {
+    background: #1e252f !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr td,
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr:hover td,
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr td.ss:hover {
+    background: transparent !important;
+}
+
+/* SELECAO DISCRETA */
+
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr.selected td,
+html[data-cgm-theme="dark"] body.cgm-fit #rows tr:has(input[type="checkbox"]:checked) td {
+    background: #26313e !important;
+}
+
+/* PAINEL LATERAL */
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open) #lower.open {
+    background: #141a22 !important;
+    color: #e4eaf1 !important;
+    border-color: #344252 !important;
+    box-shadow: none !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open > .cgm-stage:not(.cgm-stage-hidden):not([hidden]) {
+    background: #191f28 !important;
+    color: #e4eaf1 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open .cgm-details .details {
+    background: #191f28 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open .cgm-details .field {
+    background: #202833 !important;
+    border-color: #344252 !important;
+    box-shadow: none !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open .cgm-details .field > span {
+    color: #9eb8cf !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open .cgm-details .val {
+    background: transparent !important;
+    color: #f0f4f8 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower #dcliente,
+html[data-cgm-theme="dark"] body.cgm-fit #lower #dss {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+}
+
+/* CABECALHO E ABAS */
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower .cgm-panel-head {
+    background: #103b61 !important;
+    color: #ffffff !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower .cgm-panel-tabs {
+    background: #141a22 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower .cgm-panel-tabs button {
+    background: #202833 !important;
+    border-color: #3a4858 !important;
+    color: #dce5ef !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower .cgm-panel-tabs button.active {
+    background: #1769b0 !important;
+    border-color: #1769b0 !important;
+    color: #ffffff !important;
+}
+
+/* RETORNO E HISTORICO */
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower :is(
+    .executionGrid,.executionValue,
+    .cgm-retorno,#note,.cgm-full-text
+) {
+    background: #202833 !important;
+    color: #e4eaf1 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower .executionGrid label {
+    color: #9eb8cf !important;
+}
+
+/* GIS CESAN */
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower #gisSSCard {
+    background: #191f28 !important;
+    color: #e4eaf1 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower #gisSSCard .gisHead {
+    background: #103b61 !important;
+    color: #ffffff !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower #gisSSCard :is(
+    .gisInfo,.gisActions,#gisSSStatus
+) {
+    background: #191f28 !important;
+    color: #c4d3e1 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower #gisSSMap {
+    background: #202833 !important;
+}
+
+/* ACOES DA SS */
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open > .card:has(>.actions) {
+    background: #141a22 !important;
+    border-color: #344252 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open .actions .action {
+    background: #232d39 !important;
+    color: #e4eaf1 !important;
+    border-color: #3a4858 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit.panel-open:has(#lower.open)
+#lower.open .actions .action b {
+    color: #e4eaf1 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower .actions .action:hover {
+    background: #303d4c !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower {
+    scrollbar-color: #48586b #141a22;
+}
