@@ -460,3 +460,32 @@ html[data-cgm-theme="dark"] body td [data-tram-detail]:hover {
     color: #ffffff !important;
     text-decoration-color: #ffffff !important;
 }
+
+/* CGM_TEMA_V6 - CONTRASTE SS */
+
+html[data-cgm-theme="dark"] body #rows tr td.ss,
+html[data-cgm-theme="dark"] body #rows tr td.ss *,
+html[data-cgm-theme="dark"] body #rows tr td:nth-child(2),
+html[data-cgm-theme="dark"] body #rows tr td:nth-child(2) * {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-decoration-color: #ffffff !important;
+}
+
+/* FUNDO DA LINHA SELECIONADA */
+
+html[data-cgm-theme="dark"] body #rows tr.selected td,
+html[data-cgm-theme="dark"] body #rows tr:has(input[type="checkbox"]:checked) td {
+    background: #253e53 !important;
+}
+
+/* FUNDO AO PASSAR O MOUSE */
+
+html[data-cgm-theme="dark"] body #rows tr:hover td {
+    background: #263747 !important;
+}
+
+html[data-cgm-theme="dark"] body #rows tr:hover td.ss,
+html[data-cgm-theme="dark"] body #rows tr:hover td:nth-child(2) {
+    color: #ffffff !important;
+}
