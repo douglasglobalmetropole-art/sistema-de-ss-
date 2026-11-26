@@ -2238,7 +2238,7 @@ load();
    const x=await q.json();if(!q.ok)throw Error(x.error||'Erro ao consultar tarefa');
    const state=String(x.status).toLowerCase();
    if(['concluido','concluído','completed','done','success'].includes(state))return (route==='baixar-ss'||route==='complementar-criar')?{...x.result,__job_id:j.id}:x.result;
-   if(['erro','error','failed','errored'].includes(state))throw Error(x.error_message||'Falha no worker');
+   if(['erro','error','failed','errored'].includes(state)){const e=Error(x.error_message||'Falha no worker');e.workerErro=true;throw e;}
   }
   throw Error('Tempo excedido. Confira o worker VPN.');
  }
@@ -2839,7 +2839,8 @@ load();
   try{
    const r=await fetch('/api/siscom-gateway/tentativa-baixa/'+encodeURIComponent(current),{cache:'no-store'});
    const x=await r.json();if(!r.ok)throw Error(x.error||'Falha ao consultar tentativa');
-   const detalhes=[x.status_baixa&&'Resultado: '+x.status_baixa,x.http_status&&'HTTP SISCOM: '+x.http_status,x.diagnostico_validacao&&'Validação: '+x.diagnostico_validacao,x.mensagem,x.error_message].filter(Boolean).join(' | ');
+   const erroOficial=String(x.erro_siscom||x.diagnostico_validacao||'').trim();
+    const detalhes=erroOficial||[x.error_message,x.mensagem,x.http_status&&'HTTP SISCOM: '+x.http_status].filter(Boolean).join(' | ')||String(x.status_baixa||'');
    status('Tentativa anterior ('+x.status+'): '+(detalhes||'sem diagnóstico disponível')+'. NÃO reenviar automaticamente.');
    return x;
   }catch(e){status('Não foi possível consultar a tentativa anterior: '+e.message+'. NÃO reenviar.');return null;}
@@ -2865,7 +2866,9 @@ load();
   try{
    const r=await job('baixar-ss',{numero_ss:numero,confirmacao:'BAIXAR '+numero,executor:$('sbExecutor').value,equipe:code,macro:$('sbMacro').value,micro,ultima_ss:$('sbUltima').value,inicio:$('sbInicio').value,fim:$('sbFim').value,descricao:desc,causa:$('sbCausa').value||null},abertura);
    if(abertura!==generation||numero!==current)return;
-   status('RESULTADO SISCOM: '+(r.status_baixa||'INCERTO')+(r.http_status?' | HTTP '+r.http_status:'')+(r.diagnostico_validacao?' | Validação: '+r.diagnostico_validacao:'')+' — '+(r.mensagem||''));
+   // CGM_ERROS_SISCOM_V1
+    const erroOficial=String(r.erro_siscom||r.diagnostico_validacao||'').trim();
+    const http=Number(r.http_status)||0;
    if(r.status_baixa==='CONFIRMADA'){
     baixaOficialConfirmada=true;ssBaixada=numero;jobConfirmadoId=String(r.__job_id||'');
     if(!jobConfirmadoId){
@@ -2878,8 +2881,9 @@ load();
     }
    }else{
     resultadoIncerto=true;
-    alterarEtapa('Resultado não confirmado','O SISCOM não confirmou a baixa. Consulte o histórico e a tentativa oficial antes de qualquer nova operação.','warning');
-    status('Baixa não confirmada. Não reenvie sem conferir o SISCOM.');
+    const msg=erroOficial||(http>=400?'SISCOM retornou HTTP '+http+' sem mensagem de validação disponível.':String(r.mensagem||'Não houve confirmação oficial da baixa.'));
+     alterarEtapa(erroOficial?'Erro retornado pelo SISCOM':http>=400?'Resposta de erro do SISCOM':'Baixa sem confirmação',msg,'warning');
+     status(msg+' — Confira a situação oficial antes de reenviar.');
    }
   }catch(e){
    if(e.antesDoEnvio){
@@ -2888,9 +2892,8 @@ load();
     status('Baixa nao enviada: '+e.message+' (HTTP '+e.httpStatus+'). Corrija os dados antes de tentar novamente.');
    }else{
     resultadoIncerto=true;
-    alterarEtapa('Resultado incerto','Não foi possível confirmar o resultado da baixa. Consulte a tentativa oficial; não repita o envio.','warning');
-    status('Envio não confirmado: '+e.message+' — NÃO reenviar.');
-    await mostrarTentativaExistente();
+    alterarEtapa(e.workerErro?'Erro na operação':'Falha na comunicação',e.message,'warning');
+     status(e.message+' — Consulte a tentativa oficial antes de reenviar.');
    }
   }finally{baixaEmAndamento=false;atualizarBotoesFluxo();}
  };
@@ -3325,7 +3328,7 @@ load();
    await wait(1200);
    const r=await fetch('/api/siscom-gateway/jobs/'+encodeURIComponent(id),{credentials:'same-origin',cache:'no-store'});
    const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Erro ao acompanhar tarefa');
-   if(j.status==='erro')throw Error(j.error_message||'Operação rejeitada pelo worker');
+   if(j.status==='erro'){const e=Error(j.error_message||'Operação rejeitada pelo worker');e.workerErro=true;throw e;}
    if(j.status==='concluido')return j.result||{};
   }
   throw Error('Tempo excedido. Consulte o histórico antes de tentar novamente.');
@@ -3469,7 +3472,8 @@ load();
   try{
    const r=await fetch('/api/siscom-gateway/rejeicao-tentativa/'+encodeURIComponent(numero),{credentials:'same-origin',cache:'no-store'});
    const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Falha na consulta');
-   setStatus('Tentativa '+j.id+' | '+j.status+' | '+(j.result?.status_rejeicao||j.error_message||'Sem resultado oficial')+'. '+(j.result?.mensagem||''));
+   const msg=String(j.result?.erro_siscom||j.result?.diagnostico_validacao||j.error_message||j.result?.mensagem||j.result?.status_rejeicao||'Sem resultado oficial');
+    setStatus(msg);
    if(j.status==='concluido'&&j.result?.status_rejeicao==='CONFIRMADA'){ultimoConfirmado={id:j.id,numero};$('rejSincronizar').hidden=false;}
   }catch(e){setStatus('Tentativa: '+e.message)}finally{$('rejTentativa').disabled=false;atualizarBotao()}
  };
@@ -3515,7 +3519,9 @@ if(!Number.isSafeInteger(motivoId)||motivoId<1)
    setStatus('Tarefa '+job.id+' registrada. Aguardando confirmação oficial...');
    const r=await acompanhar(job.id);
    if(r.status_rejeicao!=='CONFIRMADA'){
-    const mensagem='RESULTADO INCERTO: '+(r.mensagem||'Não houve confirmação oficial')+' NÃO reenvie. Tarefa: '+job.id;
+    const erroOficial=String(r.erro_siscom||r.diagnostico_validacao||'').trim();
+     const http=Number(r.http_status)||0;
+     const mensagem=(erroOficial?'Erro retornado pelo SISCOM: '+erroOficial:http>=400?'SISCOM retornou HTTP '+http+' sem mensagem de validação disponível.':String(r.mensagem||'Rejeição sem confirmação oficial.'))+'\nConfira a situação oficial antes de reenviar.';
     setStatus(mensagem);window.alert(mensagem);return;
    }
    setStatus('Rejeição confirmada no SISCOM. Sincronizando status com o uMov...');
@@ -3526,7 +3532,7 @@ if(!Number.isSafeInteger(motivoId)||motivoId<1)
    }else{
     window.alert('REJEIÇÃO OFICIAL CONFIRMADA NO SISCOM: '+numero+'. A atualização ao uMov ainda não foi confirmada. NÃO envie a rejeição novamente.');
    }
-  }catch(e){const msg='Não foi possível confirmar o resultado: '+e.message+'. Se o envio foi iniciado, NÃO tente novamente sem verificar a tentativa oficial.';setStatus(msg);if(envioRejeicaoPendente)window.alert(msg);}
+  }catch(e){const msg=e.message+(envioRejeicaoPendente?'\nConfira a tentativa oficial antes de reenviar.':'');setStatus(msg);if(envioRejeicaoPendente)window.alert(msg);}
   finally{ocupado=false;$('rejConsultar').disabled=false;atualizarBotao()}
  };
 
