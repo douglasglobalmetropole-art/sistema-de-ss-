@@ -706,6 +706,7 @@
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = classe;
+      if (!dado) btn.dataset.cgmChecking = '1';
       btn.textContent = '● ' + rotulo;
       btn.title = titulo;
       btn.setAttribute('aria-label',titulo);

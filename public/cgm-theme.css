@@ -373,3 +373,72 @@ html[data-cgm-theme="dark"] #dupGlobalModal
 html[data-cgm-theme="dark"] {
     scrollbar-color: #48586b #191f28;
 }
+
+/* CGM_TEMA_V4 - INDICADORES SEM FUNDO */
+
+html body #rows td.dup-indicator-cell {
+    text-align: left !important;
+}
+
+html body #rows td.dup-indicator-cell button.dup-indicator {
+    background: transparent !important;
+    background-image: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    justify-content: flex-start !important;
+    padding: 2px 8px !important;
+    min-width: 0 !important;
+    height: 24px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    color: #137b4b !important;
+}
+
+/* TEMA CLARO */
+
+html body #rows td.dup-indicator-cell button.dup-indicator.error {
+    color: #98600b !important;
+}
+
+html body #rows td.dup-indicator-cell button.dup-indicator.found {
+    color: #bd2929 !important;
+}
+
+/* TEMA ESCURO */
+
+html[data-cgm-theme="dark"] body #rows td.dup-indicator-cell button.dup-indicator {
+    color: #39dc8b !important;
+    background: transparent !important;
+}
+
+html[data-cgm-theme="dark"] body #rows td.dup-indicator-cell button.dup-indicator.error {
+    color: #ffd34d !important;
+}
+
+html[data-cgm-theme="dark"] body #rows td.dup-indicator-cell button.dup-indicator.found {
+    color: #ff656e !important;
+}
+
+/* INTERACAO */
+
+html body #rows td.dup-indicator-cell button.dup-indicator:hover {
+    background: transparent !important;
+    outline: none !important;
+    text-decoration: underline !important;
+}
+
+html body #rows td.dup-indicator-cell button.dup-indicator:focus-visible {
+    outline: 1px solid currentColor !important;
+    outline-offset: 2px;
+}
+
+/* VERIFICACAO EM ANDAMENTO */
+
+html body #rows td.dup-indicator-cell button.dup-indicator[data-cgm-checking="1"] {
+    color: #64748b !important;
+}
+
+html[data-cgm-theme="dark"] body #rows td.dup-indicator-cell button.dup-indicator[data-cgm-checking="1"] {
+    color: #94a3b8 !important;
+}
