@@ -1,4 +1,4 @@
-﻿/* CGM_TEMA_V1 */
+/* CGM_TEMA_V1 */
 
 #siscomConsultaTop {
     display: none !important;
@@ -662,4 +662,80 @@ html[data-cgm-theme="dark"] body.cgm-fit #lower .actions .action:hover {
 
 html[data-cgm-theme="dark"] body.cgm-fit #lower {
     scrollbar-color: #48586b #141a22;
+}
+
+/* CGM_TEMA_V8 - CONTRASTE GLOBAL */
+
+@media screen {
+
+html[data-cgm-theme="dark"] body :is(
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]),
+    select, textarea
+) {
+    background-color: #242f3d !important;
+    color: #f1f5f9 !important;
+    border-color: #405166 !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    caret-color: #ffffff;
+    color-scheme: dark;
+}
+
+html[data-cgm-theme="dark"] body :is(
+    input[readonly], textarea[readonly],
+    input:disabled:not([type="checkbox"]):not([type="radio"]),
+    textarea:disabled, select:disabled
+) {
+    background-color: #1e293b !important;
+    color: #e2e8f0 !important;
+    -webkit-text-fill-color: #e2e8f0 !important;
+    opacity: 1 !important;
+}
+
+/* RETORNO PREENCHIDO PELA EQUIPE */
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower.open
+:is(.executionValue, .executionGrid input,
+    .executionGrid textarea, .executionGrid select) {
+    background: #242f3d !important;
+    color: #f1f5f9 !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    border-color: #405166 !important;
+    opacity: 1 !important;
+}
+
+html[data-cgm-theme="dark"] body.cgm-fit #lower.open
+.executionValue * {
+    color: #f1f5f9 !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+}
+
+/* FORMULARIOS SISCOM */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(input:not([type="checkbox"]):not([type="radio"]),
+    select, textarea) {
+    background: #242f3d !important;
+    color: #f1f5f9 !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    border-color: #405166 !important;
+    opacity: 1 !important;
+}
+
+html[data-cgm-theme="dark"] body
+:is(input,textarea)::placeholder {
+    color: #a8b8ca !important;
+    -webkit-text-fill-color: #a8b8ca !important;
+    opacity: 1 !important;
+}
+
+html[data-cgm-theme="dark"] body select option {
+    background: #242f3d !important;
+    color: #f1f5f9 !important;
+}
+
+html[data-cgm-theme="dark"] body input:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 1000px #242f3d inset !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+}
+
 }
