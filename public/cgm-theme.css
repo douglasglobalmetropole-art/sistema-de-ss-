@@ -1009,3 +1009,55 @@ html[data-cgm-theme="dark"] body #siscomBaixaModal
 }
 
 }
+
+
+/* CGM_TEMA_CONTRASTE_FINAL */
+
+@media screen {
+
+html[data-cgm-theme="dark"] .siscomLoginDialog {
+    background: #202833 !important;
+    color: #f1f5f9 !important;
+    border: 1px solid #405166 !important;
+}
+
+html[data-cgm-theme="dark"] .siscomLoginDialog h3,
+html[data-cgm-theme="dark"] .siscomLoginDialog label {
+    color: #f1f5f9 !important;
+}
+
+html[data-cgm-theme="dark"] .siscomLoginDialog p {
+    color: #c3d2e2 !important;
+    -webkit-text-fill-color: #c3d2e2 !important;
+}
+
+html[data-cgm-theme="dark"] #siscomLoginFeedback {
+    color: #ffaaaa !important;
+    -webkit-text-fill-color: #ffaaaa !important;
+    font-weight: 600;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.cgmFotosLateral button:not(:disabled) {
+    background: #26384a !important;
+    color: #e5eef8 !important;
+    border-color: #465e76 !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.cgmFotosLateral button:not(:disabled):hover {
+    background: #354e66 !important;
+    color: #ffffff !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+button:disabled {
+    background: #354252 !important;
+    color: #b4c5d8 !important;
+    border-color: #48586b !important;
+    -webkit-text-fill-color: #b4c5d8 !important;
+    opacity: 1 !important;
+    cursor: not-allowed !important;
+}
+
+}
