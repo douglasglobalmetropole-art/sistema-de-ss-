@@ -739,3 +739,34 @@ html[data-cgm-theme="dark"] body input:-webkit-autofill {
 }
 
 }
+
+/* CGM_TEMA_V9 - CONTRASTE RETORNO DA EQUIPE */
+
+@media screen {
+
+html[data-cgm-theme="dark"] body #lower #executionInfo {
+    background: transparent !important;
+    color: #f1f5f9 !important;
+}
+
+html[data-cgm-theme="dark"] body #lower #executionInfo #dInicioAtividade,
+html[data-cgm-theme="dark"] body #lower #executionInfo #dFimAtividade,
+html[data-cgm-theme="dark"] body #lower #executionInfo #dInfoExecucao,
+html[data-cgm-theme="dark"] body #lower #executionInfo #dMateriais,
+html[data-cgm-theme="dark"] body #lower #executionInfo #dPavimentacao {
+    background: #242f3d !important;
+    background-color: #242f3d !important;
+    background-image: none !important;
+    color: #f1f5f9 !important;
+    -webkit-text-fill-color: #f1f5f9 !important;
+    border: 1px solid #405166 !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
+}
+
+html[data-cgm-theme="dark"] body #lower #executionInfo label {
+    color: #b4c5d8 !important;
+    -webkit-text-fill-color: #b4c5d8 !important;
+}
+
+}
