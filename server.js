@@ -192,7 +192,8 @@ const sincronizacaoExistenteDivisao =
      '/api/siscom-gateway/complementar-servicos',
      '/api/siscom-gateway/complementar-consultar',
       '/api/siscom-gateway/complementar-criar',
-     '/api/siscom-gateway/tramitacao'
+     '/api/siscom-gateway/tramitacao',
+     '/api/siscom-gateway/tramitacao-lote'
     ].includes(rota)
    )
   ) || (
@@ -1464,7 +1465,471 @@ app.post('/api/siscom-gateway/sincronizar-rejeicao',async(req,res)=>{
 // === FIM REJEIÃ‡ÃƒO OFICIAL ===
 
 // TramitaÃ§Ã£o SISCOM: apenas leitura, sempre com sessÃ£o individual assinada.
+// CGM_TRAM_V2_DIVISION_GUARD
+
+const CGM_TRAM_DIVISOES=Object.freeze({
+ ODVV:270,
+ ODCV:271,
+ ODLS:272,
+ ODVT:355,
+ ODLN:356
+});
+
+function cgmTramContratoDivisao(req){
+ const divisao=String(
+   req.divisaoSS?.codigo||
+   loteContext.getStore()?.divisao||
+   ''
+ ).toUpperCase();
+
+ return CGM_TRAM_DIVISOES[divisao]||null;
+}
+
+app.use('/api/siscom-gateway/tramitacao',(req,res,next)=>{
+ if(req.method!=='POST')return next();
+
+ const user=siscomIndividual(req);
+
+ if(!user){
+   return res.status(401).json({
+     error:'Login individual SISCOM obrigatorio.'
+   });
+ }
+
+ const operation=String(req.body?.operation||'');
+ const params=req.body?.params||{};
+ const permitido=cgmTramContratoDivisao(req);
+
+ if(['tram_pesquisar','tram_macros','tram_ni'].includes(operation)){
+   const contrato=Number(params.contrato);
+
+   if(!Number.isSafeInteger(contrato)||contrato<=0){
+     return res.status(400).json({
+       error:'Contrato invalido.'
+     });
+   }
+
+   if(permitido!==null&&contrato!==permitido){
+     return res.status(403).json({
+       error:'Contrato nao pertence a esta divisao.'
+     });
+   }
+ }
+
+ return next();
+});
+
+// CGM_TRAM_V2_SCOPE_GUARD
+
+function cgmTramScope(req){
+ return String(
+   req.divisaoSS?.codigo||
+   loteContext.getStore()?.divisao||
+   (emLote1()?'LOTE1':'GERAL')
+ ).toUpperCase();
+}
+
+// CGM_TRAM_V2_DETAIL_GUARD
+
+function cgmTramRows(d){
+  for(let i=0;i<5;i++){
+    if(Array.isArray(d))return d;
+    if(!d||typeof d!=='object')break;
+
+    const rows=d.dados??d.content??d.items??
+      d.rows??d.registros??d.lista;
+
+    if(Array.isArray(rows))return rows;
+
+    d=d.data??d.result??d.response;
+  }
+
+  return null;
+}
+
+function cgmTramNumero(x){
+  const n=String(x.ssFormatada||x.numeroSS||x.ss||'');
+
+  if(/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(n))return n;
+
+  const ref=String(x.refAtendimento??'');
+  const cod=x.cdAtendimento??x.codAtendimento;
+  const seq=x.seqSS??x.ssSequencial;
+
+  if(!/^\d{6}$/.test(ref)||cod==null||seq==null)return '';
+
+  const numero=ref.slice(4,6)+'/'+ref.slice(2,4)+'-'+
+    String(cod).padStart(6,'0')+'-'+
+    String(seq).padStart(2,'0');
+
+  return /^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)?numero:'';
+}
+
+app.use('/api/siscom-gateway/tramitacao',async(req,res,next)=>{
+
+  if(req.method!=='POST')return next();
+
+  const operation=String(req.body?.operation||'');
+
+  const individuais=[
+    'tram_detalhes',
+    'tram_anexos',
+    'tram_itens',
+    'tram_historico',
+    'tram_ultima_acao'
+  ];
+
+  if(!individuais.includes(operation))return next();
+
+  const user=siscomIndividual(req);
+
+  if(!user)return res.status(401).json({
+    error:'Login individual SISCOM obrigatorio.'
+  });
+
+  const p=req.body?.params||{};
+  const origem=String(p.origemJob||'');
+  const ss=String(p.ss||'');
+  const contrato=Number(p.contrato);
+
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if(!uuid.test(origem)||
+     !/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss)||
+     !Number.isSafeInteger(contrato)||contrato<=0){
+
+    return res.status(400).json({
+      error:'Atualize a listagem antes de consultar esta SS.'
+    });
+  }
+
+  try{
+
+    const scope=cgmTramScope(req);
+
+    const jobs=await gatewayRest(
+      'siscom_gateway_jobs?select=id,operation,status,result,payload,finished_at&id=eq.'+
+      origem+'&limit=1'
+    );
+
+    const j=jobs?.[0];
+
+    if(!j||
+       j.operation!=='tram_pesquisar'||
+       j.status!=='concluido'||
+       j.payload?.__siscom_identity?.sid!==user.sid||
+       j.payload?.__tram_scope!==scope||
+       Number(j.payload?.params?.contrato)!==contrato){
+
+      return res.status(403).json({
+        error:'Consulta de origem nao autorizada.'
+      });
+    }
+
+    const idade=Date.now()-Date.parse(j.finished_at);
+
+    if(!Number.isFinite(idade)||idade<0||idade>900000){
+      return res.status(409).json({
+        error:'Pesquisa expirada. Atualize a listagem.'
+      });
+    }
+
+    const permitido=cgmTramContratoDivisao(req);
+
+    if(permitido!==null&&contrato!==permitido){
+      return res.status(403).json({
+        error:'Contrato fora da divisao.'
+      });
+    }
+
+    const rows=cgmTramRows(j.result);
+
+    if(!rows||rows.length>100){
+      return res.status(422).json({
+        error:'Listagem de origem invalida.'
+      });
+    }
+
+    const registro=rows.find(x=>cgmTramNumero(x)===ss);
+
+    if(!registro){
+      return res.status(403).json({
+        error:'SS fora da pesquisa autorizada.'
+      });
+    }
+
+    if(['tram_itens','tram_historico','tram_ultima_acao'].includes(operation)){
+
+      const medicao=Number(p.medicao);
+
+      if(!Number.isSafeInteger(medicao)||medicao<=0){
+        return res.status(400).json({
+          error:'Identificador de medicao invalido.'
+        });
+      }
+
+      // CGM_TRAM_V2_MEDICAO_GUARD
+
+      const origemDetalhe=String(p.origemDetalhe||'');
+
+      if(!uuid.test(origemDetalhe)){
+        return res.status(400).json({
+          error:'Consulta oficial dos detalhes obrigatoria.'
+        });
+      }
+
+      const detalhes=await gatewayRest(
+        'siscom_gateway_jobs?select=id,operation,status,result,payload,finished_at&id=eq.'+
+        origemDetalhe+'&limit=1'
+      );
+
+      const dj=detalhes?.[0];
+      const dp=dj?.payload?.params||{};
+
+      if(!dj||
+         dj.operation!=='tram_detalhes'||
+         dj.status!=='concluido'||
+         dj.payload?.__siscom_identity?.sid!==user.sid||
+         dj.payload?.__tram_scope!==scope||
+         dp.ss!==ss||
+         dp.origemJob!==origem||
+         Number(dp.contrato)!==contrato){
+
+        return res.status(403).json({
+          error:'Detalhes nao correspondem a SS autorizada.'
+        });
+      }
+
+      const idadeDetalhe=Date.now()-Date.parse(dj.finished_at);
+
+      if(!Number.isFinite(idadeDetalhe)||
+         idadeDetalhe<0||
+         idadeDetalhe>900000){
+
+        return res.status(409).json({
+          error:'Consulta de detalhes expirada. Atualize a SS.'
+        });
+      }
+
+      let d=dj.result;
+
+      for(let i=0;i<5;i++){
+
+        if(Array.isArray(d)){
+          d=d.length===1?d[0]:null;
+          break;
+        }
+
+        if(!d||typeof d!=='object')break;
+
+        const interno=d.dados??d.content??
+          d.data??d.result??d.response;
+
+        if(interno==null)break;
+
+        d=interno;
+      }
+
+      if(!d||typeof d!=='object'||Array.isArray(d)){
+        return res.status(422).json({
+          error:'Resposta oficial dos detalhes invalida.'
+        });
+      }
+
+      const ids=[
+        d.idMedicaoSs,
+        d.idMedicaoSS,
+        d.medicaoSs?.id,
+        d.medicaoSS?.id,
+        d.medicao?.id,
+        d.idMedicao,
+        d.cdMedicao,
+        d.medicaoSsId
+      ]
+      .filter(v=>v!=null&&v!=='')
+      .map(Number)
+      .filter(v=>Number.isSafeInteger(v)&&v>0);
+
+      const unicos=[...new Set(ids)];
+
+      if(unicos.length!==1||unicos[0]!==medicao){
+
+        return res.status(403).json({
+          error:'Identificador oficial da medicao ausente ou divergente.'
+        });
+      }
+
+      // FIM CGM_TRAM_V2_MEDICAO_GUARD
+    }
+
+    return next();
+
+  }catch(e){
+
+    console.error('[CGM TRAM DETAIL GUARD]',e.message);
+
+    return res.status(503).json({
+      error:'Nao foi possivel validar a autorizacao da SS.'
+    });
+  }
+});
+
+// FIM CGM_TRAM_V2_DETAIL_GUARD
+
 const TRAM_OPS=new Set(['tram_contratos','tram_fases','tram_macros','tram_responsaveis','tram_pesquisar','tram_detalhes','tram_ni','tram_itens','tram_anexos','tram_historico','tram_ultima_acao','tram_perfil']);
+// CGM_TRAM_V2_BATCH_GATEWAY
+app.post('/api/siscom-gateway/tramitacao-lote',async(req,res)=>{
+ res.set('Cache-Control','no-store');
+
+ const user=siscomIndividual(req);
+
+ if(!user)return res.status(401).json({
+   error:'Sessao individual obrigatoria'
+ });
+
+ const origem=String(req.body?.origem||'');
+
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(origem)){
+   return res.status(400).json({error:'Consulta de origem invalida'});
+ }
+
+ try{
+   const jobs=await gatewayRest(
+     'siscom_gateway_jobs?select=id,operation,status,result,payload,finished_at&id=eq.'+
+     origem+'&limit=1'
+   );
+
+   const j=jobs?.[0];
+
+   if(!j||
+      j.operation!=='tram_pesquisar'||
+      j.status!=='concluido'||
+      j.payload?.__siscom_identity?.sid!==user.sid){
+     return res.status(403).json({
+       error:'Consulta de origem nao autorizada'
+     });
+   }
+
+   if(j.payload?.__tram_scope!==cgmTramScope(req)){
+ return res.status(403).json({
+   error:'Consulta de origem pertence a outra divisao.'
+ });
+}
+
+const contratoDivisao=cgmTramContratoDivisao(req);
+
+if(contratoDivisao!==null &&
+   Number(j.payload?.params?.contrato)!==contratoDivisao){
+ return res.status(403).json({
+   error:'Contrato de origem fora da divisao.'
+ });
+}
+
+const idade=Date.now()-Date.parse(j.finished_at);
+
+   if(!Number.isFinite(idade)||idade<0||idade>300000){
+     return res.status(409).json({
+       error:'Consulta expirada. Atualize a listagem.'
+     });
+   }
+
+   let d=j.result;
+
+   for(let i=0;i<5&&d&&!Array.isArray(d);i++){
+     if(Array.isArray(d.dados)||
+        Array.isArray(d.content)||
+        Array.isArray(d.items)||
+        Array.isArray(d.rows)||
+        Array.isArray(d.registros)||
+        Array.isArray(d.lista))break;
+
+     const next=d.data??d.result??d.response;
+     if(!next||typeof next!=='object')break;
+     d=next;
+   }
+
+   const rows=Array.isArray(d)?d:
+     (d?.dados??d?.content??d?.items??
+      d?.rows??d?.registros??d?.lista??[]);
+
+   if(!Array.isArray(rows)||rows.length>100){
+     return res.status(422).json({
+       error:'Listagem de origem invalida'
+     });
+   }
+
+   const autorizadas=new Set();
+
+   for(const x of rows){
+     let numero=String(x.ssFormatada||x.numeroSS||x.ss||'');
+
+     if(!numero){
+       const ref=String(x.refAtendimento??'');
+       const cod=x.cdAtendimento??x.codAtendimento;
+       const seq=x.seqSS??x.ssSequencial;
+
+       if(/^\d{6}$/.test(ref)&&cod!=null&&seq!=null){
+         numero=ref.slice(4,6)+'/'+ref.slice(2,4)+'-'+
+           String(cod).padStart(6,'0')+'-'+
+           String(seq).padStart(2,'0');
+       }
+     }
+
+     if(/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero)){
+       autorizadas.add(numero);
+     }
+   }
+
+   const solicitadas=req.body?.ss;
+
+   if(!Array.isArray(solicitadas)||
+      solicitadas.length===0||
+      solicitadas.length>25){
+     return res.status(400).json({
+       error:'Informe entre 1 e 25 SS'
+     });
+   }
+
+   const numeros=[...new Set(solicitadas.map(String))];
+
+   if(numeros.some(n=>!autorizadas.has(n))){
+     return res.status(403).json({
+       error:'SS fora da listagem autorizada'
+     });
+   }
+
+   const contrato=Number(j.payload?.params?.contrato);
+
+   if(!Number.isSafeInteger(contrato)||contrato<=0){
+     return res.status(422).json({
+       error:'Contrato de origem invalido'
+     });
+   }
+
+   const operation='tram_enriquecer_lote';
+
+   const job=await siscomCreateJob(
+     operation,
+     signedTask(operation,{
+       __tram_scope:cgmTramScope(req),
+        params:{
+          contrato,
+          origem,
+          ss:numeros
+       }
+     },user.sid)
+   );
+
+   return res.status(202).json(job);
+
+ }catch(e){
+   console.error('Tramitacao lote:',e.message);
+   return res.status(502).json({
+     error:'Falha ao preparar consulta em lote'
+   });
+ }
+});
+
 app.post('/api/siscom-gateway/tramitacao',async(req,res)=>{
  res.set('Cache-Control','no-store');
  const user=siscomIndividual(req);
@@ -1473,7 +1938,7 @@ app.post('/api/siscom-gateway/tramitacao',async(req,res)=>{
  if(!TRAM_OPS.has(operation))return res.status(400).json({error:'OperaÃ§Ã£o invÃ¡lida'});
  const p=req.body?.params||{};
  if(!p||typeof p!=='object'||Array.isArray(p))return res.status(400).json({error:'ParÃ¢metros invÃ¡lidos'});
- try{const job=await siscomCreateJob(operation,signedTask(operation,{params:p},user.sid));res.status(202).json(job)}
+ try{const job=await siscomCreateJob(operation,signedTask(operation,{params:p,__tram_scope:cgmTramScope(req)},user.sid));res.status(202).json(job)}
  catch(e){console.error('TramitaÃ§Ã£o fila:',e.message);res.status(502).json({error:'Falha ao consultar fila SISCOM'});}
 });
 
@@ -1487,7 +1952,22 @@ app.get('/api/siscom-gateway/jobs/:id', async (req,res) => {
   const individual=siscomIndividual(req);
   if(individual&&jobs[0].payload?.__siscom_identity?.sid!==individual.sid)return res.status(403).json({error:'Tarefa pertence a outra sessÃ£o'});
   if(individual&&jobs[0].operation==='siscom_login_individual')return res.status(403).json({error:'Use o endpoint de autenticaÃ§Ã£o'});
-  const {payload,...publicJob}=jobs[0];
+     // CGM_TRAM_V2_SESSION_GUARD
+   if(String(jobs[0].operation||'').startsWith('tram_')){
+     const owner=jobs[0].payload?.__siscom_identity?.sid;
+
+if(jobs[0].payload?.__tram_scope!==cgmTramScope(req)){
+ return res.status(403).json({
+   error:'Consulta pertence a outra divisao.'
+ });
+}
+     if(!individual||!owner||owner!==individual.sid){
+       return res.status(403).json({
+         error:'Consulta restrita a sessao individual de origem'
+       });
+     }
+   }
+   const {payload,...publicJob}=jobs[0];
   res.set('Cache-Control','no-store').json(publicJob);
  } catch (e) { console.error('Gateway:',e.message);res.status(502).json({error:'Falha ao consultar tarefa'}); }
 });

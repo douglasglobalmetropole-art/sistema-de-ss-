@@ -1381,7 +1381,84 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 </div>
 
 <section class="toolbar"><button class="tab active" data-screen="recepcao">▣   RECEPÇÃO</button><button class="tab" data-screen="preparacao" disabled="" title="Notas em preparação ainda não estão disponíveis">⚙   PREPARAÇÃO</button><button class="tab" data-screen="campo">▤   NOTAS EM CAMPO</button><button class="tab" data-screen="baixar">☁   NOTAS PARA BAIXAR</button><button class="tab" data-screen="encerradas" title="Mantém as situações integradas (incluindo rejeitadas e duplicadas), até a definição de classificação específica">✓   NOTAS BAIXADAS</button><button class="tab" data-screen="tramitacao">⇄   TRAMITAÇÃO</button><div class="tramFilters"><label>Divisão / Contrato<select id="tramContrato"><option value="">Carregando...</option></select></label><label>Status<select id="tramStatus"><option value="todas">Todas</option><option value="concluidas">Concluídas</option><option value="sem">Sem medir</option><option value="pendentes">Pendentes</option><option value="andamento">Em andamento</option></select></label><label>Macro<select id="tramMacro"><option value="">Todas</option></select></label><label>Execução inicial<input type="date" id="tramInicio"></label><label>Execução final<input type="date" id="tramFim"></label><button type="button" class="btn primary" id="tramPesquisar">Pesquisar</button><button type="button" class="btn" id="tramLimpar">× Limpar</button></div><div class="f multi" id="macroMulti"><label>Tipo de Serviços (Macros)</label><button class="multiBtn" id="macroBtn" type="button">Todos</button><div class="multiMenu" id="macroMenu"></div></div><div class="f multi" id="cityMulti"><label>Cidade</label><button class="multiBtn" id="cityBtn" type="button">Todas</button><div class="multiMenu" id="cityMenu"></div></div><div class="f"><label>Data Início</label><input id="dateIni" type="date"/></div><div class="f"><label>Data Fim</label><input id="dateFim" type="date"/></div><button class="btn primary" id="filterBtn">▽   Filtrar</button><button class="btn" id="clearBtn">×   Limpar</button><button class="btn" id="refreshBtn" title="Consultar novamente o banco sem perder os filtros" type="button"><span class="spin">⟳</span>   Atualizar</button><div class="ssQuickSearch" id="buscaDiretaBox" title="Busca de SS em todas as datas, diretamente no PostgreSQL"><input aria-label="Pesquisar SS no banco" autocomplete="off" id="buscaDiretaSS" placeholder="Pesquisar SS..." type="search"/><button aria-label="Pesquisar SS" id="buscaDiretaBtn" title="Pesquisar SS" type="button">⌕</button><button aria-label="Limpar pesquisa de SS" id="buscaDiretaLimpar" title="Limpar pesquisa" type="button">×</button></div></section>
-<section id="tramitacaoIntro" class="tramitacaoIntro" hidden><div class="tramitacaoHeading"><div><span class="tramitacaoEyebrow">SISCOM • MEDIÇÃO</span><h2>Tramitação</h2><p>Consulta oficial conforme os contratos autorizados para seu login individual.</p></div><div class="tramitacaoIndicador">SOMENTE CONSULTA</div></div>
+<section id="tramitacaoIntro" class="tramitacaoIntro" hidden>
+<!-- CGM_TRAM_V2_LAYOUT -->
+<style>
+.tramFilters label:has(#tramStatus),
+#tramitacaoIntro .tramitacaoHeading {
+    display:none!important;
+}
+
+#cgmTramTabsV2 {
+    display:flex;
+    align-items:center;
+    gap:6px;
+    margin:0 0 8px;
+    flex-wrap:wrap;
+}
+
+#cgmTramTabsV2 button {
+    padding:9px 16px;
+    border:1px solid #c5d7e8;
+    border-radius:5px;
+    font-size:11px;
+    font-weight:700;
+    cursor:pointer;
+    background:transparent;
+    color:inherit;
+}
+
+#cgmTramTabsV2 button.active {
+    background:#087cf0!important;
+    color:#fff!important;
+    border-color:#087cf0!important;
+}
+
+#cgmTramTabsV2 button:disabled {
+    opacity:.65;
+    cursor:wait;
+}
+
+#cgmTramTabsV2 .tramTabCount {
+    margin-left:7px;
+    font-variant-numeric:tabular-nums;
+}
+
+#tramitacaoIntro .tramTable {
+    width:100%;
+    font-size:11px;
+}
+
+#tramitacaoIntro .tramTable th {
+    white-space:nowrap;
+}
+
+#tramitacaoIntro .tramTable td {
+    vertical-align:middle;
+}
+
+#tramitacaoIntro .tramTableWrap {
+    overflow-x:auto;
+}
+</style>
+
+<div id="cgmTramTabsV2">
+    <button type="button" class="active" data-tram-tab="para" aria-pressed="true">
+        NOTAS PARA TRAMITAR
+        <span class="tramTabCount" id="tramCountPara">—</span>
+    </button>
+
+    <button type="button" data-tram-tab="tramitadas" aria-pressed="false">
+        NOTAS TRAMITADAS
+        <span class="tramTabCount" id="tramCountTramitadas">—</span>
+    </button>
+
+    <button type="button" data-tram-tab="aprovadas" aria-pressed="false">
+        NOTAS APROVADAS
+        <span class="tramTabCount" id="tramCountAprovadas">—</span>
+    </button>
+</div>
+<div class="tramitacaoHeading"><div><span class="tramitacaoEyebrow">SISCOM • MEDIÇÃO</span><h2>Tramitação</h2><p>Consulta oficial conforme os contratos autorizados para seu login individual.</p></div><div class="tramitacaoIndicador">SOMENTE CONSULTA</div></div>
 
 <div id="tramAviso" class="tramitacaoAviso">Faça login individual no SISCOM para consultar.</div><div class="tramTableWrap"><table class="tramTable"><thead><tr><th>SS</th><th>Serviço solicitado</th><th>Serviço executado</th><th>Contrato</th><th>Valor</th><th>Data execução</th><th>Localidade</th><th>Fase da medição</th><th>Ações</th></tr></thead><tbody id="tramRows"></tbody></table></div><div class="tramPagination"><button id="tramPrev" type="button">◀ Anterior</button><label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap">Por página <select id="tramSize" aria-label="Registros por página" style="width:auto;min-width:62px;padding:3px 5px;font-size:11px"><option value="25">25</option><option value="50">50</option><option value="75">75</option><option value="100">100</option></select></label><span id="tramCount">0 registros</span><button id="tramNext" type="button">Próxima ▶</button></div><div id="tramDetail" hidden class="tramDetail"></div></section>
 <section id="buscaDiretaPainel" style="display:none;background:#fff;border:1px solid #d4e1ec;border-radius:7px;padding:10px;margin-top:6px"><div aria-live="polite" id="buscaDiretaStatus" style="color:#55718c;margin-bottom:6px"></div><div id="buscaDiretaResultados" style="display:none;overflow-x:auto"></div></section>
@@ -3820,7 +3897,396 @@ function tramDisplayDate(v){
 function tramDate(v){if(!v)return '';const [y,m,d]=v.split('-');return d+'/'+m+'/'+y}
 // Status: concluídas 4/5; pendentes 0; andamento 1/2/3/7; sem medir usa checkbox SISCOM.
 const tramFases=status=>status==='concluidas'?[4,5]:status==='pendentes'?[0]:status==='andamento'?[1,2,3,7]:[-1];
+// CGM_TRAM_V2_SEARCH_ENGINE
+
+let tramV2SearchId=0;
+const tramV2Pages=new Map();
+
+async function tramV2Gateway(url,body){
+  const r=await fetch(url,{
+    method:'POST',
+    credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+
+  const j=await r.json();
+
+  if(!r.ok||!j.id){
+    throw Error(j.error||'Falha ao iniciar consulta');
+  }
+
+  for(let i=0;i<120;i++){
+    await new Promise(resolve=>setTimeout(resolve,900));
+
+    const q=await fetch(
+      '/api/siscom-gateway/jobs/'+encodeURIComponent(j.id),
+      {credentials:'same-origin',cache:'no-store'}
+    );
+
+    const d=await q.json();
+
+    if(!q.ok)throw Error(d.error||'Falha na consulta');
+
+    if(['concluido','concluida','finalizado','sucesso'].includes(d.status)){
+      return {id:j.id,result:d.result};
+    }
+
+    if(['erro','falha'].includes(d.status)){
+      throw Error(d.error_message||'Falha SISCOM');
+    }
+  }
+
+  throw Error('Tempo de consulta excedido');
+}
+
+async function tramV2Page(params){
+  const key=JSON.stringify([tramV2Generation,Object.fromEntries(Object.entries(params).sort(([a],[b])=>a.localeCompare(b)))]);
+  const cached=tramV2Pages.get(key);
+
+  if(cached&&cached.exp>Date.now()){
+    return cached.promise;
+  }
+
+  const promise=tramV2Gateway(
+    '/api/siscom-gateway/tramitacao',
+    {operation:'tram_pesquisar',params}
+  );
+
+  tramV2Pages.set(key,{
+    promise,
+    exp:Date.now()+60000
+  });
+
+  while(tramV2Pages.size>100){
+    tramV2Pages.delete(tramV2Pages.keys().next().value);
+  }
+
+  try{
+    return await promise;
+  }catch(e){
+    if(tramV2Pages.get(key)?.promise===promise){
+      tramV2Pages.delete(key);
+    }
+    throw e;
+  }
+}
+
+function tramV2Render(){
+  const headers=[
+    'SS',
+    'Servi\u00e7o solicitado',
+    'Servi\u00e7o executado',
+    'Munic\u00edpio',
+    'Rua',
+    'Bairro',
+    'Equipe executora',
+    '\u00daltima SS',
+    'Valor',
+    'Execu\u00e7\u00e3o',
+    'Fase',
+    'A\u00e7\u00f5es'
+  ];
+
+  const table=tramEl('tramRows').closest('table');
+
+  table.querySelector('thead').innerHTML=
+    '<tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
+
+  tramEl('tramRows').innerHTML=tramRecords.map((x,i)=>{
+    const e=x.__cgmEnriquecimento;
+
+    const loading=!e?'Consultando...':
+      e.status==='ERRO'?'Falha na consulta':
+      'N\u00e3o informado';
+
+    const cells=[
+      tramSS(x),
+      x.descServicoSolicitado??x.descricaoServicoSolicitado,
+      x.descServicoExecutado??x.descricaoServicoExecutado,
+      e?.municipio||x.localidade||x.municipio,
+      e?.rua||loading,
+      e?.bairro||loading,
+      e?.equipe||e?.codEquipe||loading,
+      e?.ultimaSS==='S'?'Sim':
+        e?.ultimaSS==='N'?'N\u00e3o':loading,
+      tramDetailMoney(x.valorTotal??x.valor),
+      tramDisplayDate(x.dataExecucao??x.dataExecucaoInicial),
+      x.faseMedicao||x.descricaoFaseMedicao||'Sem medi\u00e7\u00e3o'
+    ];
+
+    return '<tr>'+cells.map((v,j)=>{
+      const c=tramEsc(v??'\u2014');
+
+      return '<td title="'+c+'">'+
+        (j===0?
+          '<button type="button" data-tram-detail="'+i+
+          '" style="background:none;border:0;padding:0;'+
+          'text-decoration:underline;color:#075b9e;cursor:pointer;font:inherit">'+
+          c+'</button>':c)+
+        '</td>';
+
+    }).join('')+
+      '<td><button type="button" data-tram-detail="'+
+      i+'">Ver</button></td></tr>';
+
+  }).join('');
+
+  if(!tramRecords.length){
+    tramEl('tramRows').innerHTML=
+      '<tr><td colspan="12">Nenhuma SS encontrada.</td></tr>';
+  }
+
+  // Preserva os eventos dos detalhes apos cada renderizacao.
+  tramEl('tramRows').querySelectorAll('[data-tram-detail]')
+    .forEach(b=>{
+      b.onclick=()=>tramDetail(Number(b.dataset.tramDetail));
+    });
+}
+
+async function tramV2Enrich(records,searchId,generation){
+  const atual=()=>searchId===tramV2SearchId&&
+    generation===tramV2Generation;
+
+  const groups=new Map();
+
+  for(const x of records){
+    if(!groups.has(x.__cgmOrigem)){
+      groups.set(x.__cgmOrigem,[]);
+    }
+
+    groups.get(x.__cgmOrigem).push(x);
+  }
+
+  let falhas=0;
+
+  for(const [origem,rows] of groups){
+    for(let i=0;i<rows.length;i+=25){
+      if(!atual())return;
+
+      const lote=rows.slice(i,i+25);
+
+      try{
+        const response=await tramV2Gateway(
+          '/api/siscom-gateway/tramitacao-lote',
+          {origem,ss:lote.map(tramSS)}
+        );
+
+        if(!atual())return;
+
+        const dados=response.result?.registros;
+
+        if(!Array.isArray(dados)){
+          throw Error('Retorno do lote invalido');
+        }
+
+        const map=new Map(dados.map(x=>[x.ss,x]));
+
+        for(const x of lote){
+          x.__cgmEnriquecimento=
+            map.get(tramSS(x))||{status:'PARCIAL'};
+        }
+
+        falhas+=lote.filter(
+          x=>x.__cgmEnriquecimento.status!=='OK'
+        ).length;
+
+      }catch(e){
+        if(!atual())return;
+
+        falhas+=lote.length;
+
+        lote.forEach(x=>{
+          x.__cgmEnriquecimento={status:'ERRO'};
+        });
+
+        console.warn('[TRAM V2] Lote:',e.message);
+      }
+
+      if(atual())tramV2Render();
+    }
+  }
+
+  if(atual()){
+    const aviso=tramEl('tramMacro').value?
+      ' Macro filtrada somente nesta pagina.':'';
+
+    tramNotice(
+      (falhas?
+        'Consulta concluida. '+falhas+' SS com dados incompletos.':
+        'Dados oficiais SISCOM atualizados.')+aviso
+    );
+  }
+}
+
 async function tramSearch(){
+  if(tramBusy)return;
+
+  const base=tramV2Base();
+
+  if(!base.contrato){
+    tramNotice('Selecione uma divisao / contrato.');
+    return;
+  }
+
+  const inicio=tramEl('tramInicio').value;
+  const fim=tramEl('tramFim').value;
+
+  if(inicio&&fim&&inicio>fim){
+    tramNotice('Periodo invalido.');
+    return;
+  }
+
+  const searchId=++tramV2SearchId;
+  const generation=tramV2Generation;
+  const aba=tramV2Active;
+  const size=Number(tramEl('tramSize').value)||25;
+  const page=tramPage;
+
+  const atual=()=>searchId===tramV2SearchId&&
+    generation===tramV2Generation;
+
+  const controles=[
+    'tramPesquisar','tramPrev','tramNext',
+    'tramContrato','tramSize','tramLimpar',
+    'tramInicio','tramFim','tramMacro'
+  ];
+
+  tramBusy=true;
+
+  controles.forEach(id=>tramEl(id).disabled=true);
+
+  document.querySelectorAll('[data-tram-tab]')
+    .forEach(b=>b.disabled=true);
+
+  tramDetailClose();
+
+  tramRecords=[];
+  tramTotal=0;
+
+  tramEl('tramRows').innerHTML='';
+  tramEl('tramCount').textContent='Consultando...';
+
+  tramNotice('Consultando SISCOM...');
+
+  try{
+    const grupos=tramV2Groups[aba];
+    const records=[];
+
+    let total=0;
+    let cursor=0;
+
+    const offset=page*size;
+
+    for(const grupo of grupos){
+      if(!atual())return;
+
+      const params={...base,...grupo,size};
+
+      const primeira=await tramV2Page({
+        ...params,page:0
+      });
+
+      if(!atual())return;
+
+      const quantidade=Math.max(
+        0,tramTotalElements(primeira.result)
+      );
+
+      const inicioFase=Math.max(0,offset-cursor);
+
+      if(records.length<size&&inicioFase<quantidade){
+        let pos=inicioFase;
+
+        while(pos<quantidade&&records.length<size){
+          if(!atual())return;
+
+          const pagina=Math.floor(pos/size);
+
+          const r=pagina===0?primeira:
+            await tramV2Page({...params,page:pagina});
+
+          if(!atual())return;
+
+          const linhas=tramArray(r.result);
+          const dentro=pos%size;
+
+          const selecionadas=linhas.slice(
+            dentro,dentro+(size-records.length)
+          );
+
+          if(!selecionadas.length)break;
+
+          records.push(...selecionadas.map(x=>({
+            ...x,
+            __cgmOrigem:r.id
+          })));
+
+          pos+=selecionadas.length;
+        }
+      }
+
+      cursor+=quantidade;
+      total+=quantidade;
+    }
+
+    if(!atual())return;
+
+    const macro=tramEl('tramMacro').value;
+
+    tramRecords=macro?records.filter(x=>
+      String(x.cdServicoSolicitado??
+        x.codigoMacro??x.cdMacro??x.macro?.id??'')===macro
+    ):records;
+
+    tramTotal=total;
+
+    tramEl(tramV2CountIds[aba]).textContent=
+      total.toLocaleString('pt-BR');
+
+    tramEl('tramCount').textContent=
+      'Pagina '+(page+1)+' de '+
+      Math.max(1,Math.ceil(total/size))+
+      ' | '+tramRecords.length+' exibidas | '+
+      total.toLocaleString('pt-BR')+' SS';
+
+    tramV2Render();
+
+    tramNotice(
+      tramRecords.length?
+      'Listagem carregada. Consultando enderecos e equipes...':
+      'Nenhuma SS nesta pagina.'
+    );
+
+    if(tramRecords.length){
+      void tramV2Enrich(tramRecords,searchId,generation);
+    }
+
+  }catch(e){
+    if(atual()){
+      tramRecords=[];
+      tramTotal=0;
+      tramV2Render();
+      tramEl('tramCount').textContent='Consulta indisponivel';
+      tramNotice(e.message);
+    }
+
+  }finally{
+    tramBusy=false;
+
+    controles.forEach(id=>tramEl(id).disabled=false);
+
+    document.querySelectorAll('[data-tram-tab]')
+      .forEach(b=>b.disabled=false);
+
+    tramEl('tramPrev').disabled=tramPage<=0;
+
+    tramEl('tramNext').disabled=
+      (tramPage+1)*size>=tramTotal;
+  }
+}
+
+async function tramSearchLegado(){
  if(tramBusy)return;
  const contrato=Number(tramEl('tramContrato').value);
  if(!contrato){tramNotice('Selecione uma divisão / contrato.');return}
@@ -3896,7 +4362,7 @@ function tramDetailTable(id,headers,rows,keys,formatters={}){
  }).join('')+'</tr>').join('')+'</tbody></table>';
 }
 function tramDetailMedicaoId(d,x){
- const n=tramDetailPick(d,'idMedicaoSs','idMedicaoSS','medicaoSs.id','medicaoSS.id','medicao.id','idMedicao','cdMedicao','medicaoSsId','id');
+ const n=tramDetailPick(d,'idMedicaoSs','idMedicaoSS','medicaoSs.id','medicaoSS.id','medicao.id','idMedicao','cdMedicao','medicaoSsId');
  const alt=tramDetailPick(x,'idMedicaoSs','idMedicaoSS','medicaoSs.id','idMedicao');
  const value=Number(n??alt);
  return Number.isSafeInteger(value)&&value>0?value:null;
@@ -3942,7 +4408,17 @@ function tramDetailClose(){tramDetailToken++;tramEl('tramDetailOverlay').hidden=
 async function tramDetail(i){
  const x=tramRecords[i];if(!x)return tramNotice('SS não encontrada na página atual.');
  const ss=tramSS(x);if(!ss)return tramNotice('Não foi possível identificar o número da SS.');
- tramDetailSelected={x,ss};const token=++tramDetailToken;
+ // CGM_TRAM_V2_DETAIL_SCOPE
+ const origem=x.__cgmOrigem;
+ const contrato=Number(tramEl('tramContrato').value);
+
+ if(!origem||!contrato){
+   tramNotice('Atualize a pesquisa antes de consultar esta SS.');
+   return;
+ }
+
+ tramDetailSelected={x,ss,origem,contrato};
+ const token=++tramDetailToken;
  tramEl('tramDetailOverlay').hidden=false;document.body.style.overflow='hidden';tramEl('tramDetailSS').textContent=ss;
  tramEl('tramDetailPhase').textContent=tramDetailVal(x.faseMedicao??x.descricaoFaseMedicao??'Consultando...');
  tramEl('tramDetailFields').innerHTML='<div class="tramDetailLoading">Consultando medição da SS '+tramEsc(ss)+'...</div>';
@@ -3950,14 +4426,23 @@ async function tramDetail(i){
  for(const id of ['tramDetailItemsPager','tramDetailAttachmentsPager','tramDetailHistoryPager'])tramEl(id).innerHTML='';
  tramEl('tramDetailFeedback').textContent='Consultando dados oficiais do SISCOM. Somente leitura.';
  // Anexos independem do identificador da medição.
- tramDetailPager('tramDetailAttachmentsPager','tram_anexos',{ss},token);
+ tramDetailPager('tramDetailAttachmentsPager','tram_anexos',{ss,origemJob:origem,contrato},token);
  try{
-  const d=tramDetailOne(await tramJob('tram_detalhes',{ss}));if(token!==tramDetailToken)return;
+  // CGM_TRAM_V2_MEDICAO_ORIGEM
+  const detalheJob=await tramV2Gateway(
+    '/api/siscom-gateway/tramitacao',
+    {
+      operation:'tram_detalhes',
+      params:{ss,origemJob:origem,contrato}
+    }
+  );
+
+  const d=tramDetailOne(detalheJob.result);if(token!==tramDetailToken)return;
   tramDetailRenderFields(d,x);
   const medicao=tramDetailMedicaoId(d,x);
   if(medicao){
-   tramDetailPager('tramDetailItemsPager','tram_itens',{medicao},token);
-   tramDetailPager('tramDetailHistoryPager','tram_historico',{medicao},token);
+   tramDetailPager('tramDetailItemsPager','tram_itens',{medicao,ss,origemJob:origem,contrato,origemDetalhe:detalheJob.id},token);
+   tramDetailPager('tramDetailHistoryPager','tram_historico',{medicao,ss,origemJob:origem,contrato,origemDetalhe:detalheJob.id},token);
    tramEl('tramDetailFeedback').textContent='Medição '+medicao+' consultada. Informações somente leitura.';
   }else{
    tramDetailSectionError('tramDetailItems','O SISCOM não informou um identificador de medição para consultar os itens.');
@@ -3972,8 +4457,241 @@ tramEl('tramDetailRefresh').addEventListener('click',()=>{if(tramDetailSelected)
 tramEl('tramDetailPrint').addEventListener('click',()=>window.print());
 tramEl('tramDetailOverlay').addEventListener('click',e=>{if(e.target===tramEl('tramDetailOverlay'))tramDetailClose()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!tramEl('tramDetailOverlay').hidden)tramDetailClose()});
+// CGM_TRAM_V2_TABS_ENGINE
+const tramV2Groups={
+  para:[
+    {fase:-1,semMedicao:true},
+    {fase:0,semMedicao:false}
+  ],
+  tramitadas:[
+    {fase:1,semMedicao:false},
+    {fase:2,semMedicao:false},
+    {fase:3,semMedicao:false},
+    {fase:7,semMedicao:false}
+  ],
+  aprovadas:[
+    {fase:4,semMedicao:false}
+  ]
+};
+
+let tramV2Active='para';
+let tramV2Generation=0;
+
+const tramV2Cache=new Map();
+
+const tramV2CountIds={
+  para:'tramCountPara',
+  tramitadas:'tramCountTramitadas',
+  aprovadas:'tramCountAprovadas'
+};
+
+function tramV2Invalidate(){
+  tramDetailClose();
+  tramV2Generation++;
+  tramV2Cache.clear();
+  tramV2Pages.clear();
+  tramV2SearchId++;
+  tramRecords=[];
+  tramTotal=0;
+  tramPage=0;
+  tramEl('tramRows').innerHTML='';
+  tramEl('tramCount').textContent='Selecione os filtros e pesquise.';
+  tramEl('tramPrev').disabled=true;
+  tramEl('tramNext').disabled=true;
+
+  Object.values(tramV2CountIds).forEach(id=>{
+    tramEl(id).textContent='—';
+  });
+}
+
+async function tramV2Query(params){
+  const key=JSON.stringify(Object.fromEntries(Object.entries(params).sort(([a],[b])=>a.localeCompare(b))));
+  const cached=tramV2Cache.get(key);
+
+  if(cached&&cached.exp>Date.now()){
+    return cached.promise;
+  }
+
+  const generation=tramV2Generation;
+
+  const promise=tramV2Page({
+    ...params,
+    size:Number(tramEl('tramSize').value)||25
+  }).then(x=>x.result);
+
+  tramV2Cache.set(key,{
+    promise,
+    exp:Date.now()+60000
+  });
+
+  while(tramV2Cache.size>100){
+    tramV2Cache.delete(tramV2Cache.keys().next().value);
+  }
+
+  try{
+    const result=await promise;
+
+    if(generation!==tramV2Generation){
+      throw Error('Consulta substituida');
+    }
+
+    return result;
+
+  }catch(e){
+    if(tramV2Cache.get(key)?.promise===promise){
+      tramV2Cache.delete(key);
+    }
+    throw e;
+  }
+}
+
+function tramV2Base(){
+  return {
+    contrato:Number(tramEl('tramContrato').value),
+    inicio:tramDate(tramEl('tramInicio').value),
+    fim:tramDate(tramEl('tramFim').value)
+  };
+}
+
+async function tramV2Counts(){
+  const generation=tramV2Generation;
+  const base=tramV2Base();
+
+  if(!base.contrato)return;
+
+  const ordem=[
+    tramV2Active,
+    ...Object.keys(tramV2Groups).filter(
+      x=>x!==tramV2Active
+    )
+  ];
+
+  for(const nome of ordem){
+    if(generation!==tramV2Generation)return;
+
+    const el=tramEl(tramV2CountIds[nome]);
+
+    el.textContent='...';
+
+    try{
+      let total=0;
+
+      for(const grupo of tramV2Groups[nome]){
+        if(generation!==tramV2Generation)return;
+
+        const result=await tramV2Query({
+          ...base,
+          ...grupo,
+          page:0,
+          size:1
+        });
+
+        total+=tramTotalElements(result);
+      }
+
+      if(generation===tramV2Generation){
+        el.textContent=total.toLocaleString('pt-BR');
+      }
+
+    }catch(e){
+      if(generation===tramV2Generation){
+        el.textContent='—';
+        el.title='Falha ao consultar total';
+      }
+    }
+  }
+}
+
+function tramV2Select(nome){
+  if(!tramV2Groups[nome]||tramBusy)return;
+
+  tramV2Active=nome;
+  tramPage=0;
+
+  document.querySelectorAll('[data-tram-tab]').forEach(b=>{
+    const active=b.dataset.tramTab===nome;
+
+    b.classList.toggle('active',active);
+    b.setAttribute('aria-pressed',String(active));
+  });
+
+  tramEl('tramStatus').value={
+    para:'pendentes',
+    tramitadas:'andamento',
+    aprovadas:'concluidas'
+  }[nome];
+
+  if(tramEl('tramContrato').value){
+    tramSearch();
+  }
+}
+
+document.querySelectorAll('[data-tram-tab]').forEach(b=>{
+  b.addEventListener('click',()=>{
+    tramV2Select(b.dataset.tramTab);
+  });
+});
+
+tramEl('tramContrato').addEventListener(
+  'change',tramV2Invalidate
+);
+
+tramEl('tramInicio').addEventListener(
+  'change',tramV2Invalidate
+);
+
+tramEl('tramFim').addEventListener(
+  'change',tramV2Invalidate
+);
+
+tramEl('tramLimpar').addEventListener(
+  'click',tramV2Invalidate,true
+);
+
+tramEl('tramPesquisar').addEventListener('click',()=>{
+  tramV2Invalidate();
+
+  tramEl('tramStatus').value={
+    para:'pendentes',
+    tramitadas:'andamento',
+    aprovadas:'concluidas'
+  }[tramV2Active];
+},true);
+
+
+
+tramEl('tramStatus').value='pendentes';
+/* CGM_TRAM_V2_AUTH_RESET */
+let cgmTramAuthState='';
+new MutationObserver(()=>{
+  const state=[
+    document.body.dataset.siscomAuthenticated,
+    window.cgmSessionGeneration?.()
+  ].join(':');
+
+  if(state===cgmTramAuthState)return;
+  cgmTramAuthState=state;
+  tramV2Invalidate();
+  tramReady=false;
+  tramDetailSelected=null;
+
+  tramEl('tramContrato').innerHTML=
+    '<option value="">Selecione uma divisao / contrato</option>';
+
+  tramEl('tramMacro').innerHTML=
+    '<option value="">Todas</option>';
+
+  if(document.body.dataset.siscomAuthenticated==='true' &&
+     document.body.classList.contains('tram-mode')){
+    void tramInit();
+  }
+}).observe(document.body,{
+  attributes:true,
+  attributeFilter:['data-siscom-authenticated']
+});
+
 tramEl('tramSize').addEventListener('change',()=>{tramPage=0;tramSearch()});
-tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramCount').textContent='Selecione os filtros e pesquise.';tramMacros()});tramEl('tramPesquisar').addEventListener('click',()=>{tramPage=0;tramSearch()});tramEl('tramLimpar').addEventListener('click',()=>{tramEl('tramStatus').value='todas';tramEl('tramMacro').value='';tramEl('tramInicio').value='';tramEl('tramFim').value='';tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramDetail').hidden=true;tramEl('tramCount').textContent='Filtros limpos. Clique em Pesquisar.';tramNotice('Filtros limpos. Datas em branco consultam todo o histórico do contrato.');});tramEl('tramPrev').addEventListener('click',()=>{if(tramPage>0){tramPage--;tramSearch()}});tramEl('tramNext').addEventListener('click',()=>{tramPage++;tramSearch()});
+tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramCount').textContent='Selecione os filtros e pesquise.';tramMacros()});tramEl('tramPesquisar').addEventListener('click',async()=>{tramPage=0;await tramSearch();if(tramTotal>0)void tramV2Counts()});tramEl('tramLimpar').addEventListener('click',()=>{tramEl('tramStatus').value='todas';tramEl('tramMacro').value='';tramEl('tramInicio').value='';tramEl('tramFim').value='';tramPage=0;tramRecords=[];tramTotal=0;tramEl('tramRows').innerHTML='';tramEl('tramDetail').hidden=true;tramEl('tramCount').textContent='Filtros limpos. Clique em Pesquisar.';tramNotice('Filtros limpos. Datas em branco consultam todo o histórico do contrato.');});tramEl('tramPrev').addEventListener('click',()=>{if(tramPage>0){tramPage--;tramSearch()}});tramEl('tramNext').addEventListener('click',()=>{tramPage++;tramSearch()});
 </script>
 <style>
 #umovFotosModal{position:fixed;inset:0;z-index:110000;display:none;align-items:center;justify-content:center;padding:12px;background:rgba(8,24,44,.78)}
