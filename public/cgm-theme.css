@@ -770,3 +770,242 @@ html[data-cgm-theme="dark"] body #lower #executionInfo label {
 }
 
 }
+
+/* CGM_TEMA_V10 - SISTEMA ESCURO INTEGRADO */
+
+@media screen {
+
+html[data-cgm-theme="dark"] {
+    --cgm-bg: #171e28;
+    --cgm-panel: #202833;
+    --cgm-field: #242f3d;
+    --cgm-border: #405166;
+    --cgm-text: #f1f5f9;
+    --cgm-muted: #b4c5d8;
+    --cgm-heading: #163f60;
+}
+
+/* JANELAS E PAINEIS */
+
+html[data-cgm-theme="dark"] body
+:is(.modalBox,.modalContent,.modalBody,
+    .modalItem,.modalBtns,.tramitacaoIntro,
+    .tramitacaoStat,.tramitacaoAviso,
+    .ssQuickSearch,.multiMenu) {
+    background: var(--cgm-panel) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+/* BAIXA SISCOM - TODAS AS ABAS */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.sbShell,.sbPane,.sbColumns,.sbRibbon,
+    .sbSummaryTop,.sbSummaryTop>div,
+    .sbV3Panel,.sbV3Tabs,.sbFooter,
+    .sbHistoryPane,.sbOfficialDetails,
+    .sbOfficialGrid,.sbV3ItemsList,
+    .sbV3Umov,.sbV3UmovFonte,
+    .sbV4AnexoList,#sbCompSection,
+    .sbV3Statusbar) {
+    background: var(--cgm-panel) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+/* CABECALHOS E SECOES */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.sbInnerTitle,.sbHistoryPane h4,
+    .sbOfficialDetails summary,.sbV3SectionHead,
+    #sbCompSection h4,.sbV3Subheading) {
+    background: var(--cgm-heading) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+/* TEXTOS E ROTULOS */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(label,b,.sbRead,.sbSource,.sbStatus,
+    .sbV3Note,.sbV3Empty,.sbV3Field,
+    .sbV3UmovFonte>strong,.sbV3Umov>h4,
+    #sbResumoSS,.sbRibbonTitle) {
+    color: var(--cgm-text) !important;
+    -webkit-text-fill-color: currentColor !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.sbSummaryDates>div,.sbSummaryField,
+    .sbV3Duration,#sbHistoricoLista>div) {
+    border-color: var(--cgm-border) !important;
+}
+
+/* FORMULARIOS GLOBAIS */
+
+html[data-cgm-theme="dark"] body
+:is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
+    select,textarea) {
+    background: var(--cgm-field) !important;
+    color: var(--cgm-text) !important;
+    -webkit-text-fill-color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+    color-scheme: dark;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(#sbDescricao,#sbObservacoes,
+    #sbCompDescricao,textarea,
+    .executionGrid input,.executionGrid select) {
+    background: var(--cgm-field) !important;
+    color: var(--cgm-text) !important;
+    -webkit-text-fill-color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+    opacity: 1 !important;
+}
+
+html[data-cgm-theme="dark"] body
+:is(input,textarea)::placeholder {
+    color: var(--cgm-muted) !important;
+    -webkit-text-fill-color: var(--cgm-muted) !important;
+    opacity: 1 !important;
+}
+
+/* CAMPOS SOMENTE LEITURA */
+
+html[data-cgm-theme="dark"] body #lower
+#executionInfo .val,
+html[data-cgm-theme="dark"] body #lower
+#executionInfo .executionValue {
+    background: var(--cgm-field) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+    -webkit-text-fill-color: var(--cgm-text) !important;
+}
+
+/* ABAS DO FORMULARIO */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.sbV3Tab:not(.active) {
+    background: var(--cgm-field) !important;
+    color: var(--cgm-muted) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.sbV3Tab.active {
+    background: #1769b0 !important;
+    color: #ffffff !important;
+    border-color: #438bc8 !important;
+}
+
+/* PAINEIS DE FOTOS - ANTES E DEPOIS */
+
+html[data-cgm-theme="dark"] body
+#siscomBaixaModal.open > #cgmFotosAnteriorLateral,
+html[data-cgm-theme="dark"] body
+#siscomBaixaModal.open > #cgmFotosAtualLateral {
+    background: var(--cgm-panel) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.cgmFotosSeletores,.cgmFotosMiniaturas,
+    .cgmFotosMiniaturas figure,
+    .cgmFotosLateral footer,
+    .cgmNumeroSS) {
+    background: var(--cgm-panel) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.cgmFotosSeletores label,.cgmFotosStatus,
+    .cgmFotosMiniaturas figcaption) {
+    color: var(--cgm-muted) !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.cgmFotosMiniaturas img {
+    background: #11151c !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.cgmFotosLateral footer button {
+    background: var(--cgm-field) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+/* ETAPAS, AVISOS E STATUS */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.sbWorkflowProgress,.sbWorkflowStage,
+    .sbV3Ok,.sbV4AnexoInfo) {
+    background: #193d58 !important;
+    color: #b9dcff !important;
+    border-color: #365d7b !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.sbV3Ok.ready,.sbV4AnexoInfo.ok,
+    .sbWorkflowProgress[data-state="success"],
+    .sbWorkflowProgress[data-state="success"] .sbWorkflowStage) {
+    background: #17362e !important;
+    color: #81dcb1 !important;
+    border-color: #285747 !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+:is(.sbV4AnexoInfo.warning,.sbV4AnexoMore,
+    .sbWorkflowProgress[data-state="warning"],
+    .sbWorkflowProgress[data-state="warning"] .sbWorkflowStage) {
+    background: #392e1d !important;
+    color: #f4c675 !important;
+    border-color: #5c4828 !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.sbV4AnexoInfo.error {
+    background: #3d232a !important;
+    color: #ffa3a3 !important;
+    border-color: #69343d !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.sbV3MatStatus {
+    color: #81dcb1 !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.sbV3MatStatus.error {
+    color: #ffa3a3 !important;
+}
+
+/* TABELAS INTERNAS */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+table th {
+    background: var(--cgm-heading) !important;
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+table td {
+    color: var(--cgm-text) !important;
+    border-color: var(--cgm-border) !important;
+}
+
+/* BOTOES BLOQUEADOS */
+
+html[data-cgm-theme="dark"] body #siscomBaixaModal
+.sbFooter :is(#sbPrevia,#sbFinalizar):disabled {
+    background: #354252 !important;
+    border-color: #48586b !important;
+    color: #aab8c8 !important;
+    opacity: 1 !important;
+}
+
+}
