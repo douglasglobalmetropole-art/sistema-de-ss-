@@ -432,6 +432,18 @@ if(materiaisDivisao && rota!=='/api/materiais'){
     const numero=String(req.query?.ss||'').trim();
     if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({ok:false,error:'SS invalida.'});
     const schema=config.lote1?'u46915':'u45468';
+    // CGM_TRAM_RESUMO_V6: validates every related sequence before disclosure.
+    if(String(req.query?.todas||'')==='1'){
+      const prefixo=numero.slice(0,-2);
+      const numeros=Array.from({length:100},(_,i)=>prefixo+String(i).padStart(2,'0'));
+      return pool.query({text:`SELECT DISTINCT l.loc_integrationid AS ss,l.loc_city AS cidade FROM ${schema}.local l WHERE l.loc_integrationid=ANY($1::text[]) LIMIT 501`,values:[numeros],query_timeout:10000})
+        .then(q=>{
+          const permitidas=new Set(config.cidades.map(normalizarCidade));
+          if(q.rows.length>=501 || !q.rows.some(x=>x.ss===numero) || q.rows.some(x=>!permitidas.has(normalizarCidade(x.cidade||''))))
+            return res.status(403).json({ok:false,error:'Nao foi possivel autorizar todas as sequencias nesta divisao.'});
+          return next();
+        }).catch(e=>{console.error('Sequencias resumo/divisao:',e.code||e.name);return res.status(503).json({ok:false,error:'Falha ao validar sequencias da divisao.'});});
+    }
     return pool.query({text:`SELECT l.loc_city AS cidade FROM ${schema}.local l WHERE l.loc_integrationid=$1 LIMIT 1`,values:[numero],query_timeout:7000})
       .then(q=>{
         const cidade=normalizarCidade(q.rows[0]?.cidade||'');
@@ -2710,7 +2722,7 @@ const { consultarMateriais } = require('./umov-materiais');
 
         const { consultarSequenciasFotos } = require('./umov-materiais');
         const inicioConsulta = Date.now();
-        const sequencias = await consultarSequenciasFotos(pool, ss);
+        const sequencias = await consultarSequenciasFotos(pool, ss, String(req.query.todas||'')==='1');
         res.setHeader('Server-Timing', 'anteriores;dur=' + (Date.now() - inicioConsulta));
 
         return res.json({

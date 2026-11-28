@@ -3819,7 +3819,8 @@ atualizarTextosDuplicidade();
   <div class="tramDetailTop"><h2 id="tramDetailTitle">Dados da Solicitação de Serviço — Tramitação</h2><button id="tramDetailTopClose" type="button" aria-label="Fechar detalhes">✕</button></div>
   <div class="tramDetailBody">
    <div class="tramDetailSummary"><div><small>Nº SS</small><div><strong id="tramDetailSS">—</strong></div></div><div id="tramDetailPhase" class="tramPhase">Consultando...</div><div class="tramDetailActions"><button id="tramDetailPrint" type="button">▣ Imprimir</button><button id="tramDetailRefresh" type="button">⟳ Atualizar</button><button id="tramDetailClose" type="button">✕ Fechar</button></div></div>
-   <section class="tramDetailSection"><h3>Dados de Medição</h3><div class="tramDetailSectionBody" id="tramDetailFields"><div class="tramDetailLoading">Consultando dados oficiais do SISCOM...</div></div></section>
+   <section class="tramDetailSection"><h3>Resumo da solicita&ccedil;&atilde;o e execu&ccedil;&atilde;o</h3><div class="tramDetailSectionBody" id="tramDetailFields"><div class="tramDetailLoading">Consultando dados oficiais do SISCOM...</div></div></section>
+   <section class="tramDetailSection" id="cgmTramFotosV6"><h3>Fotografias uMov por sequ&ecirc;ncia</h3><div class="tramDetailSectionBody"><div id="cgmTramSeqV6" role="group" aria-label="Sequencias com relatorio uMov"></div><div id="cgmTramRelV6"></div><div id="cgmTramFotoStatusV6" class="tramDetailMsg" role="status"></div><div id="cgmTramFotoGridV6"></div><div id="cgmTramFotoAmpliadaV6" hidden></div></div></section>
    <section class="tramDetailSection"><h3>Itens da Solicitação de Serviço</h3><div id="tramDetailItems" class="tramDetailTableWrap"><div class="tramDetailMsg">Aguardando medição...</div></div><div id="tramDetailItemsPager" class="tramDetailPager"></div></section>
    <section class="tramDetailSection"><h3>Anexos</h3><div id="tramDetailAttachments" class="tramDetailTableWrap"><div class="tramDetailMsg">Consultando anexos...</div></div><div id="tramDetailAttachmentsPager" class="tramDetailPager"></div></section>
    <section class="tramDetailSection"><h3>Histórico de Tramitações</h3><div id="tramDetailHistory" class="tramDetailTableWrap"><div class="tramDetailMsg">Aguardando medição...</div></div><div id="tramDetailHistoryPager" class="tramDetailPager"></div></section>
@@ -4328,23 +4329,87 @@ function tramDetailMedicaoId(d,x){
  const value=Number(n??alt);
  return Number.isSafeInteger(value)&&value>0?value:null;
 }
+// CGM_TRAM_RESUMO_V6
 function tramDetailRenderFields(d,x){
- const get=(...keys)=>tramDetailPick(d,...keys)??tramDetailPick(x,...keys);
- const phaseRaw=get('cdFaseMedicao','faseMedicaoId','faseMedicao.id','faseMedicao');
- const phaseId=Number(typeof phaseRaw==='object'?phaseRaw?.id:phaseRaw);
- const phase=tramDetailPhases[phaseId]||get('descricaoFaseMedicao','faseMedicao.descricao','faseMedicao')||'Não informada';
- const phaseEl=tramEl('tramDetailPhase');phaseEl.textContent=Number.isInteger(phaseId)&&tramDetailPhases[phaseId]?phaseId+' - '+phase:String(phase);phaseEl.dataset.phase=String(phaseId);
- const fields=[
- ['Localidade',get('localidade','municipio','cidade')],['Endereço',get('endereco','logradouro','enderecoSS','rua')],['Data registro',tramDetailDate(get('dataRegistro','dtRegistro','dataAbertura'))],
- ['Matrícula',get('matricula','nrMatricula')],['Cliente',get('cliente','nomeCliente','nmCliente')],['Execução inicial',tramDetailDate(get('dataExecucaoInicial','dtExecucaoInicial','inicioExecucao'))],
- ['Serviço solicitado',get('descServicoSolicitado','descricaoServicoSolicitado','servicoSolicitado.descricao','servicoSolicitado')],['Serviço executado',get('descServicoExecutado','descricaoServicoExecutado','servicoExecutado.descricao','servicoExecutado')],['Execução final',tramDetailDate(get('dataExecucaoFinal','dtExecucaoFinal','fimExecucao'))],
- ['Fase de medição',phase],['Nº medição',get('numeroMedicao','nrMedicao','medicao.numero','numero')],['Valor',tramDetailMoney(get('valorTotal','valorMedicao','valor'))],
- ['Contrato',get('dcContrato','descricaoContrato','contrato.dcContrato','tpProcesso')],['HD retirado',get('hdRetirado')],['HD instalado',get('hdInstalado')],
- ['Lacre',get('lacre','numeroLacre')],['Leitura',get('leitura')],['Recurso',get('recurso')],
- ['Instruções para contratada',get('instrucoesContratada','instrucoesParaContratada','dsInstrucao','observacaoSolicitacao','observacao'),true],
- ['Informações da execução',get('informacoesExecucao','descricaoExecucao','observacaoExecucao','dsExecucao'),true]
+ const e=x.__cgmEnriquecimento||{};
+ const ss=tramSS(x);
+ const phaseRaw=d.faseMedicao;
+ const phaseId=phaseRaw==null||phaseRaw===''?null:Number(typeof phaseRaw==='object'?phaseRaw.id:phaseRaw);
+ const med=tramDetailMedicaoId(d,x);
+ const phase=phaseId!==null&&tramDetailPhases[phaseId]?tramDetailPhases[phaseId]:(!med&&phaseRaw==null?'Sem medi\u00e7\u00e3o':tramDetailVal(d.faseMedicao?.descricao??x.descricaoFaseMedicao??phaseRaw));
+ const phaseEl=tramEl('tramDetailPhase');phaseEl.textContent=phase;phaseEl.dataset.phase=phaseId===null?'':String(phaseId);
+ const solicitacao=[
+  ['SS',ss],['Servi\u00e7o solicitado',d.servicoMacroDTO?.dcServico??x.descServicoSolicitado,true],
+  ['Munic\u00edpio',d.municipioLocalidadeDTO?.dcCidade??e.municipio??x.localidade],['Bairro',e.bairro],
+  ['Endere\u00e7o',d.endereco??e.rua,true],['Abertura',tramDetailDate(d.dataHoraRegistro)],
+  ['Matr\u00edcula',d.matricula],['Instru\u00e7\u00f5es para a contratada',d.instrucoesContratada,true]
  ];
- tramEl('tramDetailFields').innerHTML='<div class="tramDetailGrid">'+fields.map(f=>tramDetailField(...f)).join('')+'</div>';
+ const execucao=[
+  ['Servi\u00e7o executado',d.servicoMicroDTO?.dcServico??x.descServicoExecutado,true],
+  ['Equipe executora',e.equipe??e.codEquipe],['Fase',phase],
+  ['In\u00edcio',tramDetailDate(d.dataHoraExecucaoIni)],['T\u00e9rmino',tramDetailDate(d.dataHoraExecucaoFim)],
+  ['N\u00ba medi\u00e7\u00e3o',d.nrMedicao],['Valor da medi\u00e7\u00e3o',tramDetailMoney(d.valorTotalNi)],
+  ['Descri\u00e7\u00e3o da execu\u00e7\u00e3o',d.descricaoExecucao,true]
+ ];
+ const painel=(titulo,fields)=>'<section class="cgmTramResumoBlocoV6"><h4>'+tramEsc(titulo)+'</h4><div class="cgmTramResumoCamposV6">'+fields.map(f=>tramDetailField(...f)).join('')+'</div></section>';
+ tramEl('tramDetailFields').innerHTML='<div class="cgmTramResumoGridV6">'+painel('RESUMO DA SOLICITA\u00c7\u00c3O',solicitacao)+painel('RESUMO DA EXECU\u00c7\u00c3O',execucao)+'</div>';
+}
+let cgmTramFotosGeracaoV6=0;
+function cgmTramFotoUrlV6(src){return typeof src==='string'&&(/^https:\/\//i.test(src)||/^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(src));}
+async function cgmTramFotosV6(ss,token){
+ const seq=tramEl('cgmTramSeqV6'),rel=tramEl('cgmTramRelV6'),status=tramEl('cgmTramFotoStatusV6'),grid=tramEl('cgmTramFotoGridV6'),zoom=tramEl('cgmTramFotoAmpliadaV6');
+ const geracao=++cgmTramFotosGeracaoV6;
+ const ativo=()=>token===tramDetailToken&&geracao===cgmTramFotosGeracaoV6;
+ let versao=0;
+ seq.replaceChildren();rel.replaceChildren();grid.replaceChildren();zoom.replaceChildren();zoom.hidden=true;
+ status.textContent='Consultando relatorios uMov de todas as sequencias...';
+ const prefixo=ss.slice(0,-2);
+ const botao=(texto,fn)=>{const b=document.createElement('button');b.type='button';b.textContent=texto;b.onclick=fn;return b;};
+ try{
+  const r=await fetch('/api/umov/sequencias-fotos?ss='+encodeURIComponent(ss)+'&todas=1',{credentials:'same-origin',cache:'no-store'});
+  const d=await r.json();if(!ativo())return;
+  if(!r.ok||!d.ok||!Array.isArray(d.sequencias))throw Error(d.error||'Resposta de sequencias invalida');
+  const grupos=new Map();
+  for(const x of d.sequencias){
+   const n=String(x.numero_ss||''),t=Number(x.tarefa);
+   if(!n.startsWith(prefixo)||n.length!==prefixo.length+2||!/^\d{2}$/.test(n.slice(-2))||!Number.isSafeInteger(t)||t<=0)continue;
+   if(!grupos.has(n))grupos.set(n,[]);
+   if(!grupos.get(n).some(y=>Number(y.tarefa)===t))grupos.get(n).push(x);
+  }
+  if(!grupos.size){status.textContent='Nenhum relatorio uMov localizado para este atendimento.';return;}
+  async function carregar(numero,tarefa,modo='direto'){
+   const v=++versao;grid.replaceChildren();zoom.replaceChildren();zoom.hidden=true;
+   status.textContent='Consultando fotos de '+numero+'...';
+   try{
+    const r=await fetch('/api/relatorio-fotos',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({ss:numero,tarefa:Number(tarefa),modo})});
+    const d=await r.json();if(!ativo()||v!==versao)return;
+    if(!r.ok||!d.ok||!Array.isArray(d.fotos))throw Error(d.error||'Resposta de fotos invalida');
+    const fotos=d.fotos.filter(cgmTramFotoUrlV6);
+    status.textContent=numero+' | '+fotos.length+' foto(s)'+(numero!==ss?' | resumo acima pertence a '+ss:'');
+    if(modo==='direto')status.append(' ',botao('Recuperar imagens',()=>carregar(numero,tarefa,'captura')));
+    for(const [i,src] of fotos.entries()){
+     const figura=document.createElement('figure'),img=document.createElement('img'),leg=document.createElement('figcaption');
+     img.loading='lazy';img.decoding='async';img.alt='Foto '+(i+1)+' de '+numero;img.src=src;
+     const b=botao('',()=>{zoom.replaceChildren();const maior=document.createElement('img');maior.alt=img.alt;maior.src=src;zoom.append(botao('Fechar ampliacao',()=>{zoom.hidden=true;zoom.replaceChildren()}),maior);zoom.hidden=false;zoom.scrollIntoView({block:'nearest'});});
+     b.setAttribute('aria-label','Ampliar '+img.alt);b.append(img);leg.textContent='Foto '+String(i+1).padStart(2,'0');figura.append(b,leg);grid.append(figura);
+    }
+   }catch(err){if(ativo()&&v===versao)status.textContent='Falha ao consultar fotos: '+err.message;}
+  }
+  function selecionar(numero){
+   if(!ativo())return;
+   for(const b of seq.querySelectorAll('button')){const a=b.dataset.ss===numero;b.classList.toggle('active',a);b.setAttribute('aria-pressed',String(a));}
+   rel.replaceChildren();
+   const registros=grupos.get(numero);
+   const lista=document.createElement('select');lista.setAttribute('aria-label','Relatorio uMov');
+   for(const x of registros){const o=document.createElement('option');o.value=String(x.tarefa);o.textContent='Relatorio '+x.tarefa+(x.data_execucao?' - '+tramDetailDate(x.data_execucao):'');lista.append(o);}
+   rel.append(lista);lista.onchange=()=>carregar(numero,lista.value);
+   const idx=tramRecords.findIndex(x=>tramSS(x)===numero&&x.__cgmOrigem);
+   if(numero!==ss&&idx>=0)rel.append(botao('Abrir resumo desta SS',()=>tramDetail(idx)));
+   void carregar(numero,lista.value);
+  }
+  for(const n of [...grupos.keys()].sort()){const b=botao('SS '+n.slice(-2),()=>selecionar(n));b.dataset.ss=n;seq.append(b);}
+  selecionar(grupos.has(ss)?ss:[...grupos.keys()].sort()[0]);
+ }catch(err){if(ativo())status.textContent='Fotografias indisponiveis: '+err.message;}
 }
 function tramDetailPager(id,op,params,token){
  const tableId={tram_itens:'tramDetailItems',tram_anexos:'tramDetailAttachments',tram_historico:'tramDetailHistory'}[op];
@@ -4386,6 +4451,7 @@ async function tramDetail(i){
  for(const id of ['tramDetailItems','tramDetailAttachments','tramDetailHistory'])tramEl(id).innerHTML='<div class="tramDetailMsg">Aguardando consulta...</div>';
  for(const id of ['tramDetailItemsPager','tramDetailAttachmentsPager','tramDetailHistoryPager'])tramEl(id).innerHTML='';
  tramEl('tramDetailFeedback').textContent='Consultando dados oficiais do SISCOM. Somente leitura.';
+ void cgmTramFotosV6(ss,token);
  // Anexos independem do identificador da medição.
  tramDetailPager('tramDetailAttachmentsPager','tram_anexos',{ss,origemJob:origem,contrato},token);
  try{
@@ -4408,7 +4474,7 @@ async function tramDetail(i){
   }else{
    tramDetailSectionError('tramDetailItems','O SISCOM não informou um identificador de medição para consultar os itens.');
    tramDetailSectionError('tramDetailHistory','O SISCOM não informou um identificador de medição para consultar o histórico.');
-   tramEl('tramDetailFeedback').textContent='Detalhes carregados parcialmente: identificador da medição ausente.';
+   tramEl('tramDetailFeedback').textContent='Resumo consultado. SS sem identificador de medicao; itens e historico nao se aplicam.';
   }
  }catch(e){if(token!==tramDetailToken)return;tramDetailSectionError('tramDetailFields','Falha ao consultar dados da medição: '+e.message);tramDetailSectionError('tramDetailItems','Aguardando medição.');tramDetailSectionError('tramDetailHistory','Aguardando medição.');tramEl('tramDetailFeedback').textContent='Falha na consulta. Confira a sessão individual SISCOM.';}
 }
@@ -5639,4 +5705,38 @@ body.tram-mode #tramAviso {
 }
 </style>
 
+<style id="CGM_TRAM_RESUMO_STYLE_V6">
+@media screen {
+#tramDetailOverlay{justify-content:flex-end;padding:6px!important}
+#tramDetailOverlay .tramDetailWindow{width:min(1120px,98vw);height:calc(100dvh - 12px);max-height:calc(100dvh - 12px);border-radius:6px}
+#tramDetailOverlay .tramDetailTop{background:#0d3c6b;padding:9px 12px}
+#tramDetailOverlay .tramDetailTop h2{font-size:15px}
+#tramDetailOverlay .tramDetailBody{padding:9px}
+#tramDetailOverlay .tramDetailSummary{padding:8px 10px;margin-bottom:8px}
+#tramDetailOverlay .tramDetailSummary strong{font-size:19px}
+#tramDetailOverlay .tramDetailSection{margin-bottom:8px}
+#tramDetailOverlay .tramDetailSection h3{padding:7px 10px}
+#tramDetailOverlay .tramDetailSectionBody{padding:8px}
+}
+.cgmTramResumoGridV6{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.cgmTramResumoBlocoV6{border:1px solid #cbdce9;border-radius:5px;min-width:0;overflow:hidden}
+.cgmTramResumoBlocoV6 h4{margin:0;padding:7px 9px;background:#0d5e99;color:#fff;font-size:11px}
+.cgmTramResumoCamposV6{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;padding:3px 8px}
+.cgmTramResumoCamposV6 .tramDetailField{padding:6px 3px;border-bottom:1px solid #dce5ee;white-space:pre-wrap;line-height:1.35;overflow-wrap:anywhere}
+.cgmTramResumoCamposV6 .tramDetailField b{display:block;font-size:10px;margin:0 0 3px}
+#cgmTramSeqV6,#cgmTramRelV6{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px;align-items:center}
+#cgmTramFotosV6 button,#cgmTramFotosV6 select{font:inherit;padding:5px 8px;border-radius:4px;border:1px solid #bfd2e1;background:#fff;color:#123e6e;cursor:pointer}
+#cgmTramSeqV6 button.active{background:#0875ce;color:#fff;border-color:#0875ce}
+#cgmTramFotoGridV6{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+#cgmTramFotoGridV6 figure{margin:0;min-width:0;border:1px solid #cbdce9;border-radius:5px;overflow:hidden}
+#cgmTramFotoGridV6 figure button{padding:0;border:0;display:block;width:100%}
+#cgmTramFotoGridV6 img{width:100%;aspect-ratio:4/3;object-fit:contain;display:block;background:#eef3f8}
+#cgmTramFotoGridV6 figcaption{padding:5px 8px;font-size:11px}
+#cgmTramFotoAmpliadaV6:not([hidden]){display:grid;gap:6px;margin:8px 0}
+#cgmTramFotoAmpliadaV6 img{max-width:100%;max-height:75vh;object-fit:contain;margin:auto}
+html[data-cgm-theme="dark"] .cgmTramResumoBlocoV6,html[data-cgm-theme="dark"] .cgmTramResumoCamposV6 .tramDetailField,html[data-cgm-theme="dark"] #cgmTramFotoGridV6 figure{border-color:var(--cgm-border,#405166)}
+html[data-cgm-theme="dark"] #cgmTramFotosV6 button:not(.active),html[data-cgm-theme="dark"] #cgmTramFotosV6 select{background:var(--cgm-field,#242f3d);color:var(--cgm-text,#f1f5f9);border-color:var(--cgm-border,#405166)}
+@media(max-width:750px){.cgmTramResumoGridV6{grid-template-columns:1fr}#cgmTramFotoGridV6{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media print{#cgmTramSeqV6,#cgmTramRelV6,#cgmTramFotoStatusV6 button,#cgmTramFotoAmpliadaV6{display:none!important}}
+</style>
 </body></html>

@@ -63,11 +63,11 @@ async function consultarMateriais(pool, numeroSS) {
   });
 }
 
-async function consultarSequenciasFotos(pool, numeroSS) {
+async function consultarSequenciasFotos(pool, numeroSS, todas=false) {
   const ss=String(numeroSS||'').trim();
   const m=/^(\d{2}\/\d{2}-\d{6})-(\d{2})$/.exec(ss);
   if(!m)throw Error('Numero de SS invalido.');
-  const ate=Number(m[2]);if(!ate)return [];
+  const ate=todas?100:Number(m[2]);if(!ate)return [];
   // Busca exata por sequencias anteriores; sem varredura de prefixo em toda a base.
   const numeros=Array.from({length:ate},(_,i)=>m[1]+'-'+String(i).padStart(2,'0'));
   const q=await pool.query({text:`
@@ -90,6 +90,7 @@ async function consultarSequenciasFotos(pool, numeroSS) {
     ORDER BY l.loc_integrationid DESC,data_execucao DESC NULLS LAST,t.tsk_id DESC
     LIMIT 200
   `,values:[numeros],query_timeout:10000});
+  if(todas && q.rows.length>=200)throw Error('Limite de relatorios atingido; consulta nao pode ser considerada completa.');
   const vistos=new Set();
   return q.rows.filter(r=>{const k=r.numero_ss+'|'+r.tarefa;if(vistos.has(k))return false;vistos.add(k);return true;});
 }
