@@ -5396,4 +5396,85 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 
 </script>
 <link rel="stylesheet" href="/cgm-theme.css?v=6baa5d0da4cd1a70">
+<style id="cgmTramLayoutFinal">
+.tramFilters label:has(#tramStatus),
+#tramitacaoIntro .tramitacaoHeading {
+    display:none !important;
+}
+
+#tramitacaoIntro:not([hidden]) #cgmTramTabsV2 {
+    display:grid !important;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+    width:100%;
+    margin:0 0 12px;
+}
+
+#cgmTramTabsV2 button {
+    display:flex !important;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    min-height:42px;
+    padding:10px 14px;
+    border:1px solid #b9cde0;
+    border-radius:5px;
+    background:#f1f6fb;
+    color:#103c65;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+}
+
+#cgmTramTabsV2 button.active {
+    background:#087af0 !important;
+    color:#fff !important;
+    border-color:#087af0;
+}
+
+html[data-cgm-theme="dark"] #cgmTramTabsV2 button:not(.active) {
+    background:#26384a !important;
+    color:#e5eef8 !important;
+    border-color:#465e76;
+}
+
+#tramitacaoIntro .tramTableWrap {
+    width:100%;
+    overflow-x:auto;
+}
+
+#tramitacaoIntro table {
+    width:100%;
+    min-width:1250px;
+}
+</style>
+<script id="cgmTramLayoutFinalJS">
+(function(){
+    function aplicar(){
+        const root=document.getElementById('tramitacaoIntro');
+        const tabs=document.getElementById('cgmTramTabsV2');
+        if(!root||!tabs)return;
+
+        const status=document.getElementById('tramStatus');
+        if(status&&status.closest('label')){
+            status.closest('label').style.setProperty(
+                'display','none','important'
+            );
+        }
+
+        const head=root.querySelector('table thead');
+        if(head&&!head.textContent.includes('Equipe')){
+            head.innerHTML='<tr>'+
+                ['SS','Serviço solicitado','Serviço executado',
+                'Município','Rua','Bairro','Equipe',
+                'Última SS','Valor','Execução','Fase','Ações']
+                .map(x=>'<th>'+x+'</th>').join('')+
+                '</tr>';
+        }
+    }
+
+    aplicar();
+    document.addEventListener('DOMContentLoaded',aplicar);
+})();
+</script>
 </body></html>
