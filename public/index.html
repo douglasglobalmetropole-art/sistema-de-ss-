@@ -5758,4 +5758,155 @@ html[data-cgm-theme="dark"] #tramitacaoIntro .cgm-tram-tab-count{
     box-shadow:none!important;
 }
 </style>
+<style id="CGM_TRAM_PADRAO_GLOBAL">
+
+/* Navegacao e filtros na mesma linha */
+
+html body.tram-mode .toolbar {
+    display:flex!important;
+    flex-wrap:wrap!important;
+    align-items:flex-end!important;
+    gap:5px!important;
+}
+
+html body.tram-mode .toolbar > .tramFilters {
+    display:flex!important;
+    flex:1 1 450px!important;
+    width:auto!important;
+    min-width:0!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    gap:5px!important;
+    align-items:flex-end!important;
+    order:0!important;
+}
+
+html body.tram-mode .tramFilters label {
+    flex:1 1 90px!important;
+    min-width:80px!important;
+    margin:0!important;
+    gap:3px!important;
+    font-size:11px!important;
+}
+
+html body.tram-mode .tramFilters input,
+html body.tram-mode .tramFilters select {
+    height:30px!important;
+    min-height:30px!important;
+    font-size:11px!important;
+    padding:4px 6px!important;
+}
+
+html body.tram-mode #tramPesquisar,
+html body.tram-mode #tramLimpar {
+    height:30px!important;
+    min-height:30px!important;
+    font-size:11px!important;
+    padding:4px 10px!important;
+}
+
+/* Area principal */
+
+html body.tram-mode #tramitacaoIntro {
+    display:flex!important;
+    flex-direction:column!important;
+    flex:1 1 auto!important;
+    min-height:0!important;
+    height:auto!important;
+    margin:4px 0 0!important;
+    padding:0!important;
+    border-radius:4px!important;
+    font-family:inherit!important;
+    font-size:11px!important;
+}
+
+/* Abas secundarias compactas */
+
+html body.tram-mode #tramitacaoIntro #cgmTramTabsV2 {
+    display:flex!important;
+    flex-wrap:wrap!important;
+    justify-content:flex-start!important;
+    align-items:center!important;
+    width:auto!important;
+    gap:5px!important;
+    margin:0!important;
+    padding:6px!important;
+}
+
+html body.tram-mode #tramitacaoIntro [data-tram-tab],
+html body.tram-mode #cgmTramTabsV2 button {
+    flex:0 0 auto!important;
+    width:auto!important;
+    min-width:0!important;
+    height:28px!important;
+    min-height:28px!important;
+    padding:4px 12px!important;
+    font-size:11px!important;
+    letter-spacing:normal!important;
+    border-radius:4px!important;
+}
+
+/* Tabela no padrao operacional */
+
+html body.tram-mode #tramitacaoIntro .tramTableWrap {
+    flex:1 1 auto!important;
+    max-height:none!important;
+    min-height:0!important;
+    overflow:auto!important;
+    margin:0!important;
+    padding:0!important;
+    border-radius:0!important;
+}
+
+html body.tram-mode #tramitacaoIntro .tramTable {
+    width:100%!important;
+    font-family:inherit!important;
+    font-size:11px!important;
+    border-collapse:collapse!important;
+}
+
+html body.tram-mode #tramitacaoIntro .tramTable th {
+    font-size:11px!important;
+    padding:5px 6px!important;
+    text-align:left!important;
+    white-space:nowrap!important;
+}
+
+html body.tram-mode #tramitacaoIntro .tramTable td {
+    font-size:11px!important;
+    padding:4px 6px!important;
+    line-height:1.35!important;
+}
+
+html body.tram-mode #tramAviso {
+    font-size:11px!important;
+    margin:0!important;
+    padding:5px 8px!important;
+}
+
+/* Paginacao */
+
+html body.tram-mode #tramitacaoIntro .tramPagination {
+    display:flex!important;
+    justify-content:flex-end!important;
+    align-items:center!important;
+    flex-wrap:wrap!important;
+    gap:6px!important;
+    margin:0!important;
+    padding:5px 8px!important;
+    font-size:11px!important;
+}
+
+html body.tram-mode .tramPagination button {
+    min-height:25px!important;
+    font-size:11px!important;
+    padding:3px 7px!important;
+}
+
+html body.tram-mode #tramCount {
+    margin-right:auto!important;
+}
+
+</style>
 </body></html>
