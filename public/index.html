@@ -5477,4 +5477,188 @@ html[data-cgm-theme="dark"] #cgmTramTabsV2 button:not(.active) {
     document.addEventListener('DOMContentLoaded',aplicar);
 })();
 </script>
+<style id="cgmTramTabsPolish">
+#tramitacaoIntro #cgmTramTabsV2{
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(220px,1fr));
+  gap:10px;
+  margin:10px 0 10px;
+  align-items:stretch;
+}
+
+#tramitacaoIntro #cgmTramTabsV2 button,
+#tramitacaoIntro [data-tram-tab]{
+  display:flex !important;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:38px;
+  padding:8px 14px;
+  border:1px solid #b8cada;
+  border-radius:6px;
+  background:#ffffff;
+  color:#17456b;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.1;
+  letter-spacing:.2px;
+  box-shadow:none;
+  transition:all .15s ease;
+}
+
+#tramitacaoIntro #cgmTramTabsV2 button:hover,
+#tramitacaoIntro [data-tram-tab]:hover{
+  border-color:#2b7ed2;
+  background:#f4f9ff;
+}
+
+#tramitacaoIntro #cgmTramTabsV2 button.active,
+#tramitacaoIntro [data-tram-tab].active{
+  background:#0b78ef !important;
+  color:#fff !important;
+  border-color:#0b78ef !important;
+}
+
+#tramitacaoIntro .cgm-tram-tab-title{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  white-space:nowrap;
+}
+
+#tramitacaoIntro .cgm-tram-tab-count{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:20px;
+  height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  background:rgba(11,120,239,.12);
+  color:#0b5eb8;
+  font-size:11px;
+  font-weight:700;
+}
+
+#tramitacaoIntro #cgmTramTabsV2 button.active .cgm-tram-tab-count,
+#tramitacaoIntro [data-tram-tab].active .cgm-tram-tab-count{
+  background:rgba(255,255,255,.18);
+  color:#fff;
+}
+
+#tramitacaoIntro .cgm-tram-tab-count.empty{
+  display:none;
+}
+
+#tramitacaoIntro .tramTableWrap,
+#tramitacaoIntro .tableScroll{
+  margin-top:6px;
+}
+
+#tramitacaoIntro .tramitacaoIntroMsg,
+#tramitacaoIntro .tramFeedback,
+#tramitacaoIntro .tramInfo,
+#tramitacaoIntro .tramSummary{
+  font-size:12px;
+  color:#4d6780;
+}
+
+html[data-cgm-theme="dark"] #tramitacaoIntro #cgmTramTabsV2 button,
+html[data-cgm-theme="dark"] #tramitacaoIntro [data-tram-tab]{
+  background:#233548 !important;
+  color:#e7eff8 !important;
+  border-color:#486177 !important;
+}
+
+html[data-cgm-theme="dark"] #tramitacaoIntro #cgmTramTabsV2 button:hover,
+html[data-cgm-theme="dark"] #tramitacaoIntro [data-tram-tab]:hover{
+  background:#2a4158 !important;
+}
+
+html[data-cgm-theme="dark"] #tramitacaoIntro #cgmTramTabsV2 button.active,
+html[data-cgm-theme="dark"] #tramitacaoIntro [data-tram-tab].active{
+  background:#0b78ef !important;
+  color:#fff !important;
+  border-color:#0b78ef !important;
+}
+
+html[data-cgm-theme="dark"] #tramitacaoIntro .cgm-tram-tab-count{
+  background:rgba(255,255,255,.12);
+  color:#fff;
+}
+
+@media (max-width: 1100px){
+  #tramitacaoIntro #cgmTramTabsV2{
+    grid-template-columns:1fr;
+  }
+}
+</style>
+<script id="cgmTramTabsPolishJS">
+(function(){
+  const MAP = {
+    pendentes: 'Notas para tramitar',
+    tramitar: 'Notas para tramitar',
+    tramitadas: 'Notas tramitadas',
+    aprovadas: 'Notas aprovadas'
+  };
+
+  function extrairNumero(txt){
+    const m = String(txt || '').match(/\d[\d\.]*/);
+    return m ? m[0] : '';
+  }
+
+  function tituloDoBotao(btn, raw){
+    const key = String(
+      btn.dataset.tramTab ||
+      btn.getAttribute('data-tram-tab') ||
+      ''
+    ).toLowerCase().trim();
+
+    if (MAP[key]) return MAP[key];
+
+    const normal = raw.toLowerCase();
+    if (normal.includes('aprovad')) return 'Notas aprovadas';
+    if (normal.includes('tramitad')) return 'Notas tramitadas';
+    return 'Notas para tramitar';
+  }
+
+  function aplicar(){
+    const lista = Array.from(
+      document.querySelectorAll('#cgmTramTabsV2 button, #cgmTramTabsV2 [data-tram-tab], [data-tram-tab]')
+    ).filter(x => x.tagName === 'BUTTON' || x.closest('#cgmTramTabsV2'));
+
+    lista.forEach(btn => {
+      const raw = btn.textContent.replace(/\s+/g,' ').trim();
+      const titulo = tituloDoBotao(btn, raw);
+      const numero = extrairNumero(raw);
+
+      const assinatura = titulo + '|' + numero + '|' + (btn.className || '');
+      if (btn.dataset.cgmTabsSignature === assinatura) return;
+      btn.dataset.cgmTabsSignature = assinatura;
+
+      btn.innerHTML =
+        '<span class="cgm-tram-tab-title">' + titulo + '</span>' +
+        '<span class="cgm-tram-tab-count' + (numero ? '' : ' empty') + '">' + numero + '</span>';
+    });
+  }
+
+  let lock = false;
+  const executar = () => {
+    if (lock) return;
+    lock = true;
+    try { aplicar(); } finally { lock = false; }
+  };
+
+  executar();
+  document.addEventListener('DOMContentLoaded', executar);
+
+  const alvo = document.body || document.documentElement;
+  new MutationObserver(executar).observe(alvo, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true
+  });
+})();
+</script>
 </body></html>
