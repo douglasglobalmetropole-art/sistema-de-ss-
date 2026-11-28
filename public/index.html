@@ -3919,9 +3919,11 @@ async function tramInit(){
    c.disabled=true;
    c.dispatchEvent(new Event('change'));
 
-   tramNotice(
-    'Divisao identificada automaticamente. Clique em Pesquisar.'
-   );
+   tramNotice('Carregando notas da divisao...');
+   tramPage=0;
+   if(document.body.classList.contains('tram-mode')){
+    await tramSearch();
+   }
   }else{
    c.disabled=false;
    tramNotice(
