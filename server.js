@@ -2941,7 +2941,60 @@ async function programacaoFetch(query='',form=null){
  return dados;
 }
 app.get('/api/materiais',async(req,res)=>{try{const hit=getCache('programacao:materiais',300000);if(hit)return res.json({ok:true,rows:hit});const rows=await programacaoFetch('materiais=1');setCache('programacao:materiais',Array.isArray(rows)?rows:[]);res.json({ok:true,rows:Array.isArray(rows)?rows:[]})}catch(error){res.status(502).json({ok:false,error:error.message})}});
-app.get('/api/itens',async(req,res)=>{try{const ss=String(req.query.ss||'').trim();if(!ss)return res.status(400).json({ok:false,error:'Informe a SS.'});const rows=await programacaoFetch('itens=1&ss='+encodeURIComponent(ss));res.json({ok:true,rows:Array.isArray(rows)?rows:[]})}catch(error){res.status(502).json({ok:false,error:error.message})}});
+
+// CGM_TRAM_NI_CADASTRO_V9B
+function cgmCodigoMaterialV9B(v){
+ const m=/^["']?([0-9]+(?:\.[0-9]+)*)\s*[-–—]\s*(.+)$/u.exec(String(v??'').trim());
+ return m?m[1]:null;
+}
+function cgmCruzarNiV9B(rows,cadastro,indisponivel=false){
+ const grupos=new Map();
+ for(const c of cadastro){
+  const codigo=cgmCodigoMaterialV9B(c.cev_description);
+  if(!codigo)continue;
+  if(!grupos.has(codigo))grupos.set(codigo,[]);
+  grupos.get(codigo).push(c);
+ }
+ return rows.map(row=>{
+  const codigo=cgmCodigoMaterialV9B(row.material??row.nome);
+  const candidatos=grupos.get(codigo)||[];
+  const nis=[...new Set(candidatos.map(c=>String(c.cev_integrationid??'').trim()).filter(n=>/^\d{10}$/.test(n)))];
+  const todosValidos=candidatos.every(c=>/^\d{10}$/.test(String(c.cev_integrationid??'').trim()));
+  const confirmado=nis.length===1&&todosValidos;
+  const precos=[...new Set(candidatos.map(c=>String(c.e_valorunit??'').trim()).filter(v=>/^\d+(?:\.\d+)?$/.test(v)).map(Number))];
+  const todosPrecos=candidatos.every(c=>/^\d+(?:\.\d+)?$/.test(String(c.e_valorunit??'').trim()));
+  return {...row,ni_siscom:confirmado?nis[0]:null,
+   ni_status:indisponivel?'INDISPONIVEL':confirmado?'OK':nis.length>1||candidatos.length?'AMBIGUO':'NAO_LOCALIZADO',
+   ni_valor_unitario:confirmado&&todosPrecos&&precos.length===1?precos[0]:null};
+ });
+}
+async function cgmEnriquecerNiV9B(rows,pool){
+ const codigos=[...new Set(rows.map(x=>cgmCodigoMaterialV9B(x.material??x.nome)).filter(Boolean))];
+ if(!codigos.length)return cgmCruzarNiV9B(rows,[]);
+ if(codigos.length>200)return cgmCruzarNiV9B(rows,[],true);
+ try{
+  const q=await pool.query({text:"SELECT cev_description, cev_integrationid, e_valorunit FROM u45468.dbout_customentity_mc_cadastroni WHERE substring(btrim(cev_description) from '^([0-9]+([.][0-9]+)*)[[:space:]]*[-–—]')=ANY($1::text[]) LIMIT 5001",values:[codigos],query_timeout:12000});
+  if(q.rows.length>=5001)throw Error('Catalogo excedeu limite seguro');
+  return cgmCruzarNiV9B(rows,q.rows);
+ }catch(e){console.error('Consulta NI uMov:',e.code||e.name);return cgmCruzarNiV9B(rows,[],true);}
+}
+
+app.get('/api/itens',async(req,res)=>{
+ try{
+  const ss=String(req.query.ss||'').trim();
+  if(!ss)return res.status(400).json({ok:false,error:'Informe a SS.'});
+  const incluirNi=String(req.query.incluirNi||'')==='1';
+  if(incluirNi){
+   res.set('Cache-Control','no-store');
+   if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'Login SISCOM obrigatorio.'});
+   if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(ss))return res.status(400).json({ok:false,error:'SS invalida.'});
+  }
+  const dados=await programacaoFetch('itens=1&ss='+encodeURIComponent(ss));
+  if(incluirNi&&!Array.isArray(dados))throw Error('Resposta de itens invalida');
+  const rows=Array.isArray(dados)?dados:[];
+  res.json({ok:true,rows:incluirNi?await cgmEnriquecerNiV9B(rows,pool):rows});
+ }catch(error){res.status(502).json({ok:false,error:error.message});}
+});
 app.post('/api/itens',async(req,res)=>{try{const ss=String(req.body?.ss||'').trim(),material=String(req.body?.material||'').trim(),unidade=String(req.body?.unidade||'').trim(),quantidade=String(req.body?.quantidade||'').trim(),valor_total=String(req.body?.valor_total||'').trim();if(!ss||!material||!unidade||!quantidade)return res.status(400).json({ok:false,error:'Preencha material, unidade e quantidade.'});const result=await programacaoFetch('',{inserir_item:'1',ss,material,unidade,quantidade,valor_total});res.json({ok:result?.success!==false,message:result?.message||'Item lanÃ§ado com sucesso.'})}catch(error){res.status(502).json({ok:false,error:error.message})}});
 // Recebe a lista uma Ãºnica vez; processa sequencialmente para proteger a API de programaÃ§Ã£o.
 app.post('/api/itens/lote',async(req,res)=>{

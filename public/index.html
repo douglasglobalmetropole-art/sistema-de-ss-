@@ -3821,14 +3821,16 @@ atualizarTextosDuplicidade();
    <div class="tramDetailSummary"><div><small>Nº SS</small><div><strong id="tramDetailSS">—</strong></div></div><div id="tramDetailPhase" class="tramPhase">Consultando...</div><div class="tramDetailActions"><button id="tramDetailPrint" type="button">▣ Imprimir</button><button id="tramDetailRefresh" type="button">⟳ Atualizar</button><button id="tramDetailClose" type="button">✕ Fechar</button></div></div>
    <section class="tramDetailSection" id="cgmTramNavV8"><h3>Sequ&ecirc;ncias do atendimento</h3><div class="tramDetailSectionBody"><div id="cgmTramBotoesV8" role="group" aria-label="Sequencias"></div><div id="cgmTramEstadoV8" role="status"></div></div></section>
    <section class="tramDetailSection"><h3>Resumo da solicita&ccedil;&atilde;o e execu&ccedil;&atilde;o</h3><div class="tramDetailSectionBody" id="tramDetailFields"><div class="tramDetailLoading">Consultando dados oficiais do SISCOM...</div></div></section>
-   <section class="tramDetailSection" id="cgmTramMateriaisV7">
+   <section class="tramDetailSection" id="cgmTramMateriaisV7" hidden aria-hidden="true">
      <h3>Materiais utilizados por sequ&ecirc;ncia</h3>
      <div class="tramDetailSectionBody">
        <div id="cgmTramMatStatusV7" role="status"></div>
        <div id="cgmTramMatListaV7"></div>
      </div>
    </section>
-   <section class="tramDetailSection" id="cgmTramFotosV6"><h3>Fotografias uMov por sequ&ecirc;ncia</h3><div class="tramDetailSectionBody"><div id="cgmTramSeqV6" role="group" aria-label="Sequencias com relatorio uMov"></div><div id="cgmTramRelV6"></div><div id="cgmTramFotoStatusV6" class="tramDetailMsg" role="status"></div><div id="cgmTramFotoGridV6"></div><div id="cgmTramFotoAmpliadaV6" hidden></div></div></section>
+   <section class="tramDetailSection" id="cgmTramLancadosV9">
+<h3>Materiais lan&ccedil;ados na baixa</h3><div class="tramDetailSectionBody"><div id="cgmTramLancadosStatusV9" role="status" class="tramDetailMsg"></div><div id="cgmTramLancadosListaV9"></div></div></section>
+<section class="tramDetailSection" id="cgmTramFotosV6"><h3>Fotografias uMov por sequ&ecirc;ncia</h3><div class="tramDetailSectionBody"><div id="cgmTramSeqV6" role="group" aria-label="Sequencias com relatorio uMov"></div><div id="cgmTramRelV6"></div><div id="cgmTramFotoStatusV6" class="tramDetailMsg" role="status"></div><div id="cgmTramFotoGridV6"></div><div id="cgmTramFotoAmpliadaV6" hidden></div></div></section>
    <section class="tramDetailSection"><h3>Itens da Solicitação de Serviço</h3><div id="tramDetailItems" class="tramDetailTableWrap"><div class="tramDetailMsg">Aguardando medição...</div></div><div id="tramDetailItemsPager" class="tramDetailPager"></div></section>
    <section class="tramDetailSection"><h3>Anexos</h3><div id="tramDetailAttachments" class="tramDetailTableWrap"><div class="tramDetailMsg">Consultando anexos...</div></div><div id="tramDetailAttachmentsPager" class="tramDetailPager"></div></section>
    <section class="tramDetailSection"><h3>Histórico de Tramitações</h3><div id="tramDetailHistory" class="tramDetailTableWrap"><div class="tramDetailMsg">Aguardando medição...</div></div><div id="tramDetailHistoryPager" class="tramDetailPager"></div></section>
@@ -4494,6 +4496,86 @@ async function cgmTramFotosV6(ss,token){
   selecionar(ss);
  }catch(err){if(ativo())status.textContent='Fotografias indisponiveis: '+err.message;}
 }
+
+// CGM_TRAM_MATERIAIS_V9
+function cgmTramItemV9(row){
+ const bruto=String(row?.material??row?.nome??'').trim();
+ const m=/^["']?([0-9]+(?:\.[0-9]+)*)\s*[-–—]\s*(.+)$/u.exec(bruto);
+ const num=v=>{if(v==null||String(v).trim()==='')return null;const n=Number(v);return Number.isFinite(n)?n:null;};
+ const qtd=num(row?.quantidade),total=num(row?.valor_total);
+ return {codigo:m?m[1]:'—',ni:row?.ni_siscom??null,niStatus:row?.ni_status??'NAO_LOCALIZADO',catalogo:num(row?.ni_valor_unitario),descricao:m?m[2]:bruto||'—',unidade:String(row?.unidade??'—'),qtd,total,unit:qtd>0&&total!==null?total/qtd:null};
+}
+function cgmTramBombeiroV9(alvo,numero,blocos,textoMat){
+ const sec=document.createElement('div');sec.className='cgmTramBombeiroV9 tramWide';
+ const h=document.createElement('h5');h.textContent='RESUMO DO BOMBEIRO — MATERIAIS INFORMADOS (uMov)';sec.append(h);
+ const origem=blocos.find(b=>b.dataset.ss===numero);
+ if(origem){
+  for(const el of origem.querySelectorAll('small,.cgmTramMaterialTextoV7'))sec.append(el.cloneNode(true));
+ }else{
+  const p=document.createElement('div');p.textContent=textoMat.startsWith('Falha')?textoMat:'Nenhum material informado no uMov para esta sequencia.';sec.append(p);
+ }
+ const campos=alvo.querySelector('.cgmTramResumoBlocoV6:nth-child(2) .cgmTramResumoCamposV6');
+ (campos||alvo).append(sec);
+}
+function cgmTramTabelaLancadosV9(alvo,rows){
+ if(!rows.length){alvo.textContent='Nenhum material lancado nesta SS.';return;}
+ const wrap=document.createElement('div');wrap.className='tramDetailTableWrap';
+ const table=document.createElement('table');table.className='tramDetailTable';
+ const head=table.createTHead().insertRow();
+ for(const t of ['Codigo material','NI SISCOM','Descricao do material','UN','QTD','Valor unit. lancado','Valor unit. cadastro','Valor total lancado']){const th=document.createElement('th');th.textContent=t;head.append(th);}
+ const body=table.createTBody();
+ const fmt=(n,opts)=>n===null?'—':n.toLocaleString('pt-BR',opts);
+ const dinheiro={style:'currency',currency:'BRL'};
+ let centavos=0,completo=true;
+ for(const row of rows){
+  const v=cgmTramItemV9(row);const tr=body.insertRow();
+  const ni=v.ni??(v.niStatus==='AMBIGUO'?'NI ambiguo':v.niStatus==='INDISPONIVEL'?'Consulta indisponivel':'Nao localizado');
+  const vals=[v.codigo,ni,v.descricao,v.unidade,fmt(v.qtd,{maximumFractionDigits:4}),fmt(v.unit,{...dinheiro,maximumFractionDigits:4}),fmt(v.catalogo,{...dinheiro,maximumFractionDigits:4}),fmt(v.total,dinheiro)];
+  vals.forEach((t,i)=>{const td=tr.insertCell();td.textContent=t;if(i>=4)td.style.textAlign='right';});
+  if(v.total===null)completo=false;else centavos+=Math.round(v.total*100);
+ }
+ const foot=table.createTFoot().insertRow();const label=foot.insertCell();label.colSpan=7;label.textContent=completo?'TOTAL LANCADO NA SS':'TOTAL INCOMPLETO (valores ausentes)';
+ const valor=foot.insertCell();valor.textContent=fmt(centavos/100,dinheiro);valor.style.textAlign='right';
+ wrap.append(table);alvo.replaceChildren(wrap);
+}
+function cgmTramLancadosControllerV9(token,mapa){
+ const cache=new Map();let versao=0;
+ const ativo=v=>token===tramDetailToken&&v===versao;
+ async function consultar(n){
+  if(!cache.has(n)){
+   const promise=(async()=>{
+    const r=await fetch('/api/itens?ss='+encodeURIComponent(n)+'&incluirNi=1',{credentials:'same-origin',cache:'no-store'});
+    const d=await r.json();
+    if(!r.ok||!d.ok||!Array.isArray(d.rows))throw Error(d.error||'Resposta de materiais invalida');
+    return d.rows;
+   })();
+   cache.set(n,promise);promise.catch(()=>{if(cache.get(n)===promise)cache.delete(n);});
+  }
+  return cache.get(n);
+ }
+ return async function selecionar(numeros){
+  const v=++versao;const status=tramEl('cgmTramLancadosStatusV9'),lista=tramEl('cgmTramLancadosListaV9');
+  if(!ativo(v))return;
+  lista.replaceChildren();status.textContent='Consultando materiais lancados na programacao...';
+  const blocos=numeros.map(n=>{
+   const sec=document.createElement('section');sec.className='cgmTramLancadoSeqV9';
+   const h=document.createElement('h4');h.textContent='SS '+n;
+   const conteudo=document.createElement('div');conteudo.textContent='Aguardando consulta...';sec.append(h,conteudo);lista.append(sec);
+   return {n,conteudo};
+  });
+  let ok=0,erro=0;
+  for(let i=0;i<blocos.length;i+=3){
+   if(!ativo(v))return;
+   await Promise.all(blocos.slice(i,i+3).map(async ({n,conteudo})=>{
+    if(mapa.get(n)?.status!=='OK'){if(ativo(v)){conteudo.textContent='Consulta indisponivel: resumo SISCOM nao confirmado.';erro++;}return;}
+    try{const rows=await consultar(n);if(!ativo(v))return;cgmTramTabelaLancadosV9(conteudo,rows);ok++;}
+    catch(e){if(ativo(v)){conteudo.textContent='Falha ao consultar materiais lancados: '+e.message;erro++;}}
+   }));
+  }
+  if(ativo(v))status.textContent=ok+' sequencia(s) consultada(s)'+(erro?' | '+erro+' indisponivel(is)':'')+'. Fonte: programacao. NI e valor de cadastro: uMov. Valor unitario lancado: total / quantidade.';
+ };
+}
+
 // CGM_TRAM_ATENDIMENTO_UI_V8
 async function cgmTramAtendimentoV8({x,ss,origem,contrato,token,d,fontesV8}){
  const ativo=()=>token===tramDetailToken;
@@ -4528,15 +4610,18 @@ async function cgmTramAtendimentoV8({x,ss,origem,contrato,token,d,fontesV8}){
    }catch(e){if(!ativo())return;aviso+=' Consulta relacionada indisponivel: '+e.message;}
   }
   const campos=tramEl('tramDetailFields');
+  const carregarLancadosV9=cgmTramLancadosControllerV9(token,mapa);
   function render(n,alvo,fase){
    const item=mapa.get(n);
    if(!item||item.status!=='OK'){
     alvo.textContent='Resumo oficial nao disponivel ou nao autorizado para '+n+'.';
+    cgmTramBombeiroV9(alvo,n,blocos,textoMat);
     if(fase){tramEl('tramDetailPhase').textContent='Indisponivel';tramEl('tramDetailPhase').dataset.phase='';}
     return;
    }
    const registro=n===ss?{...x,__cgmEnriquecimento:{...x.__cgmEnriquecimento,bairro:item.bairro??x.__cgmEnriquecimento?.bairro,equipe:item.equipe??x.__cgmEnriquecimento?.equipe}}:{ss:n,__cgmEnriquecimento:{bairro:item.bairro,equipe:item.equipe}};
    tramDetailRenderFields(item.dados,registro,alvo,fase);
+   cgmTramBombeiroV9(alvo,n,blocos,textoMat);
   }
   function selecionar(n){
    if(!ativo())return;
@@ -4548,6 +4633,7 @@ async function cgmTramAtendimentoV8({x,ss,origem,contrato,token,d,fontesV8}){
     tramEl('tramDetailPhase').textContent='Visao geral';tramEl('tramDetailPhase').dataset.phase='';
     for(const numero of conhecidos){const bloco=document.createElement('section');bloco.className='cgmTramResumoSeqV8';const h=document.createElement('h4');h.textContent='SS '+numero+(mapa.get(numero)?.ultimaSS==='S'?' | Ultima':'');const corpo=document.createElement('div');bloco.append(h,corpo);campos.append(bloco);render(numero,corpo,false);}
    }else render(n,campos,true);
+   void carregarLancadosV9(geral?conhecidos:[n]);
    for(const b of blocos)b.hidden=!geral&&b.dataset.ss!==n;
    statusMat.textContent=geral?textoMat:blocos.some(b=>b.dataset.ss===n)?'Materiais da SS '+n: textoMat.startsWith('Falha')?textoMat:'Nenhum material registrado para '+n;
    // Em visao geral, a galeria mantem o seletor de relatorios por SS.
@@ -4559,7 +4645,7 @@ async function cgmTramAtendimentoV8({x,ss,origem,contrato,token,d,fontesV8}){
   }
   for(const n of ['todas',...conhecidos]){const b=document.createElement('button');b.type='button';b.dataset.ss=n;b.textContent=n==='todas'?'Visao geral':'SS '+n.slice(-2)+(mapa.get(n)?.ultimaSS==='S'?' | Ultima':'');b.onclick=()=>selecionar(n);nav.append(b);}
   selecionar(ss);
- }catch(e){if(ativo())status.textContent='Falha ao organizar atendimento: '+e.message;}
+ }catch(e){if(ativo()){status.textContent='Falha ao organizar atendimento: '+e.message;tramEl('cgmTramLancadosStatusV9').textContent='Consulta de materiais lancados indisponivel.';}}
 }
 
 function tramDetailPager(id,op,params,token){
@@ -4604,6 +4690,8 @@ async function tramDetail(i){
  tramEl('tramDetailFeedback').textContent='Consultando dados oficiais do SISCOM. Somente leitura.';
  const nav=tramEl('cgmTramBotoesV8');nav.replaceChildren();
  tramEl('cgmTramEstadoV8').textContent='Localizando sequencias relacionadas...';
+ tramEl('cgmTramLancadosListaV9').replaceChildren();
+ tramEl('cgmTramLancadosStatusV9').textContent='Aguardando resumo da sequencia...';
  const fontesV8=Promise.allSettled([cgmTramFotosV6(ss,token),cgmTramCarregarMateriaisV7(ss,token)]);
  for(const id of ['tramDetailItems','tramDetailAttachments','tramDetailHistory']){
   const sec=tramEl(id).closest('.tramDetailSection');sec.hidden=false;
@@ -4636,7 +4724,7 @@ async function tramDetail(i){
    tramDetailSectionError('tramDetailHistory','O SISCOM não informou um identificador de medição para consultar o histórico.');
    tramEl('tramDetailFeedback').textContent='Resumo consultado. SS sem identificador de medicao; itens e historico nao se aplicam.';
   }
- }catch(e){if(token!==tramDetailToken)return;tramDetailSectionError('tramDetailFields','Falha ao consultar dados da medição: '+e.message);tramDetailSectionError('tramDetailItems','Aguardando medição.');tramDetailSectionError('tramDetailHistory','Aguardando medição.');tramEl('tramDetailFeedback').textContent='Falha na consulta. Confira a sessão individual SISCOM.';}
+ }catch(e){if(token!==tramDetailToken)return;tramDetailSectionError('tramDetailFields','Falha ao consultar dados da medição: '+e.message);tramDetailSectionError('tramDetailItems','Aguardando medição.');tramDetailSectionError('tramDetailHistory','Aguardando medição.');tramEl('tramDetailFeedback').textContent='Falha na consulta. Confira a sessão individual SISCOM.';tramEl('cgmTramLancadosStatusV9').textContent='Consulta de materiais lancados indisponivel.';}
 }
 tramEl('tramDetailTopClose').addEventListener('click',tramDetailClose);
 tramEl('tramDetailClose').addEventListener('click',tramDetailClose);
@@ -5966,5 +6054,17 @@ html[data-cgm-theme="dark"] .cgmTramMaterialBlocoV7{
 .cgmTramResumoSeqV8>h4{margin:0 0 6px;color:inherit;font-size:12px}
 #tramDetailOverlay .tramDetailSection[hidden],#cgmTramMatListaV7>[hidden]{display:none!important}
 @media print{#cgmTramBotoesV8{display:none!important}}
+</style>
+<style id="CGM_TRAM_MATERIAIS_STYLE_V9">
+#cgmTramMateriaisV7{display:none!important}
+.cgmTramBombeiroV9{grid-column:1/-1;min-width:0;border-top:1px solid var(--cgm-border,#c5d7e8);padding:7px 0 2px;white-space:normal;overflow-wrap:anywhere}
+.cgmTramBombeiroV9 h5{font-size:11px;color:inherit;margin:0 0 6px;font-weight:700}
+.cgmTramBombeiroV9 small{display:block;font-size:10px;opacity:.8;margin:5px 0 2px}
+.cgmTramBombeiroV9 .cgmTramMaterialTextoV7{padding:2px 0 5px;font-size:12px}
+.cgmTramLancadoSeqV9{border:1px solid var(--cgm-border,#c5d7e8);border-radius:4px;margin-bottom:7px;padding:6px;min-width:0}
+.cgmTramLancadoSeqV9 h4{margin:0 0 6px;padding:4px 7px;font-size:11px;background:#0c5e97;color:#fff}
+#cgmTramLancadosV9 .tramDetailTable{min-width:850px}
+#cgmTramLancadosV9 .tramDetailTable td,#cgmTramLancadosV9 .tramDetailTable th{padding:5px 7px}
+#cgmTramLancadosV9 tfoot td{font-weight:700;background:var(--cgm-field,#e8f2fa)}
 </style>
 </body></html>
