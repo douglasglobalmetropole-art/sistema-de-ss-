@@ -2,7 +2,7 @@
 
 const CAMPO_MATERIAL = 19181466;
 
-async function consultarMateriais(pool, numeroSS) {
+async function consultarMateriais(pool, numeroSS, todas=false) {
   const ss = String(numeroSS || '').trim();
 
   const match = /^(\d{2}\/\d{2}-\d{6})-(\d{2})$/.exec(ss);
@@ -13,6 +13,59 @@ async function consultarMateriais(pool, numeroSS) {
 
   const prefixo = match[1];
   const sequenciaAtual = Number(match[2]);
+
+  if(todas){
+    const numeros=Array.from(
+      {length:100},
+      (_,i)=>prefixo+'-'+String(i).padStart(2,'0')
+    );
+
+    const sql=[
+      'WITH locais AS MATERIALIZED (',
+      ' SELECT loc_id,loc_integrationid',
+      ' FROM u45468.local',
+      ' WHERE loc_integrationid=ANY($1::text[])',
+      ')',
+      'SELECT l.loc_integrationid AS numero_ss,',
+      ' h.hty_id AS relatorio_id,',
+      ' h.hty_finaldatehour AS data_execucao,',
+      ' hv.htv_externalvalue AS materiais',
+      'FROM locais l',
+      'JOIN u45468.task t ON t.loc_id=l.loc_id',
+      'JOIN u45468.history h ON h.tsk_id=t.tsk_id',
+      'JOIN u45468.historyvalue hv',
+      ' ON hv.hty_id=h.hty_id AND hv.acf_id=$2',
+      "WHERE NULLIF(BTRIM(hv.htv_externalvalue),'') IS NOT NULL",
+      'ORDER BY l.loc_integrationid,h.hty_finaldatehour DESC',
+      'LIMIT 201'
+    ].join(' ');
+
+    const r=await pool.query({
+      text:sql,
+      values:[numeros,CAMPO_MATERIAL],
+      query_timeout:12000
+    });
+
+    if(r.rows.length>200)
+      throw Error('Limite de materiais atingido.');
+
+    const vistos=new Set();
+
+    return r.rows.filter(row=>{
+      if(!numeros.includes(String(row.numero_ss)))
+        throw Error('SS fora do atendimento.');
+
+      const chave=JSON.stringify([
+        row.numero_ss,
+        row.relatorio_id,
+        row.materiais
+      ]);
+
+      if(vistos.has(chave))return false;
+      vistos.add(chave);
+      return true;
+    });
+  }
 
   const sql = `
     WITH locais AS MATERIALIZED (

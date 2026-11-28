@@ -3820,6 +3820,13 @@ atualizarTextosDuplicidade();
   <div class="tramDetailBody">
    <div class="tramDetailSummary"><div><small>Nº SS</small><div><strong id="tramDetailSS">—</strong></div></div><div id="tramDetailPhase" class="tramPhase">Consultando...</div><div class="tramDetailActions"><button id="tramDetailPrint" type="button">▣ Imprimir</button><button id="tramDetailRefresh" type="button">⟳ Atualizar</button><button id="tramDetailClose" type="button">✕ Fechar</button></div></div>
    <section class="tramDetailSection"><h3>Resumo da solicita&ccedil;&atilde;o e execu&ccedil;&atilde;o</h3><div class="tramDetailSectionBody" id="tramDetailFields"><div class="tramDetailLoading">Consultando dados oficiais do SISCOM...</div></div></section>
+   <section class="tramDetailSection" id="cgmTramMateriaisV7">
+     <h3>Materiais utilizados por sequ&ecirc;ncia</h3>
+     <div class="tramDetailSectionBody">
+       <div id="cgmTramMatStatusV7" role="status"></div>
+       <div id="cgmTramMatListaV7"></div>
+     </div>
+   </section>
    <section class="tramDetailSection" id="cgmTramFotosV6"><h3>Fotografias uMov por sequ&ecirc;ncia</h3><div class="tramDetailSectionBody"><div id="cgmTramSeqV6" role="group" aria-label="Sequencias com relatorio uMov"></div><div id="cgmTramRelV6"></div><div id="cgmTramFotoStatusV6" class="tramDetailMsg" role="status"></div><div id="cgmTramFotoGridV6"></div><div id="cgmTramFotoAmpliadaV6" hidden></div></div></section>
    <section class="tramDetailSection"><h3>Itens da Solicitação de Serviço</h3><div id="tramDetailItems" class="tramDetailTableWrap"><div class="tramDetailMsg">Aguardando medição...</div></div><div id="tramDetailItemsPager" class="tramDetailPager"></div></section>
    <section class="tramDetailSection"><h3>Anexos</h3><div id="tramDetailAttachments" class="tramDetailTableWrap"><div class="tramDetailMsg">Consultando anexos...</div></div><div id="tramDetailAttachmentsPager" class="tramDetailPager"></div></section>
@@ -4356,6 +4363,79 @@ function tramDetailRenderFields(d,x){
 }
 let cgmTramFotosGeracaoV6=0;
 function cgmTramFotoUrlV6(src){return typeof src==='string'&&(/^https:\/\//i.test(src)||/^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(src));}
+async function cgmTramCarregarMateriaisV7(ss,token){
+    const status=tramEl('cgmTramMatStatusV7');
+    const lista=tramEl('cgmTramMatListaV7');
+
+    lista.replaceChildren();
+    status.textContent='Consultando materiais do atendimento...';
+
+    try{
+      const r=await fetch(
+        '/api/umov/materiais?ss='+encodeURIComponent(ss)+'&todas=1',
+        {credentials:'same-origin',cache:'no-store'}
+      );
+
+      const d=await r.json();
+
+      if(token!==tramDetailToken)return;
+
+      if(!r.ok||!d.ok||!Array.isArray(d.materiais))
+        throw Error(d.error||'Consulta invalida');
+
+      if(!d.materiais.length){
+        status.textContent='Nenhum material registrado no uMov.';
+        return;
+      }
+
+      const grupos=new Map();
+
+      for(const x of d.materiais){
+        const numero=String(x.numero_ss||'');
+
+        if(numero.length!==ss.length||
+           numero.slice(0,-2)!==ss.slice(0,-2))
+          throw Error('Material fora do atendimento');
+
+        if(!grupos.has(numero))grupos.set(numero,[]);
+        grupos.get(numero).push(x);
+      }
+
+      status.textContent=grupos.size+
+        ' sequencia(s) com materiais registrados.';
+
+      for(const numero of [...grupos.keys()].sort()){
+        const bloco=document.createElement('section');
+        bloco.className='cgmTramMaterialBlocoV7';
+        bloco.dataset.ss=numero;
+
+        const titulo=document.createElement('h4');
+        titulo.textContent='SS '+numero;
+        bloco.append(titulo);
+
+        for(const x of grupos.get(numero)){
+          const info=document.createElement('small');
+
+          info.textContent='Relatorio '+x.relatorio_id+
+            ' | '+tramDetailDate(x.data_execucao);
+
+          const desc=document.createElement('div');
+          desc.className='cgmTramMaterialTextoV7';
+          desc.textContent=String(x.materiais||'');
+
+          bloco.append(info,desc);
+        }
+
+        lista.append(bloco);
+      }
+
+    }catch(e){
+      if(token===tramDetailToken){
+        lista.replaceChildren();
+        status.textContent='Falha ao consultar materiais: '+e.message;
+      }
+    }
+}
 async function cgmTramFotosV6(ss,token){
  const seq=tramEl('cgmTramSeqV6'),rel=tramEl('cgmTramRelV6'),status=tramEl('cgmTramFotoStatusV6'),grid=tramEl('cgmTramFotoGridV6'),zoom=tramEl('cgmTramFotoAmpliadaV6');
  const geracao=++cgmTramFotosGeracaoV6;
@@ -4452,6 +4532,7 @@ async function tramDetail(i){
  for(const id of ['tramDetailItemsPager','tramDetailAttachmentsPager','tramDetailHistoryPager'])tramEl(id).innerHTML='';
  tramEl('tramDetailFeedback').textContent='Consultando dados oficiais do SISCOM. Somente leitura.';
  void cgmTramFotosV6(ss,token);
+ void cgmTramCarregarMateriaisV7(ss,token);
  // Anexos independem do identificador da medição.
  tramDetailPager('tramDetailAttachmentsPager','tram_anexos',{ss,origemJob:origem,contrato},token);
  try{
@@ -5738,5 +5819,63 @@ html[data-cgm-theme="dark"] .cgmTramResumoBlocoV6,html[data-cgm-theme="dark"] .c
 html[data-cgm-theme="dark"] #cgmTramFotosV6 button:not(.active),html[data-cgm-theme="dark"] #cgmTramFotosV6 select{background:var(--cgm-field,#242f3d);color:var(--cgm-text,#f1f5f9);border-color:var(--cgm-border,#405166)}
 @media(max-width:750px){.cgmTramResumoGridV6{grid-template-columns:1fr}#cgmTramFotoGridV6{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media print{#cgmTramSeqV6,#cgmTramRelV6,#cgmTramFotoStatusV6 button,#cgmTramFotoAmpliadaV6{display:none!important}}
+</style>
+
+<style id="CGM_TRAM_MATERIAIS_STYLE_V7">
+
+#cgmTramMatStatusV7{
+  padding:4px 0 8px;
+  font-size:11px;
+}
+
+#cgmTramMatListaV7{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+}
+
+.cgmTramMaterialBlocoV7{
+  border:1px solid #c5d7e8;
+  border-radius:4px;
+  padding:8px;
+  background:#fff;
+  min-width:0;
+}
+
+.cgmTramMaterialBlocoV7 h4{
+  margin:0 0 6px;
+  padding:5px 7px;
+  background:#0c5e97;
+  color:#fff;
+  font-size:11px;
+}
+
+.cgmTramMaterialBlocoV7 small{
+  display:block;
+  font-size:10px;
+  opacity:.8;
+  margin:5px 0;
+}
+
+.cgmTramMaterialTextoV7{
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  line-height:1.5;
+  padding:6px 0;
+  font-size:12px;
+}
+
+html[data-cgm-theme="dark"] .cgmTramMaterialBlocoV7{
+  background:var(--cgm-panel,#202833);
+  color:var(--cgm-text,#f1f5f9);
+  border-color:var(--cgm-border,#405166);
+}
+
+@media(max-width:750px){
+  #cgmTramMatListaV7{
+    grid-template-columns:1fr;
+  }
+}
+
 </style>
 </body></html>

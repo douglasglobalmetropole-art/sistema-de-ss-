@@ -427,13 +427,13 @@ if(materiaisDivisao && rota!=='/api/materiais'){
    });
   }
   // CGM_FOTOS_SEPARADAS_V3: escopo de divisao na consulta de sequencias.
-  if(req.method==='GET' && rota==='/api/umov/sequencias-fotos'){
+  if(req.method==='GET' && (rota==='/api/umov/sequencias-fotos'||rota==='/api/umov/materiais')){
     if(!siscomIndividual(req))return res.status(401).json({ok:false,error:'FaÃ§a login individual no SISCOM.'});
     const numero=String(req.query?.ss||'').trim();
     if(!/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(numero))return res.status(400).json({ok:false,error:'SS invalida.'});
     const schema=config.lote1?'u46915':'u45468';
     // CGM_TRAM_RESUMO_V6: validates every related sequence before disclosure.
-    if(String(req.query?.todas||'')==='1'){
+    if(rota==='/api/umov/materiais'||String(req.query?.todas||'')==='1'){
       const prefixo=numero.slice(0,-2);
       const numeros=Array.from({length:100},(_,i)=>prefixo+String(i).padStart(2,'0'));
       return pool.query({text:`SELECT DISTINCT l.loc_integrationid AS ss,l.loc_city AS cidade FROM ${schema}.local l WHERE l.loc_integrationid=ANY($1::text[]) LIMIT 501`,values:[numeros],query_timeout:10000})
@@ -2748,7 +2748,12 @@ const { consultarMateriais } = require('./umov-materiais');
         });
       }
     });
+// CGM_TRAM_MATERIAIS_V7
 app.get('/api/umov/materiais', async (req, res) => {
+  if(!siscomIndividual(req))
+    return res.status(401).json({
+      ok:false,error:'Login SISCOM obrigatorio.'
+    });
   res.set('Cache-Control', 'no-store');
 
   try {
@@ -2761,7 +2766,7 @@ app.get('/api/umov/materiais', async (req, res) => {
       });
     }
 
-    const materiais = await consultarMateriais(pool, ss);
+    const materiais = await consultarMateriais(pool, ss, String(req.query.todas||'')==='1');
 
     return res.json({
       ok: true,
