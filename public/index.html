@@ -1442,6 +1442,7 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
 }
 </style>
 
+<div id="cgmTramIndicadoresV5">
 <div id="cgmTramTabsV2">
     <button type="button" class="active" data-tram-tab="para" aria-pressed="true">
         NOTAS PARA TRAMITAR
@@ -1459,6 +1460,7 @@ body.tram-mode .toolbar > .tramFilters #tramLimpar{height:33px;flex:0 0 auto}
     </button>
 </div>
 <div id="cgmTramCardsV4" role="group" aria-label="Quantitativos SISCOM"><button type="button" data-tram-card="sem" aria-pressed="false"><span>Sem medição</span><strong id="tramCardSem" aria-live="polite">—</strong></button><button type="button" data-tram-card="contratada" aria-pressed="false"><span>Contratada</span><strong id="tramCardContratada" aria-live="polite">—</strong></button><button type="button" data-tram-card="tramitadas" aria-pressed="false"><span>Em análise</span><strong id="tramCardAnalise" aria-live="polite">—</strong></button><button type="button" data-tram-card="aprovadas" aria-pressed="false"><span>Aprovadas</span><strong id="tramCardAprovadas" aria-live="polite">—</strong></button><button type="button" data-tram-card="canceladas" aria-pressed="false"><span>Canceladas</span><strong id="tramCardCanceladas" aria-live="polite">—</strong></button></div>
+</div>
 <div class="tramitacaoHeading"><div><span class="tramitacaoEyebrow">SISCOM • MEDIÇÃO</span><h2>Tramitação</h2><p>Consulta oficial conforme os contratos autorizados para seu login individual.</p></div><div class="tramitacaoIndicador">SOMENTE CONSULTA</div></div>
 
 <div id="tramAviso" class="tramitacaoAviso">Faça login individual no SISCOM para consultar.</div><div class="tramTableWrap"><table class="tramTable"><thead><tr><th>SS</th><th>Serviço solicitado</th><th>Serviço executado</th><th>Contrato</th><th>Valor</th><th>Data execução</th><th>Localidade</th><th>Fase da medição</th><th>Ações</th></tr></thead><tbody id="tramRows"></tbody></table></div><div class="tramPagination"><button id="tramPrev" type="button">◀ Anterior</button><label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;white-space:nowrap">Por página <select id="tramSize" aria-label="Registros por página" style="width:auto;min-width:62px;padding:3px 5px;font-size:11px"><option value="25">25</option><option value="50">50</option><option value="75">75</option><option value="100">100</option></select></label><span id="tramCount">0 registros</span><button id="tramNext" type="button">Próxima ▶</button></div><div id="tramDetail" hidden class="tramDetail"></div></section>
@@ -5533,4 +5535,108 @@ html[data-cgm-theme="dark"] body.tram-mode #cgmTramCardsV4 button:not(.active){b
 @media(max-width:700px){body.tram-mode #cgmTramCardsV4{grid-template-columns:repeat(3,minmax(0,1fr))}body.tram-mode #cgmTramCardsV4 button{padding:5px;flex-wrap:wrap;}}
 }
 </style>
+
+<style id="CGM_TRAM_COMPACTO_V5">
+@media screen {
+
+body.tram-mode #cgmTramIndicadoresV5 {
+    display:flex!important;
+    align-items:center!important;
+    gap:6px!important;
+    padding:4px 6px!important;
+    margin:0!important;
+    flex:0 0 auto!important;
+    box-sizing:border-box!important;
+    min-width:0!important;
+}
+
+body.tram-mode #cgmTramIndicadoresV5 #cgmTramTabsV2 {
+    display:flex!important;
+    flex:0 0 auto!important;
+    gap:4px!important;
+    padding:0!important;
+    margin:0!important;
+    flex-wrap:nowrap!important;
+}
+
+body.tram-mode #cgmTramIndicadoresV5 #cgmTramTabsV2 button {
+    height:30px!important;
+    min-height:30px!important;
+    padding:0 8px!important;
+    font-size:10px!important;
+    white-space:nowrap!important;
+    border-radius:4px!important;
+}
+
+body.tram-mode #cgmTramIndicadoresV5 #cgmTramCardsV4 {
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    flex:1 1 auto!important;
+    gap:4px!important;
+    padding:0!important;
+    margin:0!important;
+    min-width:0!important;
+}
+
+body.tram-mode #cgmTramIndicadoresV5 #cgmTramCardsV4 button {
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    flex-wrap:nowrap!important;
+    height:30px!important;
+    min-height:30px!important;
+    min-width:0!important;
+    padding:0 8px!important;
+    gap:5px!important;
+    border-radius:4px!important;
+    border-left-width:2px!important;
+    box-sizing:border-box!important;
+}
+
+body.tram-mode #cgmTramIndicadoresV5 #cgmTramCardsV4 button span {
+    font-family:inherit!important;
+    font-size:11px!important;
+    font-weight:600!important;
+    white-space:nowrap!important;
+    line-height:1!important;
+}
+
+body.tram-mode #cgmTramIndicadoresV5 #cgmTramCardsV4 button strong {
+    font-family:inherit!important;
+    font-size:16px!important;
+    font-weight:700!important;
+    line-height:1!important;
+    font-variant-numeric:tabular-nums!important;
+    white-space:nowrap!important;
+}
+
+body.tram-mode #tramAviso {
+    padding:3px 8px!important;
+    font-size:10px!important;
+    margin:0!important;
+}
+
+@media(max-width:1350px) {
+    body.tram-mode #cgmTramIndicadoresV5 {
+        flex-wrap:wrap!important;
+    }
+
+    body.tram-mode #cgmTramIndicadoresV5 #cgmTramCardsV4 {
+        flex:1 1 100%!important;
+    }
+}
+
+@media(max-width:700px) {
+    body.tram-mode #cgmTramIndicadoresV5 #cgmTramTabsV2 {
+        flex-wrap:wrap!important;
+    }
+
+    body.tram-mode #cgmTramIndicadoresV5 #cgmTramCardsV4 {
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    }
+}
+
+}
+</style>
+
 </body></html>
