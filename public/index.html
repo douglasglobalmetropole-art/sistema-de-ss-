@@ -3819,6 +3819,7 @@ atualizarTextosDuplicidade();
   <div class="tramDetailTop"><h2 id="tramDetailTitle">Dados da Solicitação de Serviço — Tramitação</h2><button id="tramDetailTopClose" type="button" aria-label="Fechar detalhes">✕</button></div>
   <div class="tramDetailBody">
    <div class="tramDetailSummary"><div><small>Nº SS</small><div><strong id="tramDetailSS">—</strong></div></div><div id="tramDetailPhase" class="tramPhase">Consultando...</div><div class="tramDetailActions"><button id="tramDetailPrint" type="button">▣ Imprimir</button><button id="tramDetailRefresh" type="button">⟳ Atualizar</button><button id="tramDetailClose" type="button">✕ Fechar</button></div></div>
+   <section class="tramDetailSection" id="cgmTramNavV8"><h3>Sequ&ecirc;ncias do atendimento</h3><div class="tramDetailSectionBody"><div id="cgmTramBotoesV8" role="group" aria-label="Sequencias"></div><div id="cgmTramEstadoV8" role="status"></div></div></section>
    <section class="tramDetailSection"><h3>Resumo da solicita&ccedil;&atilde;o e execu&ccedil;&atilde;o</h3><div class="tramDetailSectionBody" id="tramDetailFields"><div class="tramDetailLoading">Consultando dados oficiais do SISCOM...</div></div></section>
    <section class="tramDetailSection" id="cgmTramMateriaisV7">
      <h3>Materiais utilizados por sequ&ecirc;ncia</h3>
@@ -4337,14 +4338,14 @@ function tramDetailMedicaoId(d,x){
  return Number.isSafeInteger(value)&&value>0?value:null;
 }
 // CGM_TRAM_RESUMO_V6
-function tramDetailRenderFields(d,x){
+function tramDetailRenderFields(d,x,target=tramEl('tramDetailFields'),atualizarFase=true){
  const e=x.__cgmEnriquecimento||{};
  const ss=tramSS(x);
  const phaseRaw=d.faseMedicao;
  const phaseId=phaseRaw==null||phaseRaw===''?null:Number(typeof phaseRaw==='object'?phaseRaw.id:phaseRaw);
  const med=tramDetailMedicaoId(d,x);
  const phase=phaseId!==null&&tramDetailPhases[phaseId]?tramDetailPhases[phaseId]:(!med&&phaseRaw==null?'Sem medi\u00e7\u00e3o':tramDetailVal(d.faseMedicao?.descricao??x.descricaoFaseMedicao??phaseRaw));
- const phaseEl=tramEl('tramDetailPhase');phaseEl.textContent=phase;phaseEl.dataset.phase=phaseId===null?'':String(phaseId);
+ const phaseEl=tramEl('tramDetailPhase');if(atualizarFase){phaseEl.textContent=phase;phaseEl.dataset.phase=phaseId===null?'':String(phaseId);}
  const solicitacao=[
   ['SS',ss],['Servi\u00e7o solicitado',d.servicoMacroDTO?.dcServico??x.descServicoSolicitado,true],
   ['Munic\u00edpio',d.municipioLocalidadeDTO?.dcCidade??e.municipio??x.localidade],['Bairro',e.bairro],
@@ -4359,7 +4360,7 @@ function tramDetailRenderFields(d,x){
   ['Descri\u00e7\u00e3o da execu\u00e7\u00e3o',d.descricaoExecucao,true]
  ];
  const painel=(titulo,fields)=>'<section class="cgmTramResumoBlocoV6"><h4>'+tramEsc(titulo)+'</h4><div class="cgmTramResumoCamposV6">'+fields.map(f=>tramDetailField(...f)).join('')+'</div></section>';
- tramEl('tramDetailFields').innerHTML='<div class="cgmTramResumoGridV6">'+painel('RESUMO DA SOLICITA\u00c7\u00c3O',solicitacao)+painel('RESUMO DA EXECU\u00c7\u00c3O',execucao)+'</div>';
+ target.innerHTML='<div class="cgmTramResumoGridV6">'+painel('RESUMO DA SOLICITA\u00c7\u00c3O',solicitacao)+painel('RESUMO DA EXECU\u00c7\u00c3O',execucao)+'</div>';
 }
 let cgmTramFotosGeracaoV6=0;
 function cgmTramFotoUrlV6(src){return typeof src==='string'&&(/^https:\/\//i.test(src)||/^data:image\/(?:png|jpe?g|webp|gif);base64,[a-z0-9+/=\s]+$/i.test(src));}
@@ -4436,7 +4437,9 @@ async function cgmTramCarregarMateriaisV7(ss,token){
       }
     }
 }
+let cgmTramFotoSelectV8=null;
 async function cgmTramFotosV6(ss,token){
+ cgmTramFotoSelectV8=null;
  const seq=tramEl('cgmTramSeqV6'),rel=tramEl('cgmTramRelV6'),status=tramEl('cgmTramFotoStatusV6'),grid=tramEl('cgmTramFotoGridV6'),zoom=tramEl('cgmTramFotoAmpliadaV6');
  const geracao=++cgmTramFotosGeracaoV6;
  const ativo=()=>token===tramDetailToken&&geracao===cgmTramFotosGeracaoV6;
@@ -4465,7 +4468,7 @@ async function cgmTramFotosV6(ss,token){
     const d=await r.json();if(!ativo()||v!==versao)return;
     if(!r.ok||!d.ok||!Array.isArray(d.fotos))throw Error(d.error||'Resposta de fotos invalida');
     const fotos=d.fotos.filter(cgmTramFotoUrlV6);
-    status.textContent=numero+' | '+fotos.length+' foto(s)'+(numero!==ss?' | resumo acima pertence a '+ss:'');
+    status.textContent=numero+' | '+fotos.length+' foto(s)';
     if(modo==='direto')status.append(' ',botao('Recuperar imagens',()=>carregar(numero,tarefa,'captura')));
     for(const [i,src] of fotos.entries()){
      const figura=document.createElement('figure'),img=document.createElement('img'),leg=document.createElement('figcaption');
@@ -4480,17 +4483,85 @@ async function cgmTramFotosV6(ss,token){
    for(const b of seq.querySelectorAll('button')){const a=b.dataset.ss===numero;b.classList.toggle('active',a);b.setAttribute('aria-pressed',String(a));}
    rel.replaceChildren();
    const registros=grupos.get(numero);
+   if(!registros?.length){versao++;grid.replaceChildren();zoom.replaceChildren();zoom.hidden=true;status.textContent='Nenhum relatorio fotografico uMov localizado para '+numero;return;}
    const lista=document.createElement('select');lista.setAttribute('aria-label','Relatorio uMov');
    for(const x of registros){const o=document.createElement('option');o.value=String(x.tarefa);o.textContent='Relatorio '+x.tarefa+(x.data_execucao?' - '+tramDetailDate(x.data_execucao):'');lista.append(o);}
    rel.append(lista);lista.onchange=()=>carregar(numero,lista.value);
-   const idx=tramRecords.findIndex(x=>tramSS(x)===numero&&x.__cgmOrigem);
-   if(numero!==ss&&idx>=0)rel.append(botao('Abrir resumo desta SS',()=>tramDetail(idx)));
    void carregar(numero,lista.value);
   }
   for(const n of [...grupos.keys()].sort()){const b=botao('SS '+n.slice(-2),()=>selecionar(n));b.dataset.ss=n;seq.append(b);}
-  selecionar(grupos.has(ss)?ss:[...grupos.keys()].sort()[0]);
+  cgmTramFotoSelectV8=selecionar;
+  selecionar(ss);
  }catch(err){if(ativo())status.textContent='Fotografias indisponiveis: '+err.message;}
 }
+// CGM_TRAM_ATENDIMENTO_UI_V8
+async function cgmTramAtendimentoV8({x,ss,origem,contrato,token,d,fontesV8}){
+ const ativo=()=>token===tramDetailToken;
+ const nav=tramEl('cgmTramBotoesV8'),status=tramEl('cgmTramEstadoV8');
+ try{
+  await fontesV8;if(!ativo())return;
+  const prefixo=ss.slice(0,-2);
+  const valid=n=>typeof n==='string'&&/^\d{2}\/\d{2}-\d{6}-\d{2}$/.test(n)&&n.slice(0,-2)===prefixo;
+  const fotos=tramEl('cgmTramSeqV6');
+  const mats=tramEl('cgmTramMatListaV7');
+  const blocos=[...mats.querySelectorAll('[data-ss]')];
+  const statusMat=tramEl('cgmTramMatStatusV7');const textoMat=statusMat.textContent;
+  const conhecidos=[...new Set([ss,...tramRecords.map(tramSS),...Array.from(fotos.querySelectorAll('[data-ss]'),b=>b.dataset.ss),...blocos.map(b=>b.dataset.ss)].filter(valid))].sort();
+  const mapa=new Map([[ss,{ss,status:'OK',dados:d,bairro:x.__cgmEnriquecimento?.bairro,equipe:x.__cgmEnriquecimento?.equipe,ultimaSS:x.__cgmEnriquecimento?.ultimaSS}]]);
+  let aviso='';
+  if(conhecidos.length>12){aviso=' Mais de 12 sequencias: lote limitado, consulte a listagem.';}
+  const lote=[ss,...conhecidos.filter(n=>n!==ss)].slice(0,12);
+  status.textContent='Consultando '+lote.length+' sequencia(s) no SISCOM...';
+  if(lote.length>1){
+   try{
+    const job=await tramV2Gateway('/api/siscom-gateway/tramitacao',{operation:'tram_detalhes',params:{ss,origemJob:origem,contrato,modoResumoAtendimento:true,sequencias:lote}});
+    if(!ativo())return;
+    const r=tramDetailOne(job.result);
+    if(r.modo!=='RESUMO_ATENDIMENTO_V8'||r.ssOrigem!==ss||Number(r.contrato)!==contrato||!Array.isArray(r.registros)||r.registros.length!==lote.length)throw Error('Resposta V8 invalida');
+    const vistos=new Set();
+    for(const item of r.registros){
+     if(!lote.includes(item.ss)||vistos.has(item.ss))throw Error('Sequencia divergente');
+     vistos.add(item.ss);
+     if(item.status==='OK'&&(Number(item.contrato)!==contrato||!item.dados||typeof item.dados!=='object'))throw Error('Contrato ou resumo divergente');
+    }
+    for(const item of r.registros)if(item.ss!==ss||item.status==='OK')mapa.set(item.ss,item);
+   }catch(e){if(!ativo())return;aviso+=' Consulta relacionada indisponivel: '+e.message;}
+  }
+  const campos=tramEl('tramDetailFields');
+  function render(n,alvo,fase){
+   const item=mapa.get(n);
+   if(!item||item.status!=='OK'){
+    alvo.textContent='Resumo oficial nao disponivel ou nao autorizado para '+n+'.';
+    if(fase){tramEl('tramDetailPhase').textContent='Indisponivel';tramEl('tramDetailPhase').dataset.phase='';}
+    return;
+   }
+   const registro=n===ss?{...x,__cgmEnriquecimento:{...x.__cgmEnriquecimento,bairro:item.bairro??x.__cgmEnriquecimento?.bairro,equipe:item.equipe??x.__cgmEnriquecimento?.equipe}}:{ss:n,__cgmEnriquecimento:{bairro:item.bairro,equipe:item.equipe}};
+   tramDetailRenderFields(item.dados,registro,alvo,fase);
+  }
+  function selecionar(n){
+   if(!ativo())return;
+   const geral=n==='todas';
+   for(const b of nav.querySelectorAll('button')){b.classList.toggle('active',b.dataset.ss===n);b.setAttribute('aria-pressed',String(b.dataset.ss===n));}
+   tramEl('tramDetailSS').textContent=geral?prefixo.slice(0,-1):n;
+   campos.replaceChildren();
+   if(geral){
+    tramEl('tramDetailPhase').textContent='Visao geral';tramEl('tramDetailPhase').dataset.phase='';
+    for(const numero of conhecidos){const bloco=document.createElement('section');bloco.className='cgmTramResumoSeqV8';const h=document.createElement('h4');h.textContent='SS '+numero+(mapa.get(numero)?.ultimaSS==='S'?' | Ultima':'');const corpo=document.createElement('div');bloco.append(h,corpo);campos.append(bloco);render(numero,corpo,false);}
+   }else render(n,campos,true);
+   for(const b of blocos)b.hidden=!geral&&b.dataset.ss!==n;
+   statusMat.textContent=geral?textoMat:blocos.some(b=>b.dataset.ss===n)?'Materiais da SS '+n: textoMat.startsWith('Falha')?textoMat:'Nenhum material registrado para '+n;
+   // Em visao geral, a galeria mantem o seletor de relatorios por SS.
+   fotos.style.display=geral?'':'none';
+   if(!geral&&cgmTramFotoSelectV8)cgmTramFotoSelectV8(n);
+   // NIs/anexos/historico conservam a origem autorizada; nao atribuir dados a outra SS.
+   for(const id of ['tramDetailItems','tramDetailAttachments','tramDetailHistory'])tramEl(id).closest('.tramDetailSection').hidden=!geral&&n!==ss;
+   status.textContent=conhecidos.length+' sequencia(s) identificada(s); '+[...mapa.values()].filter(v=>v.status==='OK').length+' resumo(s) confirmado(s). '+(!geral&&n!==ss?'NIs, anexos e historico desta sequencia ainda nao integrados. ':'')+'Listagem baseada nas fontes disponiveis.'+aviso;
+  }
+  for(const n of ['todas',...conhecidos]){const b=document.createElement('button');b.type='button';b.dataset.ss=n;b.textContent=n==='todas'?'Visao geral':'SS '+n.slice(-2)+(mapa.get(n)?.ultimaSS==='S'?' | Ultima':'');b.onclick=()=>selecionar(n);nav.append(b);}
+  selecionar(ss);
+ }catch(e){if(ativo())status.textContent='Falha ao organizar atendimento: '+e.message;}
+}
+
 function tramDetailPager(id,op,params,token){
  const tableId={tram_itens:'tramDetailItems',tram_anexos:'tramDetailAttachments',tram_historico:'tramDetailHistory'}[op];
  const pager=tramEl(id);let page=0;const size=25;
@@ -4531,8 +4602,15 @@ async function tramDetail(i){
  for(const id of ['tramDetailItems','tramDetailAttachments','tramDetailHistory'])tramEl(id).innerHTML='<div class="tramDetailMsg">Aguardando consulta...</div>';
  for(const id of ['tramDetailItemsPager','tramDetailAttachmentsPager','tramDetailHistoryPager'])tramEl(id).innerHTML='';
  tramEl('tramDetailFeedback').textContent='Consultando dados oficiais do SISCOM. Somente leitura.';
- void cgmTramFotosV6(ss,token);
- void cgmTramCarregarMateriaisV7(ss,token);
+ const nav=tramEl('cgmTramBotoesV8');nav.replaceChildren();
+ tramEl('cgmTramEstadoV8').textContent='Localizando sequencias relacionadas...';
+ const fontesV8=Promise.allSettled([cgmTramFotosV6(ss,token),cgmTramCarregarMateriaisV7(ss,token)]);
+ for(const id of ['tramDetailItems','tramDetailAttachments','tramDetailHistory']){
+  const sec=tramEl(id).closest('.tramDetailSection');sec.hidden=false;
+  const h=sec.querySelector('h3');if(!h.dataset.tituloV8)h.dataset.tituloV8=h.textContent;
+  h.textContent=h.dataset.tituloV8+' — '+ss;
+ }
+ tramEl('cgmTramSeqV6').hidden=false;
  // Anexos independem do identificador da medição.
  tramDetailPager('tramDetailAttachmentsPager','tram_anexos',{ss,origemJob:origem,contrato},token);
  try{
@@ -4547,6 +4625,7 @@ async function tramDetail(i){
 
   const d=tramDetailOne(detalheJob.result);if(token!==tramDetailToken)return;
   tramDetailRenderFields(d,x);
+  void cgmTramAtendimentoV8({x,ss,origem,contrato,token,d,fontesV8});
   const medicao=tramDetailMedicaoId(d,x);
   if(medicao){
    tramDetailPager('tramDetailItemsPager','tram_itens',{medicao,ss,origemJob:origem,contrato,origemDetalhe:detalheJob.id},token);
@@ -5877,5 +5956,15 @@ html[data-cgm-theme="dark"] .cgmTramMaterialBlocoV7{
   }
 }
 
+</style>
+<style id="CGM_TRAM_ATENDIMENTO_STYLE_V8">
+#cgmTramBotoesV8{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+#cgmTramBotoesV8 button{font:inherit;font-weight:600;border:1px solid #bfd2e1;border-radius:4px;padding:6px 10px;background:var(--cgm-field,#fff);color:var(--cgm-text,#123e6e);cursor:pointer}
+#cgmTramBotoesV8 button.active{background:#0875ce;color:#fff;border-color:#0875ce}
+#cgmTramEstadoV8{font-size:11px;margin-top:7px;line-height:1.4}
+.cgmTramResumoSeqV8{margin-bottom:10px;border:1px solid #bfd2e1;border-radius:5px;padding:7px}
+.cgmTramResumoSeqV8>h4{margin:0 0 6px;color:inherit;font-size:12px}
+#tramDetailOverlay .tramDetailSection[hidden],#cgmTramMatListaV7>[hidden]{display:none!important}
+@media print{#cgmTramBotoesV8{display:none!important}}
 </style>
 </body></html>
