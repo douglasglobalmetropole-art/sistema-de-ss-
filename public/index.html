@@ -4343,7 +4343,8 @@ async function tramSearch(){
     if(atual()){
       tramRecords=[];
       tramTotal=0;
-      tramV2Render();
+      tramEl('tramRows').innerHTML=
+        '<tr><td colspan="12">Falha na consulta. Tente novamente.</td></tr>';
       tramEl('tramCount').textContent='Consulta indisponivel';
       tramNotice(e.message);
     }
@@ -5404,7 +5405,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 })();
 </script>
 <script defer src="/umov-manual-cgm-v1.js?v=manual-20261123-v1"></script>
-<script src="/cgm-layout-responsivo-v1.js?v=20261124-v4" defer></script>
+<script src="/cgm-layout-responsivo-v1.js?v=de7d0e25595b1c05" defer></script>
 <script>
 
 /* CGM_PRESENCA_V4 */
@@ -5473,58 +5474,7 @@ tramEl('tramContrato').addEventListener('change',()=>{tramPage=0;tramRecords=[];
 
 </script>
 <link rel="stylesheet" href="/cgm-theme.css?v=6baa5d0da4cd1a70">
-<style id="cgmTramLayoutFinal">
-.tramFilters label:has(#tramStatus),
-#tramitacaoIntro .tramitacaoHeading {
-    display:none !important;
-}
 
-#tramitacaoIntro:not([hidden]) #cgmTramTabsV2 {
-    display:grid !important;
-    grid-template-columns:repeat(3,minmax(0,1fr));
-    gap:8px;
-    width:100%;
-    margin:0 0 12px;
-}
-
-#cgmTramTabsV2 button {
-    display:flex !important;
-    align-items:center;
-    justify-content:center;
-    gap:10px;
-    min-height:42px;
-    padding:10px 14px;
-    border:1px solid #b9cde0;
-    border-radius:5px;
-    background:#f1f6fb;
-    color:#103c65;
-    font-size:13px;
-    font-weight:700;
-    cursor:pointer;
-}
-
-#cgmTramTabsV2 button.active {
-    background:#087af0 !important;
-    color:#fff !important;
-    border-color:#087af0;
-}
-
-html[data-cgm-theme="dark"] #cgmTramTabsV2 button:not(.active) {
-    background:#26384a !important;
-    color:#e5eef8 !important;
-    border-color:#465e76;
-}
-
-#tramitacaoIntro .tramTableWrap {
-    width:100%;
-    overflow-x:auto;
-}
-
-#tramitacaoIntro table {
-    width:100%;
-    min-width:1250px;
-}
-</style>
 <script id="cgmTramLayoutFinalJS">
 (function(){
     function aplicar(){
@@ -5554,360 +5504,117 @@ html[data-cgm-theme="dark"] #cgmTramTabsV2 button:not(.active) {
     document.addEventListener('DOMContentLoaded',aplicar);
 })();
 </script>
-<style id="cgmTramTabsPolish">
-#tramitacaoIntro #cgmTramTabsV2{
-  display:grid !important;
-  grid-template-columns:repeat(3,max-content);
-  gap:10px;
-  margin:10px 0 10px;
-  align-items:stretch;
+
+
+
+
+<style id="CGM_TRAM_LAYOUT_INTEGRADO">
+
+body.cgm-fit.tram-mode > main > .toolbar > .tramFilters {
+    display:contents!important;
 }
 
-#tramitacaoIntro #cgmTramTabsV2 button,
-#tramitacaoIntro [data-tram-tab]{
-  display:flex !important;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  min-height:38px;
-  padding:8px 14px;
-  border:1px solid #b8cada;
-  border-radius:6px;
-  background:#ffffff;
-  color:#17456b;
-  font-size:12px;
-  font-weight:700;
-  line-height:1.1;
-  letter-spacing:.2px;
-  box-shadow:none;
-  transition:all .15s ease;
-}
-
-#tramitacaoIntro #cgmTramTabsV2 button:hover,
-#tramitacaoIntro [data-tram-tab]:hover{
-  border-color:#2b7ed2;
-  background:#f4f9ff;
-}
-
-#tramitacaoIntro #cgmTramTabsV2 button.active,
-#tramitacaoIntro [data-tram-tab].active{
-  background:#0b78ef !important;
-  color:#fff !important;
-  border-color:#0b78ef !important;
-}
-
-#tramitacaoIntro .cgm-tram-tab-title{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  white-space:nowrap;
-}
-
-#tramitacaoIntro .cgm-tram-tab-count{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-width:20px;
-  height:20px;
-  padding:0 6px;
-  border-radius:999px;
-  background:rgba(11,120,239,.12);
-  color:#0b5eb8;
-  font-size:11px;
-  font-weight:700;
-}
-
-#tramitacaoIntro #cgmTramTabsV2 button.active .cgm-tram-tab-count,
-#tramitacaoIntro [data-tram-tab].active .cgm-tram-tab-count{
-  background:rgba(255,255,255,.18);
-  color:#fff;
-}
-
-#tramitacaoIntro .cgm-tram-tab-count.empty{
-  display:none;
-}
-
-#tramitacaoIntro .tramTableWrap,
-#tramitacaoIntro .tableScroll{
-  margin-top:6px;
-}
-
-#tramitacaoIntro .tramitacaoIntroMsg,
-#tramitacaoIntro .tramFeedback,
-#tramitacaoIntro .tramInfo,
-#tramitacaoIntro .tramSummary{
-  font-size:12px;
-  color:#4d6780;
-}
-
-html[data-cgm-theme="dark"] #tramitacaoIntro #cgmTramTabsV2 button,
-html[data-cgm-theme="dark"] #tramitacaoIntro [data-tram-tab]{
-  background:#233548 !important;
-  color:#e7eff8 !important;
-  border-color:#486177 !important;
-}
-
-html[data-cgm-theme="dark"] #tramitacaoIntro #cgmTramTabsV2 button:hover,
-html[data-cgm-theme="dark"] #tramitacaoIntro [data-tram-tab]:hover{
-  background:#2a4158 !important;
-}
-
-html[data-cgm-theme="dark"] #tramitacaoIntro #cgmTramTabsV2 button.active,
-html[data-cgm-theme="dark"] #tramitacaoIntro [data-tram-tab].active{
-  background:#0b78ef !important;
-  color:#fff !important;
-  border-color:#0b78ef !important;
-}
-
-html[data-cgm-theme="dark"] #tramitacaoIntro .cgm-tram-tab-count{
-  background:rgba(255,255,255,.12);
-  color:#fff;
-}
-
-@media (max-width: 1100px){
-  #tramitacaoIntro #cgmTramTabsV2{
-    grid-template-columns:1fr;
-  }
-}
-</style>
-<script id="cgmTramTabsPolishJS">
-(function(){
-  const MAP = {
-    pendentes: 'Notas para tramitar',
-    tramitar: 'Notas para tramitar',
-    tramitadas: 'Notas tramitadas',
-    aprovadas: 'Notas aprovadas'
-  };
-
-  function extrairNumero(txt){
-    const m = String(txt || '').match(/\d[\d\.]*/);
-    return m ? m[0] : '';
-  }
-
-  function tituloDoBotao(btn, raw){
-    const key = String(
-      btn.dataset.tramTab ||
-      btn.getAttribute('data-tram-tab') ||
-      ''
-    ).toLowerCase().trim();
-
-    if (MAP[key]) return MAP[key];
-
-    const normal = raw.toLowerCase();
-    if (normal.includes('aprovad')) return 'Notas aprovadas';
-    if (normal.includes('tramitad')) return 'Notas tramitadas';
-    return 'Notas para tramitar';
-  }
-
-  function aplicar(){
-    const lista = Array.from(
-      document.querySelectorAll('#cgmTramTabsV2 button, #cgmTramTabsV2 [data-tram-tab], [data-tram-tab]')
-    ).filter(x => x.tagName === 'BUTTON' || x.closest('#cgmTramTabsV2'));
-
-    lista.forEach(btn => {
-      const raw = btn.textContent.replace(/\s+/g,' ').trim();
-      const titulo = tituloDoBotao(btn, raw);
-      const numero = extrairNumero(raw);
-
-      const assinatura = titulo + '|' + numero + '|' + (btn.className || '');
-      if (btn.dataset.cgmTabsSignature === assinatura) return;
-      btn.dataset.cgmTabsSignature = assinatura;
-
-      btn.innerHTML =
-        '<span class="cgm-tram-tab-title">' + titulo + '</span>' +
-        '<span class="cgm-tram-tab-count' + (numero ? '' : ' empty') + '">' + numero + '</span>';
-    });
-  }
-
-  let lock = false;
-  const executar = () => {
-    if (lock) return;
-    lock = true;
-    try { aplicar(); } finally { lock = false; }
-  };
-
-  executar();
-  document.addEventListener('DOMContentLoaded', executar);
-
-  const alvo = document.body || document.documentElement;
-  new MutationObserver(executar).observe(alvo, {
-    subtree: true,
-    childList: true,
-    characterData: true,
-    attributes: true
-  });
-})();
-</script>
-<style id="cgmTramCompacto">
-#tramitacaoIntro #cgmTramTabsV2 {
-    display:flex!important;
-    flex-wrap:wrap!important;
-    justify-content:flex-start!important;
-    align-items:center!important;
-    gap:6px!important;
-    margin:4px 0 8px!important;
-}
-#tramitacaoIntro #cgmTramTabsV2 button,
-#tramitacaoIntro [data-tram-tab] {
-    flex:0 0 auto!important;
-    width:auto!important;
-    min-width:0!important;
-    min-height:32px!important;
-    height:32px!important;
-    padding:5px 14px!important;
-    font-size:12px!important;
-    border-radius:5px!important;
-    box-shadow:none!important;
-}
-</style>
-<style id="CGM_TRAM_PADRAO_GLOBAL">
-
-/* Navegacao e filtros na mesma linha */
-
-html body.tram-mode .toolbar {
-    display:flex!important;
-    flex-wrap:wrap!important;
-    align-items:flex-end!important;
-    gap:5px!important;
-}
-
-html body.tram-mode .toolbar > .tramFilters {
-    display:flex!important;
-    flex:1 1 450px!important;
-    width:auto!important;
-    min-width:0!important;
-    margin:0!important;
-    padding:0!important;
-    border:0!important;
-    gap:5px!important;
-    align-items:flex-end!important;
-    order:0!important;
-}
-
-html body.tram-mode .tramFilters label {
-    flex:1 1 90px!important;
-    min-width:80px!important;
+body.cgm-fit.tram-mode .tramFilters label {
+    flex:1 1 120px!important;
+    min-width:100px!important;
     margin:0!important;
     gap:3px!important;
-    font-size:11px!important;
+    font:inherit!important;
+    font-weight:700!important;
 }
 
-html body.tram-mode .tramFilters input,
-html body.tram-mode .tramFilters select {
-    height:30px!important;
-    min-height:30px!important;
-    font-size:11px!important;
-    padding:4px 6px!important;
+body.cgm-fit.tram-mode .tramFilters label:has(#tramStatus) {
+    display:none!important;
 }
 
-html body.tram-mode #tramPesquisar,
-html body.tram-mode #tramLimpar {
-    height:30px!important;
-    min-height:30px!important;
-    font-size:11px!important;
-    padding:4px 10px!important;
+body.cgm-fit.tram-mode .tramFilters select,
+body.cgm-fit.tram-mode .tramFilters input {
+    height:32px!important;
+    min-width:0!important;
+    font:inherit!important;
 }
 
-/* Area principal */
-
-html body.tram-mode #tramitacaoIntro {
-    display:flex!important;
-    flex-direction:column!important;
-    flex:1 1 auto!important;
-    min-height:0!important;
-    height:auto!important;
-    margin:4px 0 0!important;
+body.cgm-fit.tram-mode > main > #tramitacaoIntro {
     padding:0!important;
-    border-radius:4px!important;
+    margin:0!important;
+    overflow:hidden!important;
     font-family:inherit!important;
-    font-size:11px!important;
 }
 
-/* Abas secundarias compactas */
-
-html body.tram-mode #tramitacaoIntro #cgmTramTabsV2 {
+body.cgm-fit.tram-mode #cgmTramTabsV2 {
     display:flex!important;
-    flex-wrap:wrap!important;
     justify-content:flex-start!important;
     align-items:center!important;
-    width:auto!important;
+    flex-wrap:wrap!important;
+    flex:0 0 auto!important;
     gap:5px!important;
-    margin:0!important;
     padding:6px!important;
+    margin:0!important;
 }
 
-html body.tram-mode #tramitacaoIntro [data-tram-tab],
-html body.tram-mode #cgmTramTabsV2 button {
+body.cgm-fit.tram-mode #cgmTramTabsV2 button {
     flex:0 0 auto!important;
     width:auto!important;
-    min-width:0!important;
-    height:28px!important;
-    min-height:28px!important;
-    padding:4px 12px!important;
-    font-size:11px!important;
-    letter-spacing:normal!important;
-    border-radius:4px!important;
-}
-
-/* Tabela no padrao operacional */
-
-html body.tram-mode #tramitacaoIntro .tramTableWrap {
-    flex:1 1 auto!important;
-    max-height:none!important;
-    min-height:0!important;
-    overflow:auto!important;
-    margin:0!important;
-    padding:0!important;
-    border-radius:0!important;
-}
-
-html body.tram-mode #tramitacaoIntro .tramTable {
-    width:100%!important;
+    height:32px!important;
+    min-height:32px!important;
+    padding:0 9px!important;
+    font-size:10px!important;
     font-family:inherit!important;
-    font-size:11px!important;
-    border-collapse:collapse!important;
+    border-radius:6px!important;
 }
 
-html body.tram-mode #tramitacaoIntro .tramTable th {
-    font-size:11px!important;
-    padding:5px 6px!important;
-    text-align:left!important;
-    white-space:nowrap!important;
-}
-
-html body.tram-mode #tramitacaoIntro .tramTable td {
-    font-size:11px!important;
-    padding:4px 6px!important;
-    line-height:1.35!important;
-}
-
-html body.tram-mode #tramAviso {
-    font-size:11px!important;
-    margin:0!important;
+body.cgm-fit.tram-mode #tramAviso {
+    flex:0 0 auto!important;
     padding:5px 8px!important;
+    margin:0!important;
+    font-size:11px!important;
 }
 
-/* Paginacao */
+body.cgm-fit.tram-mode #tramitacaoIntro .tramTableWrap {
+    margin:0!important;
+    border:0!important;
+}
 
-html body.tram-mode #tramitacaoIntro .tramPagination {
+body.cgm-fit.tram-mode #tramitacaoIntro .tramTable th {
+    position:sticky!important;
+    top:0!important;
+    z-index:3;
+}
+
+body.cgm-fit.tram-mode #tramitacaoIntro .tramPagination {
     display:flex!important;
     justify-content:flex-end!important;
     align-items:center!important;
-    flex-wrap:wrap!important;
-    gap:6px!important;
     margin:0!important;
-    padding:5px 8px!important;
-    font-size:11px!important;
+    border-top:1px solid #d4e1ec;
 }
 
-html body.tram-mode .tramPagination button {
-    min-height:25px!important;
-    font-size:11px!important;
-    padding:3px 7px!important;
-}
-
-html body.tram-mode #tramCount {
+body.cgm-fit.tram-mode #tramCount {
+    order:-1;
     margin-right:auto!important;
+    font-size:11px!important;
+}
+
+body.cgm-fit.tram-mode .tramPagination button {
+    height:26px!important;
+    padding:0 8px!important;
+    font-size:11px!important;
+}
+
+html[data-cgm-theme="dark"] #cgmTramTabsV2 button:not(.active) {
+    background:#242f3d!important;
+    color:#e5eef8!important;
+    border-color:#405166!important;
+}
+
+html[data-cgm-theme="dark"] #tramitacaoIntro .tramPagination {
+    border-color:#405166!important;
+}
+
+@media(max-width:1100px) {
+    body.cgm-fit.tram-mode #tramitacaoIntro .tramTable {
+        min-width:1250px!important;
+    }
 }
 
 </style>

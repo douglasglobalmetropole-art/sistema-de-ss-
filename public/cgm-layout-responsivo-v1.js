@@ -1,4 +1,4 @@
-﻿(function(){
+(function(){
 'use strict';
 
 const rows=document.getElementById('rows');
@@ -22,18 +22,18 @@ lower.classList.add('cgm-fit-panel');
 const css=document.createElement('style');
 
 css.textContent=`
-html:has(body.cgm-fit:not(.tram-mode)),
-body.cgm-fit:not(.tram-mode){
+html:has(body.cgm-fit),
+body.cgm-fit{
  height:100dvh!important;
  max-height:100dvh!important;
  overflow:hidden!important;
 }
 
-body.cgm-fit:not(.tram-mode){
+body.cgm-fit{
  --cgm-panel-width:clamp(350px,30vw,490px);
 }
 
-body.cgm-fit:not(.tram-mode) > main{
+body.cgm-fit > main{
  display:flex!important;
  flex-direction:column!important;
  height:100dvh!important;
@@ -48,7 +48,7 @@ body.cgm-fit.panel-open:not(.tram-mode):has(#lower.open) > main{
  width:calc(100% - var(--cgm-panel-width) - 8px)!important;
 }
 
-body.cgm-fit:not(.tram-mode) > main>.toolbar{
+body.cgm-fit > main>.toolbar{
  flex:0 0 auto!important;
  flex-wrap:wrap!important;
  margin:0!important;
@@ -62,14 +62,15 @@ body.cgm-fit:not(.tram-mode) > main .toolbar .f{
  flex:1 1 120px;
 }
 
-body.cgm-fit:not(.tram-mode) > main .toolbar .tab,
-body.cgm-fit:not(.tram-mode) > main .toolbar .btn{
+body.cgm-fit > main .toolbar .tab,
+body.cgm-fit > main .toolbar .btn{
  height:32px!important;
  padding:0 9px!important;
  font-size:10px!important;
 }
 
-body.cgm-fit:not(.tram-mode) > main>.box{
+body.cgm-fit:not(.tram-mode) > main>.box,
+body.cgm-fit.tram-mode > main>#tramitacaoIntro{
  display:flex!important;
  flex-direction:column!important;
  flex:1 1 0!important;
@@ -78,7 +79,8 @@ body.cgm-fit:not(.tram-mode) > main>.box{
  margin:0!important;
 }
 
-body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll{
+body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll,
+body.cgm-fit.tram-mode #tramitacaoIntro>.tramTableWrap{
  flex:1 1 0!important;
  height:auto!important;
  min-height:0!important;
@@ -86,7 +88,8 @@ body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll{
  overflow:hidden!important;
 }
 
-body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll.cgm-large{
+body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll.cgm-large,
+body.cgm-fit.tram-mode #tramitacaoIntro>.tramTableWrap{
  overflow-y:auto!important;
  overflow-x:auto!important;
  overscroll-behavior:contain;
@@ -94,14 +97,17 @@ body.cgm-fit:not(.tram-mode) > main>.box>.tableScroll.cgm-large{
  scrollbar-color:#91aec6 #eef4fa;
 }
 
-body.cgm-fit:not(.tram-mode) > main .tableScroll>table{
+body.cgm-fit:not(.tram-mode) > main .tableScroll>table,
+body.cgm-fit.tram-mode #tramitacaoIntro .tramTable{
  width:100%!important;
  min-width:0!important;
  table-layout:fixed!important;
 }
 
 body.cgm-fit:not(.tram-mode) > main .tableScroll th,
-body.cgm-fit:not(.tram-mode) > main .tableScroll td{
+body.cgm-fit.tram-mode #tramitacaoIntro .tramTable th,
+body.cgm-fit:not(.tram-mode) > main .tableScroll td,
+body.cgm-fit.tram-mode #tramitacaoIntro .tramTable td{
  padding:5px 6px!important;
  font-size:11px!important;
 }
@@ -135,7 +141,8 @@ body.cgm-fit #rows tr.cgm-row-off{
  display:none!important;
 }
 
-body.cgm-fit:not(.tram-mode) > main .pager{
+body.cgm-fit:not(.tram-mode) > main .pager,
+body.cgm-fit.tram-mode #tramitacaoIntro .tramPagination{
  flex:0 0 auto!important;
  flex-wrap:wrap!important;
  padding:5px 8px!important;
